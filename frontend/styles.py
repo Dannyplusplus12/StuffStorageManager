@@ -47,7 +47,7 @@ QSpinBox::up-button, QSpinBox::down-button {
 QSpinBox::up-button:hover, QSpinBox::down-button:hover { background: #e0e0e0; }
 
 /* BUTTONS */
-QPushButton.PrimaryBtn { background-color: #ee4d2d; color: white; border: none; padding: 10px 16px; border-radius: 2px; font-weight: bold; }
+QPushButton.PrimaryBtn { background-color: #ee4d2d; color: #333; border: none; padding: 10px 16px; border-radius: 2px; font-weight: bold; }
 QPushButton.PrimaryBtn:hover { background-color: #d73211; }
 
 QPushButton.SecondaryBtn { background-color: white; color: #555; border: 1px solid #ddd; padding: 8px 16px; border-radius: 2px; }

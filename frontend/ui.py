@@ -26,14 +26,25 @@ def get_centered_image(image_path, size):
 # --- WORKER ---
 class APIGetWorker(QThread):
     data_ready = pyqtSignal(list)
+    error_occurred = pyqtSignal(str) # Signal mới để báo lỗi
+
     def __init__(self, endpoint):
         super().__init__()
         self.endpoint = endpoint
+
     def run(self):
         try:
-            resp = requests.get(f"{API_URL}{self.endpoint}")
-            if resp.status_code == 200: self.data_ready.emit(resp.json())
-        except: pass
+            # Thêm timeout=3 giây để không treo mãi nếu server chết
+            resp = requests.get(f"{API_URL}{self.endpoint}", timeout=3)
+            
+            if resp.status_code == 200:
+                self.data_ready.emit(resp.json())
+            else:
+                self.error_occurred.emit(f"Server trả về lỗi: {resp.status_code}")
+                
+        except Exception as e:
+            # Đây là chỗ quan trọng nhất: Nó sẽ cho biết tại sao không kết nối được
+            self.error_occurred.emit(f"Lỗi kết nối: {str(e)}")
 
 # --- CUSTOM WIDGETS (DÙNG CHUNG CHO CẢ EDIT VÀ ADD) ---
 
@@ -648,10 +659,19 @@ class MainWindow(QMainWindow):
     def load_products_for_grid(self, query=""):
         if isinstance(query, str): q = query
         else: q = ""
+        
         self.worker = APIGetWorker(f"/products?search={q}")
         self.worker.data_ready.connect(self.on_products_loaded)
+        
+        # KẾT NỐI SIGNAL LỖI ĐỂ HIỆN POPUP
+        self.worker.error_occurred.connect(self.show_error_popup) 
+        
         self.worker.start()
-
+    def show_error_popup(self, error_msg):
+        # Chỉ hiện lỗi nếu không phải do đang gõ tìm kiếm liên tục (tránh spam popup)
+        print(error_msg) # In ra console nếu có
+        # Nếu muốn hiện Popup thì uncomment dòng dưới (nhưng coi chừng spam)
+        # QMessageBox.warning(self, "Lỗi Tải Dữ Liệu", error_msg)
     def on_products_loaded(self, products):
         self.current_products = products
         self.recalculate_grid_columns()
