@@ -1,138 +1,106 @@
 import random
+import os
 from datetime import datetime, timedelta
 from backend.database import SessionLocal, Product, Variant, Order, OrderItem, engine, Base
 
-# --- CẤU HÌNH DỮ LIỆU GIẢ ---
+# --- CẤU HÌNH DỮ LIỆU SỈ (WHOLESALE) ---
 
 PRODUCT_NAMES = [
-    "Giày Sneaker Basic White", "Giày Chạy Bộ Sport Pro", "Giày Tây Oxford Classic", 
-    "Giày Lười Da Bò", "Boot Cổ Cao Fashion", "Sandal Mùa Hè Cool", 
-    "Giày Bóng Rổ Jordan Fake", "Dép Slide Simple", "Giày Vải Canvas Vintage", 
-    "Giày Cao Gót Office", "Giày Slip-on Caro", "Giày Chunky Big Sole",
-    "Giày Đá Bóng Sân Cỏ", "Giày Đi Bộ Êm Chân", "Boots Da Lộn",
-    "Giày Búp Bê Cute", "Giày Mọi Nam Công Sở", "Dép Lào Beach Vibe",
-    "Giày Training Phòng Gym", "Sneaker High-Top Streetwear"
+    "Sandal Chiến Binh", "Giày Lười Vải Bố", "Boot Da Lộn Cổ Thấp", 
+    "Giày Bata Thượng Đình Style", "Dép Tổ Ong Cao Cấp", "Giày Sneaker Chunky", 
+    "Giày Cao Gót 7cm", "Giày Tây Da Bóng", "Dép Slide Unisex", 
+    "Giày Chạy Bộ Siêu Nhẹ", "Sục Cross Văn Phòng", "Giày Vải Canvas Trắng"
 ]
 
-COLORS = ["Trắng", "Đen", "Xám", "Xanh Navy", "Đỏ Đô", "Nâu Da Bò", "Kem", "Hồng Pastel"]
+CUSTOMER_NAMES = [
+    "Đại lý Minh Hằng (Hà Nội)", "Kho Sỉ Giày 365", "Shop Mẹ và Bé (Q.5)", 
+    "Anh Tuấn (Chợ Ninh Hiệp)", "Chị Lan (Chợ An Đông)", "Shop Giày Xinh (Đà Nẵng)", 
+    "Kho Tổng Miền Nam", "Khách Buôn (Zalo)", "Chị Thảo (Sỉ SLL)"
+]
 
-SIZES = ["38", "39", "40", "41", "42", "43"]
-
-# Danh sách ảnh có sẵn trong thư mục assets/images của bạn
-AVAILABLE_IMAGES = ["1.jpg", "2.jpg", "3.jpg"]
-
-# --- HÀM TẠO DỮ LIỆU ---
+COLORS = ["Trắng", "Đen", "Be", "Nâu", "Xanh Rêu", "Xám Tiêu"]
+SIZES = ["36", "37", "38", "39", "40", "41", "42", "43"]
+AVAILABLE_IMAGES = ["1.jpg", "2.jpg", "3.jpg"] 
 
 def seed_database():
-    print("🔄 Đang xóa dữ liệu cũ và khởi tạo database mới...")
-    
-    # Xóa và tạo lại bảng để dữ liệu sạch sẽ
+    print("🔄 Đang xóa và khởi tạo dữ liệu MÔ HÌNH SỈ...")
     Base.metadata.drop_all(bind=engine)
     Base.metadata.create_all(bind=engine)
-    
     db = SessionLocal()
     
-    products_list = []
-    variants_list = []
+    all_variants = []
     
-    print("📦 Đang tạo sản phẩm và gán ảnh ngẫu nhiên...")
-    
-    # 1. TẠO SẢN PHẨM & BIẾN THỂ
-    for i, name in enumerate(PRODUCT_NAMES):
-        # Chọn ngẫu nhiên 1 ảnh từ danh sách 3 ảnh bạn có
-        random_img = random.choice(AVAILABLE_IMAGES)
-        
+    print("📦 Đang nhập kho số lượng LỚN...")
+    for name in PRODUCT_NAMES:
         # Tạo sản phẩm
-        product = Product(
-            name=name,
-            description=f"Mô tả chi tiết cho {name}. Chất liệu cao cấp, thoáng khí, phù hợp đi chơi và đi làm.",
-            image_path=f"assets/images/{random_img}" # Đường dẫn trỏ tới file ảnh
-        )
-        db.add(product)
-        db.flush() # Để lấy product.id ngay lập tức
-        products_list.append(product)
+        prod = Product(name=name, description="Hàng lô mới về", image_path=f"assets/images/{random.choice(AVAILABLE_IMAGES)}")
+        db.add(prod)
+        db.flush()
 
-        # Tạo biến thể (Mỗi giày chọn ngẫu nhiên 2-3 màu)
-        selected_colors = random.sample(COLORS, k=random.randint(2, 3))
-        base_price = random.randint(150, 800) * 1000 # Giá gốc từ 150k đến 800k
+        # Tạo hàng loạt biến thể (Kho sỉ nên tồn vài trăm đến vài ngàn đôi)
+        base_price = random.randint(50, 200) * 1000 # Giá sỉ rẻ hơn (50k - 200k)
         
-        for color in selected_colors:
+        for color in random.sample(COLORS, 3):
             for size in SIZES:
-                # Logic giá: Size càng to càng đắt thêm 1 chút
-                # Ví dụ: Size 38 giá gốc, Size 39 + 10k, Size 40 + 20k
-                size_diff = int(size) - 38
-                price_variation = base_price + (size_diff * 10000)
+                # Tồn kho cực lớn để đủ bán sỉ
+                stock = random.choice([200, 500, 1000, 2000])
                 
-                variant = Variant(
-                    product_id=product.id,
-                    color=color,
-                    size=size,
-                    price=price_variation,
-                    stock=random.randint(5, 50) # Tồn kho ngẫu nhiên
+                var = Variant(
+                    product_id=prod.id,
+                    color=color, size=size,
+                    price=base_price, # Giá sỉ thường đồng giá theo mẫu
+                    stock=stock
                 )
-                db.add(variant)
-                variants_list.append(variant)
+                db.add(var)
+                all_variants.append(var)
     
-    db.commit() # Lưu kho hàng
+    db.commit()
 
-    print("📜 Đang tạo lịch sử đơn hàng giả lập (30 ngày qua)...")
-    
-    # 2. TẠO LỊCH SỬ ĐƠN HÀNG (HISTORY)
-    # Reload lại danh sách variant đã có ID
-    all_variants = db.query(Variant).all()
-    
-    for _ in range(50): # Tạo 50 đơn hàng giả
-        # Random ngày giờ trong 30 ngày qua
-        days_ago = random.randint(0, 30)
-        hours_ago = random.randint(0, 23)
-        fake_date = datetime.now() - timedelta(days=days_ago, hours=hours_ago)
+    print("📜 Đang tạo đơn hàng SỈ (Số lượng 50-200 đôi/đơn)...")
+    for _ in range(20): # 20 đơn sỉ
+        days_ago = random.randint(0, 10)
+        fake_date = datetime.now() - timedelta(days=days_ago, hours=random.randint(8, 18))
+        cust = random.choice(CUSTOMER_NAMES)
         
-        # Random số món mua trong 1 đơn (1-5 món)
-        num_items = random.randint(1, 5)
-        cart_items = random.sample(all_variants, k=min(num_items, len(all_variants)))
+        # Một đơn sỉ thường lấy nhiều mã
+        num_items = random.randint(3, 8) 
+        chosen_vars = random.sample(all_variants, k=num_items)
         
-        total_amount = 0
-        order_items_data = []
-        
-        for var in cart_items:
-            qty = random.randint(1, 3)
-            # Lấy tên sản phẩm từ quan hệ
-            prod_name = db.query(Product).get(var.product_id).name
+        total_money = 0
+        order_items_buffer = []
+
+        for var in chosen_vars:
+            # Sỉ mua theo ri hoặc số lượng lớn (10, 20, 50, 100 đôi)
+            qty = random.choice([10, 20, 50, 100, 200])
+            price = var.price
             
-            item_total = var.price * qty
-            total_amount += item_total
+            # Logic giảm giá nếu mua nhiều
+            if qty >= 100: price = price - 5000 
             
-            # Tạo chi tiết đơn hàng
-            order_items_data.append({
-                "product_name": prod_name,
-                "variant_info": f"{var.color} - Size {var.size}",
-                "quantity": qty,
-                "price": var.price
+            total_money += price * qty
+            order_items_buffer.append({
+                "name": db.query(Product).get(var.product_id).name,
+                "info": f"{var.color} / {var.size}",
+                "qty": qty,
+                "price": price
             })
-            
-            # Trừ kho giả lập (để dữ liệu logic)
-            var.stock = max(0, var.stock - qty)
+            # Trừ kho
+            var.stock -= qty
 
-        # Tạo đơn hàng
-        order = Order(created_at=fake_date, total_amount=total_amount)
+        order = Order(created_at=fake_date, total_amount=total_money, customer_name=cust)
         db.add(order)
         db.flush()
         
-        # Lưu các item vào đơn
-        for item_data in order_items_data:
-            order_item = OrderItem(
-                order_id=order.id,
-                product_name=item_data["product_name"],
-                variant_info=item_data["variant_info"],
-                quantity=item_data["quantity"],
-                price=item_data["price"]
+        for item in order_items_buffer:
+            oi = OrderItem(
+                order_id=order.id, product_name=item["name"],
+                variant_info=item["info"], quantity=item["qty"], price=item["price"]
             )
-            db.add(order_item)
+            db.add(oi)
 
     db.commit()
     db.close()
-    print("✅ Đã tạo dữ liệu giả thành công với hình ảnh!")
-    print(f"Ảnh đang sử dụng: {AVAILABLE_IMAGES}")
+    print("✅ Xong! Đã có dữ liệu chuyên Sỉ.")
 
 if __name__ == "__main__":
     seed_database()

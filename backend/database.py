@@ -10,18 +10,15 @@ def get_db_path():
     else:
         current_dir = os.path.dirname(os.path.abspath(__file__))
         application_path = os.path.dirname(current_dir) 
-    
     return os.path.join(application_path, "shop.db")
 
 db_path = get_db_path()
 DATABASE_URL = f"sqlite:///{db_path}"
 
 Base = declarative_base()
-
 engine = create_engine(DATABASE_URL, connect_args={"check_same_thread": False})
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 
-# 1. Product
 class Product(Base):
     __tablename__ = "products"
     id = Column(Integer, primary_key=True, index=True)
@@ -30,7 +27,6 @@ class Product(Base):
     image_path = Column(String, default="") 
     variants = relationship("Variant", back_populates="product", cascade="all, delete-orphan")
 
-# 2. Variant
 class Variant(Base):
     __tablename__ = "variants"
     id = Column(Integer, primary_key=True, index=True)
@@ -41,15 +37,15 @@ class Variant(Base):
     stock = Column(Integer)
     product = relationship("Product", back_populates="variants")
 
-# 3. Order
 class Order(Base):
     __tablename__ = "orders"
     id = Column(Integer, primary_key=True, index=True)
+    # --- THÊM CỘT TÊN KHÁCH HÀNG ---
+    customer_name = Column(String, default="Khách lẻ") 
     created_at = Column(DateTime, default=datetime.now)
     total_amount = Column(Integer)
     items = relationship("OrderItem", back_populates="order")
 
-# 4. OrderItem
 class OrderItem(Base):
     __tablename__ = "order_items"
     id = Column(Integer, primary_key=True, index=True)
