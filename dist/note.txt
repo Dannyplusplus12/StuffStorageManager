@@ -1,2 +1,0 @@
-invoices : Luu hoa don
-assets : Luu hinh anh

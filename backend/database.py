@@ -1,6 +1,6 @@
 import os
 import sys
-from sqlalchemy import create_engine, Column, Integer, String, ForeignKey, DateTime
+from sqlalchemy import create_engine, Column, Integer, String, ForeignKey, DateTime, Float
 from sqlalchemy.orm import sessionmaker, relationship, declarative_base
 from datetime import datetime
 
@@ -19,6 +19,7 @@ Base = declarative_base()
 engine = create_engine(DATABASE_URL, connect_args={"check_same_thread": False})
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 
+# 1. Product & Variant (Giữ nguyên)
 class Product(Base):
     __tablename__ = "products"
     id = Column(Integer, primary_key=True, index=True)
@@ -37,14 +38,39 @@ class Variant(Base):
     stock = Column(Integer)
     product = relationship("Product", back_populates="variants")
 
+# 2. Customer & Debt (MỚI)
+class Customer(Base):
+    __tablename__ = "customers"
+    id = Column(Integer, primary_key=True, index=True)
+    name = Column(String, index=True, unique=True) # Tên là định danh duy nhất để gợi ý
+    phone = Column(String, default="")
+    debt = Column(Integer, default=0) # Tổng nợ hiện tại
+    
+    logs = relationship("DebtLog", back_populates="customer", cascade="all, delete-orphan")
+    orders = relationship("Order", back_populates="customer_rel")
+
+class DebtLog(Base):
+    __tablename__ = "debt_logs"
+    id = Column(Integer, primary_key=True, index=True)
+    customer_id = Column(Integer, ForeignKey("customers.id"))
+    change_amount = Column(Integer) # Số tiền thay đổi (+ hoặc -)
+    new_balance = Column(Integer) # Dư nợ sau khi đổi
+    note = Column(String) # Lý do (vd: "Mua hàng đơn #10", "Trả nợ", "Điều chỉnh")
+    created_at = Column(DateTime, default=datetime.now)
+    
+    customer = relationship("Customer", back_populates="logs")
+
+# 3. Order (Cập nhật liên kết)
 class Order(Base):
     __tablename__ = "orders"
     id = Column(Integer, primary_key=True, index=True)
-    # --- THÊM CỘT TÊN KHÁCH HÀNG ---
-    customer_name = Column(String, default="Khách lẻ") 
+    customer_name = Column(String) # Vẫn giữ để hiển thị nhanh
+    customer_id = Column(Integer, ForeignKey("customers.id"), nullable=True) # Link vào hồ sơ khách
     created_at = Column(DateTime, default=datetime.now)
     total_amount = Column(Integer)
+    
     items = relationship("OrderItem", back_populates="order")
+    customer_rel = relationship("Customer", back_populates="orders")
 
 class OrderItem(Base):
     __tablename__ = "order_items"

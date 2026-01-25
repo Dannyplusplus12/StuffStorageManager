@@ -1,0 +1,7 @@
+Traceback (most recent call last):
+  File "D:\Dev\app\STS\ShoeProject\run_app.py", line 44, in <module>
+    from frontend.ui import MainWindow
+  File "D:\Dev\app\STS\ShoeProject\frontend\ui.py", line 696
+    def refresh_debt_table(self):
+                                 ^
+IndentationError: unindent does not match any outer indentation level
