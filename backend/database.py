@@ -77,9 +77,8 @@ class OrderItem(Base):
     id = Column(Integer, primary_key=True, index=True)
     order_id = Column(Integer, ForeignKey("orders.id"))
     product_name = Column(String)
+    variant_id = Column(Integer, ForeignKey("variants.id"), nullable=True)
     variant_info = Column(String)
     quantity = Column(Integer)
     price = Column(Integer)
     order = relationship("Order", back_populates="items")
-
-Base.metadata.create_all(bind=engine)

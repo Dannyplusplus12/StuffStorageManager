@@ -4,10 +4,11 @@ from typing import List, Optional
 from sqlalchemy import desc
 from sqlalchemy.orm import Session
 from backend.database import SessionLocal, Product, Variant, Order, OrderItem, Customer, DebtLog
+from datetime import datetime  # <--- ĐÃ THÊM IMPORT NÀY
 
 app = FastAPI()
 
-# --- DEPENDENCY: KẾT NỐI DB (Đã sửa lỗi Syntax) ---
+# --- DEPENDENCY: KẾT NỐI DB ---
 def get_db():
     db = SessionLocal()
     try:
@@ -57,14 +58,13 @@ class CustomerUpdate(BaseModel):
     phone: str
     debt: int 
 
-# --- API SẢN PHẨM (TRẢ VỀ LIST - KHÔNG PHÂN TRANG) ---
+# --- API SẢN PHẨM ---
 @app.get("/products")
 def get_products(search: str = "", db: Session = Depends(get_db)):
     query = db.query(Product)
     if search:
         query = query.filter(Product.name.contains(search))
     
-    # Lấy toàn bộ, sắp xếp mới nhất lên đầu
     products = query.order_by(desc(Product.id)).all()
     results = []
     for p in products:
@@ -102,6 +102,8 @@ def update_product(product_id: int, p_data: ProductUpdate, db: Session = Depends
         raise HTTPException(status_code=404)
     product.name = p_data.name
     product.image_path = p_data.image_path
+    
+    # Logic update variants (giữ nguyên)
     current_variants_map = {v.id: v for v in product.variants}
     current_ids = set(current_variants_map.keys())
     incoming_ids = {v.id for v in p_data.variants if v.id is not None}
@@ -198,7 +200,13 @@ def get_customer_history(cid: int, db: Session = Depends(get_db)):
     for o in orders:
         items_list = o.items if o.items else []
         total_items = sum([i.quantity for i in items_list])
-        details = [{"name": i.product_name, "variant": i.variant_info, "qty": i.quantity, "price": i.price} for i in items_list]
+        details = [{
+            "product_name": i.product_name, 
+            "variant_id": i.variant_id, 
+            "variant_info": i.variant_info, 
+            "quantity": i.quantity, 
+            "price": i.price
+        } for i in items_list]
         
         amt = getattr(o, "total_amount", getattr(o, "total_money", 0))
         qty = getattr(o, "total_qty", total_items)
@@ -206,7 +214,7 @@ def get_customer_history(cid: int, db: Session = Depends(get_db)):
         history.append({
             "type": "ORDER",
             "date": o.created_at.strftime("%Y-%m-%d %H:%M"),
-            "desc": f"Mua đơn hàng #{o.id}",
+            "desc": f"Xuất đơn hàng #{o.id}",
             "amount": amt,
             "data": {
                 "id": o.id, 
@@ -218,7 +226,6 @@ def get_customer_history(cid: int, db: Session = Depends(get_db)):
             }
         })
     
-    # 2. Lịch sử nợ
     logs = db.query(DebtLog).filter(DebtLog.customer_id == cid).all()
     for l in logs:
         history.append({
@@ -236,15 +243,80 @@ def get_customer_history(cid: int, db: Session = Depends(get_db)):
 def checkout(data: CheckoutRequest, db: Session = Depends(get_db)):
     try:
         total = sum([item.quantity * item.price for item in data.cart])
-        
-        # Trừ kho
         for item in data.cart:
             variant = db.query(Variant).filter(Variant.id == item.variant_id).first()
             if not variant or variant.stock < item.quantity:
                 raise HTTPException(status_code=400, detail=f"SP {item.product_name} thiếu hàng")
             variant.stock -= item.quantity
+
+        c_name = data.customer_name.strip() # Cắt khoảng trắng đầu cuối
+        customer = None
         
-        # Khách hàng & Công nợ
+        if c_name:
+            from sqlalchemy import func
+            customer = db.query(Customer).filter(func.lower(Customer.name) == func.lower(c_name)).first()
+            
+            if not customer:
+                customer = Customer(name=c_name, phone=data.customer_phone, debt=0)
+                db.add(customer)
+                db.flush()
+            
+            customer.debt += total
+        new_order = Order(
+            total_amount=total,
+            customer_name=customer.name if customer else "Khách lẻ",
+            customer_id=customer.id if customer else None
+        )
+        db.add(new_order)
+        db.flush()
+        
+        for item in data.cart:
+            db.add(OrderItem(
+                order_id=new_order.id, 
+                product_name=item.product_name, 
+                variant_id=item.variant_id,
+                variant_info=f"{item.color}-{item.size}", 
+                quantity=item.quantity, 
+                price=item.price
+            ))
+            
+        db.commit()
+        return {"status": "success"}
+    except Exception as e:
+        db.rollback()
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.put("/orders/{order_id}")
+def update_order_api(order_id: int, data: CheckoutRequest, db: Session = Depends(get_db)):
+    try:
+        old_order = db.query(Order).filter(Order.id == order_id).first()
+        if not old_order:
+            raise HTTPException(status_code=404, detail="Không tìm thấy đơn hàng")
+
+        # 1. Hoàn tác đơn cũ
+        for item in old_order.items:
+            if item.variant_id:
+                var = db.query(Variant).filter(Variant.id == item.variant_id).first()
+                if var:
+                    var.stock += item.quantity
+        
+        if old_order.customer_id:
+            cust = db.query(Customer).filter(Customer.id == old_order.customer_id).first()
+            if cust:
+                cust.debt -= old_order.total_amount
+
+        # 2. Xóa chi tiết đơn cũ
+        db.query(OrderItem).filter(OrderItem.order_id == order_id).delete()
+
+        # 3. Áp dụng đơn mới
+        total_new = sum([item.quantity * item.price for item in data.cart])
+        
+        for item in data.cart:
+            variant = db.query(Variant).filter(Variant.id == item.variant_id).first()
+            if not variant or variant.stock < item.quantity:
+                raise HTTPException(status_code=400, detail=f"SP {item.product_name} không đủ hàng để cập nhật")
+            variant.stock -= item.quantity
+
         c_name = data.customer_name.strip()
         customer = None
         if c_name:
@@ -253,29 +325,25 @@ def checkout(data: CheckoutRequest, db: Session = Depends(get_db)):
                 customer = Customer(name=c_name, phone=data.customer_phone, debt=0)
                 db.add(customer)
                 db.flush()
-            customer.debt += total
+            customer.debt += total_new
         
-        # Tạo đơn
-        new_order = Order(
-            total_amount=total,
-            customer_name=c_name if c_name else "Khách lẻ",
-            customer_id=customer.id if customer else None
-        )
-        db.add(new_order)
-        db.flush()
-        
-        # Chi tiết đơn
+        old_order.customer_name = c_name if c_name else "Khách lẻ"
+        old_order.customer_id = customer.id if customer else None
+        old_order.total_amount = total_new
+        old_order.created_at = datetime.now() # <--- ĐÃ SỬA LỖI TẠI ĐÂY
+
         for item in data.cart:
             db.add(OrderItem(
-                order_id=new_order.id, 
-                product_name=item.product_name, 
-                variant_info=f"{item.color}-{item.size}", 
-                quantity=item.quantity, 
+                order_id=old_order.id,
+                product_name=item.product_name,
+                variant_id=item.variant_id,
+                variant_info=f"{item.color}-{item.size}",
+                quantity=item.quantity,
                 price=item.price
             ))
-            
+
         db.commit()
-        return {"status": "success"}
+        return {"status": "updated"}
     except Exception as e:
         db.rollback()
         raise HTTPException(status_code=500, detail=str(e))
@@ -295,6 +363,7 @@ def get_orders(page: int = 1, limit: int = 20, db: Session = Depends(get_db)):
                 calc_qty += i.quantity
                 items_list.append({
                     "product_name": i.product_name,
+                    "variant_id": i.variant_id,
                     "variant_info": i.variant_info,
                     "quantity": i.quantity,
                     "price": i.price
@@ -312,7 +381,6 @@ def get_orders(page: int = 1, limit: int = 20, db: Session = Depends(get_db)):
         
     return {"data": result, "total": total, "page": page, "limit": limit}
 
-
 @app.delete("/orders/{order_id}")
 def delete_order_only(order_id: int, db: Session = Depends(get_db)):
     order = db.query(Order).filter(Order.id == order_id).first()
@@ -322,7 +390,7 @@ def delete_order_only(order_id: int, db: Session = Depends(get_db)):
         db.query(OrderItem).filter(OrderItem.order_id == order_id).delete()
         db.delete(order)
         db.commit()
-        return {"detail": "Đã xóa hóa đơn (Không hoàn tiền/kho)"}
+        return {"detail": "Đã xóa hóa đơn"}
     except Exception as e:
         db.rollback()
         raise HTTPException(status_code=500, detail=str(e))

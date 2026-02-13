@@ -1,7 +1,7 @@
 Traceback (most recent call last):
-  File "D:\Dev\app\STS\ShoeProject\run_app.py", line 44, in <module>
+  File "D:\Dev\APP\StuffStorageManager\run_app.py", line 44, in <module>
     from frontend.ui import MainWindow
-  File "D:\Dev\app\STS\ShoeProject\frontend\ui.py", line 301
-    except: passd(self.cust_id)
-    ^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "D:\Dev\APP\StuffStorageManager\frontend\ui.py", line 684
+    except: self.refresh_debt_table()
+    ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 SyntaxError: default 'except:' must be last
