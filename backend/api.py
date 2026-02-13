@@ -6,6 +6,22 @@ from sqlalchemy.orm import Session
 from backend.database import SessionLocal, Product, Variant, Order, OrderItem, Customer, DebtLog
 from datetime import datetime  # <--- ĐÃ THÊM IMPORT NÀY
 
+from pydantic import BaseModel
+
+
+class DebtLogCreate(BaseModel):
+    change_amount: int
+    note: str = ""
+    created_at: Optional[str] = None  # format: YYYY-MM-DD HH:MM
+
+class DebtLogUpdate(BaseModel):
+    change_amount: int
+    note: str = ""
+    created_at: Optional[str] = None
+
+class OrderDateUpdate(BaseModel):
+    created_at: str  # YYYY-MM-DD HH:MM
+
 app = FastAPI()
 
 # --- DEPENDENCY: KẾT NỐI DB ---
@@ -233,10 +249,90 @@ def get_customer_history(cid: int, db: Session = Depends(get_db)):
             "date": l.created_at.strftime("%Y-%m-%d %H:%M"),
             "desc": l.note,
             "amount": l.change_amount,
-            "data": None
+            "data": None,
+            "log_id": l.id
         })
         
     return sorted(history, key=lambda x: x['date'], reverse=True)
+
+
+@app.post("/customers/{cid}/history")
+def create_debt_log(cid: int, data: DebtLogCreate, db: Session = Depends(get_db)):
+    cust = db.query(Customer).filter(Customer.id == cid).first()
+    if not cust:
+        raise HTTPException(status_code=404, detail="Khách hàng không tồn tại")
+    try:
+        amt = data.change_amount
+        # parse created_at if provided
+        created_at = datetime.now()
+        if data.created_at:
+            created_at = datetime.strptime(data.created_at, "%Y-%m-%d %H:%M")
+
+        cust.debt += amt
+        db.add(DebtLog(customer_id=cust.id, change_amount=amt, new_balance=cust.debt, note=data.note, created_at=created_at))
+        db.commit()
+        return {"status": "created"}
+    except Exception as e:
+        db.rollback()
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.put("/customers/{cid}/history/{log_id}")
+def update_debt_log(cid: int, log_id: int, data: DebtLogUpdate, db: Session = Depends(get_db)):
+    cust = db.query(Customer).filter(Customer.id == cid).first()
+    if not cust:
+        raise HTTPException(status_code=404, detail="Khách hàng không tồn tại")
+    log = db.query(DebtLog).filter(DebtLog.id == log_id, DebtLog.customer_id == cid).first()
+    if not log:
+        raise HTTPException(status_code=404, detail="Log không tồn tại")
+    try:
+        old_amt = log.change_amount
+        new_amt = data.change_amount
+        diff = new_amt - old_amt
+        # update customer debt
+        cust.debt += diff
+        log.change_amount = new_amt
+        log.note = data.note
+        if data.created_at:
+            log.created_at = datetime.strptime(data.created_at, "%Y-%m-%d %H:%M")
+        log.new_balance = cust.debt
+        db.commit()
+        return {"status": "updated"}
+    except Exception as e:
+        db.rollback()
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.delete("/customers/{cid}/history/{log_id}")
+def delete_debt_log(cid: int, log_id: int, db: Session = Depends(get_db)):
+    cust = db.query(Customer).filter(Customer.id == cid).first()
+    if not cust:
+        raise HTTPException(status_code=404, detail="Khách hàng không tồn tại")
+    log = db.query(DebtLog).filter(DebtLog.id == log_id, DebtLog.customer_id == cid).first()
+    if not log:
+        raise HTTPException(status_code=404, detail="Log không tồn tại")
+    try:
+        cust.debt -= log.change_amount
+        db.delete(log)
+        db.commit()
+        return {"status": "deleted"}
+    except Exception as e:
+        db.rollback()
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.put("/orders/{order_id}/date")
+def update_order_date(order_id: int, data: OrderDateUpdate, db: Session = Depends(get_db)):
+    order = db.query(Order).filter(Order.id == order_id).first()
+    if not order:
+        raise HTTPException(status_code=404, detail="Đơn hàng không tồn tại")
+    try:
+        order.created_at = datetime.strptime(data.created_at, "%Y-%m-%d %H:%M")
+        db.commit()
+        return {"status": "updated"}
+    except Exception as e:
+        db.rollback()
+        raise HTTPException(status_code=500, detail=str(e))
 
 # --- API CHECKOUT & ORDERS ---
 @app.post("/checkout")

@@ -6,8 +6,8 @@ import re
 import time
 import subprocess
 from PyQt6.QtWidgets import *
-from PyQt6.QtCore import Qt, QThread, pyqtSignal, QSize, QTimer, QStringListModel
-from PyQt6.QtGui import QPixmap, QIntValidator, QColor, QCursor, QStandardItemModel, QStandardItem
+from PyQt6.QtCore import Qt, QThread, pyqtSignal, QSize, QTimer, QStringListModel, QDateTime
+from PyQt6.QtGui import QPixmap, QIntValidator, QColor, QCursor, QStandardItemModel, QStandardItem, QKeySequence
 
 API_URL = "http://127.0.0.1:8000"
 
@@ -37,16 +37,18 @@ SHOPEE_THEME = """
         background-color: #ffffff; color: #d32f2f; border: 1px solid #d32f2f; font-weight: bold; border-radius: 4px;
     }    
     QPushButton#DelCustBtn:hover, QPushButton#DeleteBtn:hover { 
-        background-color: #ef9a9a !important; color: #000000 !important; border: 1px solid #b71c1c !important; 
+        background-color: #ef9a9a !important; border: 1px solid #b71c1c !important; 
     }
     QPushButton#PrimaryBtn { 
         background-color: #ee4d2d !important; color: #000000 !important; border: none; padding: 8px 16px; font-weight: bold; font-size: 14px;
     }
+    /* hover: darker background (keep text color unchanged for submit buttons) */
     QPushButton#PrimaryBtn:hover { background-color: #d73211 !important; }
     QPushButton#PrimaryBtn:pressed { background-color: #bf2b0e !important; }
     QPushButton#PrimaryBtn:disabled { background-color: #e0e0e0 !important; color: #999999 !important; }
     QPushButton#SecondaryBtn { background-color: #ffffff; color: #333333; border: 1px solid #cccccc; padding: 6px 12px; }
-    QPushButton#SecondaryBtn:hover { background-color: #f5f5f5; border-color: #999; }
+    /* hover: subtle background change, do not change text color */
+    QPushButton#SecondaryBtn:hover { background-color: #fff5f2; border-color: #ee4d2d; }
     QLineEdit { border: 1px solid #ddd; padding: 6px; border-radius: 2px; background: white; color: #333; }
     QLineEdit:focus { border: 1px solid #ee4d2d; background: #fffdfb; }
     QTableWidget { border: 1px solid #ddd; background: white; gridline-color: #eee; color: #333; selection-background-color: #fff5f2; selection-color: #ee4d2d; font-size: 13px; }
@@ -125,14 +127,33 @@ class PriceInput(QLineEdit):
         self.validator = QIntValidator()
     def format_text(self, text):
         clean = text.replace(".", "")
-        if not clean.isdigit(): 
-            if clean: self.setText(clean[:-1])
+        if not clean:
+            # allow empty
             return
+        # allow single leading sign while typing
+        if clean in ('+', '-'):
+            return
+        # Allow optional leading + or - followed by digits
+        m = re.match(r'^([+-]?)(\d+)$', clean)
+        if not m:
+            # remove last entered char to keep input valid
+            if clean:
+                self.blockSignals(True)
+                self.setText(clean[:-1])
+                self.blockSignals(False)
+            return
+        sign, digits = m.group(1), m.group(2)
         self.blockSignals(True)
-        self.setText(format_currency(clean))
+        formatted = format_currency(digits)
+        if sign == '-':
+            formatted = '-' + formatted
+        self.setText(formatted)
         self.blockSignals(False)
     def get_value(self):
-        return int(self.text().replace(".", "") or 0)
+        try:
+            return int(self.text().replace(".", "") or 0)
+        except:
+            return 0
 
 # --- SMART MONEY INPUT (CỐT LÕI CỦA TÍNH NĂNG MỚI) ---
 class SmartMoneyInput(QLineEdit):
@@ -449,6 +470,168 @@ class OrderDetailDialog(QDialog):
         lbl_total.setStyleSheet("font-size: 16px; font-weight: bold; color: #ee4d2d; alignment: right;")
         layout.addWidget(lbl_total)
 
+
+class DateEditDialog(QDialog):
+    def __init__(self, order_id, initial_dt_str, parent=None):
+        super().__init__(parent)
+        self.order_id = order_id
+        self.setWindowTitle("Chỉnh sửa ngày giờ")
+        self.resize(300,120)
+        l = QVBoxLayout(self)
+        self.dt = QDateTimeEdit()
+        self.dt.setDisplayFormat("yyyy-MM-dd HH:mm")
+        # Improve readability: larger text and white background for better contrast
+        try:
+            self.dt.setStyleSheet("background: #ffffff; color: #000000; font-size: 16px; padding: 6px;")
+            self.dt.setFixedHeight(34)
+        except Exception:
+            pass
+        try:
+            from datetime import datetime
+            self.dt.setDateTime(datetime.strptime(initial_dt_str, "%Y-%m-%d %H:%M"))
+        except:
+            pass
+        l.addWidget(self.dt)
+        b = QHBoxLayout()
+        btn_cancel = QPushButton("Hủy")
+        btn_cancel.setObjectName("SecondaryBtn")
+        btn_cancel.clicked.connect(self.reject)
+        btn_ok = QPushButton("Lưu")
+        btn_ok.setObjectName("PrimaryBtn")
+        btn_ok.clicked.connect(self.save)
+        b.addStretch(); b.addWidget(btn_cancel); b.addWidget(btn_ok)
+        l.addLayout(b)
+        # Enter = save, Esc = cancel
+        try:
+            from PyQt6.QtGui import QKeySequence
+            from PyQt6.QtWidgets import QShortcut
+            btn_ok.setAutoDefault(True)
+            btn_ok.setDefault(True)
+            sc1 = QShortcut(QKeySequence('Return'), self)
+            sc1.activated.connect(lambda: btn_ok.click())
+            sc2 = QShortcut(QKeySequence('Enter'), self)
+            sc2.activated.connect(lambda: btn_ok.click())
+            sc_esc = QShortcut(QKeySequence('Esc'), self)
+            sc_esc.activated.connect(lambda: btn_cancel.click())
+        except:
+            pass
+
+    def save(self):
+        dt_str = self.dt.dateTime().toString("yyyy-MM-dd HH:mm")
+        try:
+            resp = requests.put(f"{API_URL}/orders/{self.order_id}/date", json={"created_at": dt_str})
+            if resp.status_code in (200, 201):
+                self.accept()
+            else:
+                QMessageBox.warning(self, "Lỗi", str(resp.text))
+        except Exception as e:
+            QMessageBox.critical(self, "Lỗi kết nối", str(e))
+
+
+class EditLogDialog(QDialog):
+    def __init__(self, cust_id, data=None, parent=None):
+        super().__init__(parent)
+        self.cust_id = cust_id
+        self.data = data
+        self.setWindowTitle("Điều chỉnh công nợ")
+        self.resize(420,200)
+        l = QVBoxLayout(self)
+
+        l.addWidget(QLabel("Nội dung:"))
+        self.desc_inp = QLineEdit()
+        l.addWidget(self.desc_inp)
+
+        l.addWidget(QLabel("Số tiền (ví dụ: -100000 hoặc 100000):"))
+        # Sử dụng PriceInput để tự động format dấu chấm khi gõ
+        self.amt_inp = PriceInput()
+        self.amt_inp.setPlaceholderText("0")
+        l.addWidget(self.amt_inp)
+
+        l.addWidget(QLabel("Ngày giờ (YYYY-MM-DD HH:MM) - để trống = hiện tại:"))
+        self.dt_inp = QLineEdit()
+        self.dt_inp.setPlaceholderText("YYYY-MM-DD HH:MM")
+        # Nếu là tạo mới (không có dữ liệu), tự động điền thời gian hiện tại để người dùng dễ hiểu
+        try:
+            if not self.data:
+                from datetime import datetime
+                self.dt_inp.setText(datetime.now().strftime("%Y-%m-%d %H:%M"))
+        except:
+            pass
+        l.addWidget(self.dt_inp)
+
+        hb = QHBoxLayout()
+        hb.addStretch()
+        btn_cancel = QPushButton("Hủy")
+        btn_cancel.setObjectName("SecondaryBtn")
+        btn_cancel.setCursor(Qt.CursorShape.PointingHandCursor)
+        btn_cancel.clicked.connect(self.reject)
+        btn_save = QPushButton("Lưu")
+        btn_save.setObjectName("PrimaryBtn")
+        btn_save.setCursor(Qt.CursorShape.PointingHandCursor)
+        btn_save.clicked.connect(self.save)
+        # make save more prominent: white text and pointer already set via PrimaryBtn style
+        # ensure hover sensitivity and stronger appearance
+        btn_save.setStyleSheet("color: #000; font-weight: bold; padding: 10px 18px;")
+        hb.addWidget(btn_cancel); hb.addWidget(btn_save)
+        l.addLayout(hb)
+
+        # Allow Enter to accept and Esc to reject in dialogs (shortcuts set up below)
+        btn_save.setAutoDefault(True)
+        btn_save.setDefault(True)
+
+        if self.data:
+            # prefill
+            self.desc_inp.setText(self.data.get('desc') or '')
+            amt = self.data.get('amount')
+            if amt is not None:
+                # Hiển thị đã format để dễ đọc
+                try:
+                    self.amt_inp.setText(format_currency(int(amt)))
+                except:
+                    self.amt_inp.setText(str(int(amt)))
+            self.dt_inp.setText(self.data.get('date') or '')
+        # shortcuts for dialogs: Enter = accept, Esc = cancel
+        btn_save.setAutoDefault(True)
+        btn_save.setDefault(True)
+        try:
+            # Use globally-imported QShortcut/QKeySequence to avoid accidental
+            # local binding via an inner import which can cause UnboundLocalError
+            self._sc_enter = QShortcut(QKeySequence('Return'), self)
+            self._sc_enter.activated.connect(lambda: btn_save.click())
+            self._sc_enter2 = QShortcut(QKeySequence('Enter'), self)
+            self._sc_enter2.activated.connect(lambda: btn_save.click())
+            self._sc_esc = QShortcut(QKeySequence('Esc'), self)
+            self._sc_esc.activated.connect(lambda: btn_cancel.click())
+        except Exception:
+            # ignore if shortcuts are unavailable in the environment
+            pass
+
+    def save(self):
+        desc = self.desc_inp.text().strip()
+        # Use PriceInput.get_value() to reliably parse formatted amounts (supports negatives)
+        amt = self.amt_inp.get_value()
+        if amt == 0 and (not self.amt_inp.text().strip() or self.amt_inp.text().strip() in ['0', '0.0']):
+            QMessageBox.warning(self, "Lỗi", "Vui lòng nhập số tiền")
+            return
+
+        payload = {"change_amount": amt, "note": desc}
+        dt = self.dt_inp.text().strip()
+        if dt:
+            payload['created_at'] = dt
+
+        try:
+            if self.data and self.data.get('log_id'):
+                lid = self.data.get('log_id')
+                resp = requests.put(f"{API_URL}/customers/{self.cust_id}/history/{lid}", json=payload)
+            else:
+                resp = requests.post(f"{API_URL}/customers/{self.cust_id}/history", json=payload)
+            if resp.status_code in (200,201):
+                self.accept()
+            else:
+                QMessageBox.warning(self, "Lỗi", str(resp.text))
+        except Exception as e:
+            QMessageBox.critical(self, "Lỗi kết nối", str(e))
+
 class CustomerHistoryDialog(QDialog):
     def __init__(self, cust_id, cust_name, parent=None):
         super().__init__(parent)
@@ -456,8 +639,19 @@ class CustomerHistoryDialog(QDialog):
         self.resize(950, 600)
         self.setStyleSheet("background: white;")
         self.cust_id = cust_id 
+        self.cust_name = cust_name
 
         l = QVBoxLayout(self)
+        # Thêm nút "Thêm điều chỉnh" để tạo log mới
+        h_top = QHBoxLayout()
+        btn_add_log = QPushButton("+ Thêm điều chỉnh")
+        btn_add_log.setObjectName("SecondaryBtn")
+        btn_add_log.setCursor(Qt.CursorShape.PointingHandCursor)
+        btn_add_log.clicked.connect(self.add_log)
+        h_top.addWidget(btn_add_log)
+        h_top.addStretch()
+        l.addLayout(h_top)
+
         self.tb = QTableWidget(0, 7)
         self.tb.setHorizontalHeaderLabels(["Ngày giờ", "Loại", "Nội dung", "Số tiền", "Xem", "Sửa", "Xóa"])
         
@@ -469,9 +663,11 @@ class CustomerHistoryDialog(QDialog):
         self.tb.setColumnWidth(5, 60)
         self.tb.setColumnWidth(6, 60)
         
+        # Cho phép edit thông qua nút Sửa; không cho phép chỉnh trực tiếp để kiểm soát validate
         self.tb.setEditTriggers(QAbstractItemView.EditTrigger.NoEditTriggers)
         self.tb.setSelectionBehavior(QAbstractItemView.SelectionBehavior.SelectRows)
         self.tb.cellClicked.connect(self.clk)
+        self.tb.cellDoubleClicked.connect(self.tb_dblclick)
         
         l.addWidget(self.tb)
         l.addWidget(QLabel("<i>* Nút Xóa chỉ xóa dữ liệu, không hoàn tiền.</i>"))
@@ -487,6 +683,7 @@ class CustomerHistoryDialog(QDialog):
                 
                 i_date = QTableWidgetItem(r['date'])
                 i_date.setToolTip(r['date'])
+                # Lưu metadata vào UserRole để dễ thao tác (order data or log id)
                 self.tb.setItem(ri, 0, i_date)
                 
                 is_order = (r['type'] == "ORDER")
@@ -503,10 +700,13 @@ class CustomerHistoryDialog(QDialog):
                 amt.setForeground(QColor("red") if r['amount']>0 else QColor("green"))
                 self.tb.setItem(ri, 3, amt)
                 
+                # Phân biệt ORDER và LOG: tạo widget tương ứng
                 if is_order:
+                    # store full order data for quick access
                     self.tb.item(ri, 0).setData(Qt.ItemDataRole.UserRole, r['data'])
-                    
+
                     btn_view = QPushButton("Xem")
+                    btn_view.setObjectName("SecondaryBtn")
                     btn_view.setCursor(Qt.CursorShape.PointingHandCursor)
                     btn_view.setStyleSheet("color: blue; text-decoration: underline; border: none; font-weight: bold;")
                     btn_view.clicked.connect(lambda _, d=r['data']: OrderDetailDialog(d, self).exec())
@@ -514,7 +714,8 @@ class CustomerHistoryDialog(QDialog):
 
                     btn_edit = QPushButton("Sửa")
                     btn_edit.setCursor(Qt.CursorShape.PointingHandCursor)
-                    btn_edit.setStyleSheet("color: #e65100; font-weight: bold; border: none;")
+                    # Use SecondaryBtn style so button looks clickable and has hover effect
+                    btn_edit.setObjectName("SecondaryBtn")
                     btn_edit.clicked.connect(lambda _, d=r['data']: (self.accept(), self.parent().load_order_to_edit(d)))
                     w_edit = QWidget(); l_edit = QHBoxLayout(w_edit); l_edit.setContentsMargins(0,0,0,0); l_edit.setAlignment(Qt.AlignmentFlag.AlignCenter); l_edit.addWidget(btn_edit); self.tb.setCellWidget(ri, 5, w_edit)
 
@@ -525,6 +726,29 @@ class CustomerHistoryDialog(QDialog):
                     order_id = r['data'].get('id')
                     btn_del.clicked.connect(lambda _, oid=order_id: self.delete_invoice(oid))
                     w_del = QWidget(); l_del = QHBoxLayout(w_del); l_del.setContentsMargins(0,0,0,0); l_del.setAlignment(Qt.AlignmentFlag.AlignCenter); l_del.addWidget(btn_del); self.tb.setCellWidget(ri, 6, w_del)
+                else:
+                    # LOG: lưu log id vào UserRole
+                    log_id = r.get('log_id')
+                    self.tb.item(ri, 0).setData(Qt.ItemDataRole.UserRole, { 'log_id': log_id })
+
+                    btn_view = QPushButton("")
+                    btn_view.setEnabled(False)
+                    btn_view.setCursor(Qt.CursorShape.ArrowCursor)
+                    self.tb.setCellWidget(ri, 4, btn_view)
+
+                    btn_edit = QPushButton("Sửa")
+                    btn_edit.setObjectName("SecondaryBtn")
+                    btn_edit.setCursor(Qt.CursorShape.PointingHandCursor)
+                    # ensure hover shows pointer and stronger visual
+                    btn_edit.clicked.connect(lambda _, row=ri, rec=r: self.edit_log(rec))
+                    w_edit = QWidget(); l_edit = QHBoxLayout(w_edit); l_edit.setContentsMargins(0,0,0,0); l_edit.setAlignment(Qt.AlignmentFlag.AlignCenter); l_edit.addWidget(btn_edit); self.tb.setCellWidget(ri, 5, w_edit)
+
+                    btn_del = QPushButton("X")
+                    btn_del.setObjectName("DelCustBtn")
+                    btn_del.setFixedSize(30, 25)
+                    btn_del.setCursor(Qt.CursorShape.PointingHandCursor)
+                    btn_del.clicked.connect(lambda _, lid=log_id: self.delete_log(lid))
+                    w_del = QWidget(); l_del = QHBoxLayout(w_del); l_del.setContentsMargins(0,0,0,0); l_del.setAlignment(Qt.AlignmentFlag.AlignCenter); l_del.addWidget(btn_del); self.tb.setCellWidget(ri, 6, w_del)
                     
         except Exception as e:
             print("Lỗi load lịch sử:", e)
@@ -532,7 +756,62 @@ class CustomerHistoryDialog(QDialog):
     def clk(self, r, c): 
         if c in [4, 5, 6]: return
         d = self.tb.item(r, 0).data(Qt.ItemDataRole.UserRole)
-        if d: OrderDetailDialog(d, self).exec()
+        # chỉ mở detail nếu là order và meta chứa 'id'
+        if isinstance(d, dict) and d.get('id'):
+            OrderDetailDialog(d, self).exec()
+
+    def tb_dblclick(self, r, c):
+        # Double click trên cột ngày của ORDER cho phép chỉnh ngày
+        if c != 0: return
+        meta = self.tb.item(r, 0).data(Qt.ItemDataRole.UserRole)
+        if not meta: return
+        # Nếu là order (meta is dict with id)
+        if isinstance(meta, dict) and meta.get('id'):
+            oid = meta.get('id')
+            # open dialog to edit date
+            dlg = DateEditDialog(oid, meta.get('created_at') or self.tb.item(r,0).text(), parent=self)
+            if dlg.exec():
+                self.load(self.cust_id)
+
+    def add_log(self):
+        dlg = EditLogDialog(self.cust_id, parent=self)
+        if dlg.exec():
+            self.load(self.cust_id)
+            # refresh main window debt table if available
+            try:
+                if hasattr(self.parent(), 'refresh_debt_table'):
+                    self.parent().refresh_debt_table()
+            except: pass
+
+    def edit_log(self, rec):
+        # rec is history record dict for the log
+        dlg = EditLogDialog(self.cust_id, data=rec, parent=self)
+        if dlg.exec():
+            self.load(self.cust_id)
+            try:
+                if hasattr(self.parent(), 'refresh_debt_table'):
+                    self.parent().refresh_debt_table()
+            except: pass
+
+    def delete_log(self, log_id):
+        if not log_id: return
+        msg = QMessageBox(self)
+        msg.setWindowTitle("Xác nhận xóa")
+        msg.setText("Bạn có chắc chắn muốn xóa bản ghi điều chỉnh này? (Không hoàn tiền)")
+        msg.setIcon(QMessageBox.Icon.Warning)
+        btn_co = msg.addButton("Có", QMessageBox.ButtonRole.YesRole)
+        btn_khong = msg.addButton("Không", QMessageBox.ButtonRole.NoRole)
+        msg.exec()
+        if msg.clickedButton() == btn_co:
+            try:
+                requests.delete(f"{API_URL}/customers/{self.cust_id}/history/{log_id}")
+                self.load(self.cust_id)
+                try:
+                    if hasattr(self.parent(), 'refresh_debt_table'):
+                        self.parent().refresh_debt_table()
+                except: pass
+            except Exception as e:
+                print(e)
 
     def delete_invoice(self, order_id):
         msg = QMessageBox(self)
@@ -637,6 +916,20 @@ class ProductBuyDialog(QDialog):
         b.addWidget(bc)
         b.addWidget(ba)
         l.addLayout(b)
+        # Enter = add, Esc = cancel
+        try:
+            from PyQt6.QtGui import QKeySequence
+            from PyQt6.QtWidgets import QShortcut
+            ba.setAutoDefault(True)
+            ba.setDefault(True)
+            sc1 = QShortcut(QKeySequence('Return'), self)
+            sc1.activated.connect(lambda: ba.click())
+            sc2 = QShortcut(QKeySequence('Enter'), self)
+            sc2.activated.connect(lambda: ba.click())
+            sc_esc = QShortcut(QKeySequence('Esc'), self)
+            sc_esc.activated.connect(lambda: bc.click())
+        except:
+            pass
 
     def add(self):
         for vid, sp in self.spins.items():
@@ -697,6 +990,20 @@ class EditProductDialog(QDialog):
         l.addWidget(bd)
         
         self.load()
+        # Enter = save, Esc = close
+        try:
+            from PyQt6.QtGui import QKeySequence
+            from PyQt6.QtWidgets import QShortcut
+            bs.setAutoDefault(True)
+            bs.setDefault(True)
+            sc1 = QShortcut(QKeySequence('Return'), self)
+            sc1.activated.connect(lambda: bs.click())
+            sc2 = QShortcut(QKeySequence('Enter'), self)
+            sc2.activated.connect(lambda: bs.click())
+            sc_esc = QShortcut(QKeySequence('Esc'), self)
+            sc_esc.activated.connect(lambda: self.reject())
+        except:
+            pass
     
     def load(self):
         vbc = {}
@@ -807,6 +1114,8 @@ class AddProductPanel(QWidget):
         bs.setMinimumHeight(45)
         bs.setCursor(Qt.CursorShape.PointingHandCursor)
         bs.clicked.connect(self.save)
+        # emphasize save button visually
+        bs.setStyleSheet("font-weight: bold; padding: 10px 18px;")
         l.addWidget(bs)
         
         self.add_color_group()
@@ -1024,6 +1333,8 @@ class MainWindow(QMainWindow):
         self.btn_checkout.setMinimumHeight(50)
         self.btn_checkout.setCursor(Qt.CursorShape.PointingHandCursor)
         self.btn_checkout.clicked.connect(self.checkout)
+        # Slightly enhance visual affordance programmatically for checkout primary action
+        self.btn_checkout.setStyleSheet("font-weight: bold; padding: 12px 20px;")
         cl.addWidget(self.btn_checkout)
         
         self.rs.addWidget(cw)
@@ -1313,6 +1624,7 @@ class MainWindow(QMainWindow):
                 self.debt_table.setItem(i, 3, item_debt)
                 
                 btn_view = QPushButton("Xem")
+                btn_view.setObjectName("SecondaryBtn")
                 btn_view.setCursor(Qt.CursorShape.PointingHandCursor)
                 btn_view.clicked.connect(lambda _, cid=c['id'], name=c['name']: CustomerHistoryDialog(cid, name, self).exec())
                 self.debt_table.setCellWidget(i, 4, btn_view)
@@ -1406,6 +1718,7 @@ class MainWindow(QMainWindow):
         self.ht_table.setColumnWidth(6, 60)
         self.ht_table.setEditTriggers(QAbstractItemView.EditTrigger.NoEditTriggers)
         self.ht_table.setSelectionBehavior(QAbstractItemView.SelectionBehavior.SelectRows)
+        self.ht_table.cellDoubleClicked.connect(self.ht_cell_dblclick)
         l.addWidget(self.ht_table)
         
         pagination_layout = QHBoxLayout()
@@ -1437,6 +1750,31 @@ class MainWindow(QMainWindow):
         self.hw_his = APIGetWorker(f"/orders?page={page}&limit=20")
         self.hw_his.data_ready.connect(self.on_his_loaded)
         self.hw_his.start()
+
+    def ht_cell_dblclick(self, r, c):
+        """Handle double-clicks on the history table to allow editing order date.
+
+        Opens DateEditDialog when double-clicking the date column of an order row.
+        After successful edit reload the current history page.
+        """
+        try:
+            if c != 0: return
+            item = self.ht_table.item(r, 0)
+            if not item: return
+            meta = item.data(Qt.ItemDataRole.UserRole)
+            if not meta or not isinstance(meta, dict): return
+            oid = meta.get('id')
+            if not oid: return
+            initial = meta.get('created_at') or item.text()
+            dlg = DateEditDialog(oid, initial, parent=self)
+            if dlg.exec():
+                # reload current page to reflect updated date
+                try:
+                    self.load_history_page(self.current_page_his)
+                except:
+                    pass
+        except Exception:
+            pass
 
     def refresh_history(self):
         self.load_history_page(1)
@@ -1474,6 +1812,8 @@ class MainWindow(QMainWindow):
                 self.ht_table.insertRow(i)
                 item_date = QTableWidgetItem(str(o.get('created_at') or o.get('date', '')))
                 item_date.setToolTip(item_date.text())
+                # store order object for quick access (edit date)
+                item_date.setData(Qt.ItemDataRole.UserRole, o)
                 self.ht_table.setItem(i, 0, item_date)
                 
                 item_cust = QTableWidgetItem(str(o.get('customer_name') or o.get('customer') or "Khách lẻ"))
@@ -1490,12 +1830,14 @@ class MainWindow(QMainWindow):
                 self.ht_table.setItem(i, 3, item_qty)
                 
                 btn = QPushButton("Xem")
+                btn.setObjectName("SecondaryBtn")
                 btn.setCursor(Qt.CursorShape.PointingHandCursor)
                 btn.setStyleSheet("color:blue; text-decoration: underline; border:none;")
                 btn.clicked.connect(lambda _, x=o: OrderDetailDialog(x, self).exec())
                 self.ht_table.setCellWidget(i, 4, btn)
                 
                 btn_edit = QPushButton("Sửa")
+                btn_edit.setObjectName("SecondaryBtn")
                 btn_edit.setCursor(Qt.CursorShape.PointingHandCursor)
                 btn_edit.setStyleSheet("color: #e65100; font-weight: bold; border: none;")
                 btn_edit.clicked.connect(lambda _, x=o: self.load_order_to_edit(x))
