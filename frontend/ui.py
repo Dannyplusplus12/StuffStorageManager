@@ -74,32 +74,15 @@ def get_centered_image(image_path, size):
     return scaled.copy(x, y, target_w, target_h)
 
 def open_file_dialog_safe():
-    script = """
-import tkinter as tk
-from tkinter import filedialog
-import os
-try:
-    root = tk.Tk()
-    root.withdraw()
-    root.attributes('-topmost', True)
-    file_path = filedialog.askopenfilename(
-        title="Chọn ảnh sản phẩm",
-        filetypes=[("Image Files", "*.png *.jpg *.jpeg")]
+    from PyQt6.QtWidgets import QFileDialog
+    file_path, _ = QFileDialog.getOpenFileName(
+        None,
+        "Chọn ảnh sản phẩm",
+        "",
+        "Image Files (*.png *.jpg *.jpeg)"
     )
-    if file_path:
-        print(file_path)
-    root.destroy()
-except Exception:
-    pass
-"""
-    try:
-        creationflags = 0x08000000 if os.name == 'nt' else 0
-        result = subprocess.run([sys.executable, "-c", script], capture_output=True, text=True, creationflags=creationflags)
-        path = result.stdout.strip()
-        return path if path else None
-    except Exception as e:
-        print(f"Lỗi subprocess dialog: {e}")
-        return None
+    
+    return file_path if file_path else None
 
 # --- WORKER ---
 class APIGetWorker(QThread):
