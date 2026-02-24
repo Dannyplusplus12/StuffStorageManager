@@ -25,7 +25,6 @@ class OrderDateUpdate(BaseModel):
 
 app = FastAPI()
 
-# Ensure DB has `created_ts` columns (migration/backfill for existing DBs)
 def ensure_created_ts_columns():
     try:
         with engine.connect() as conn:
@@ -33,15 +32,10 @@ def ensure_created_ts_columns():
                 info = conn.execute(text(f"PRAGMA table_info('{table}')")).fetchall()
                 cols = [r[1] for r in info]
                 if 'created_ts' not in cols:
-                    # add column
                     conn.execute(text(f"ALTER TABLE {table} ADD COLUMN created_ts INTEGER"))
-                    # backfill from created_at where possible (convert to epoch ms)
-                    if table == 'orders':
-                        conn.execute(text("UPDATE orders SET created_ts = CAST(strftime('%s', created_at) AS INTEGER) * 1000 WHERE created_at IS NOT NULL"))
-                    else:
-                        conn.execute(text("UPDATE debt_logs SET created_ts = CAST(strftime('%s', created_at) AS INTEGER) * 1000 WHERE created_at IS NOT NULL"))
+                conn.execute(text(f"UPDATE {table} SET created_ts = (CAST(strftime('%s', created_at) AS INTEGER) * 1000) + id WHERE created_ts IS NULL OR created_ts % 1000 == 0"))
+            conn.commit()
     except Exception as e:
-        # Migration is best effort — do not crash the app if this fails
         print("Warning: ensure_created_ts_columns failed:", e)
 
 ensure_created_ts_columns()
@@ -235,62 +229,53 @@ def delete_customer(customer_id: int, db: Session = Depends(get_db)):
 def get_customer_history(cid: int, db: Session = Depends(get_db)):
     orders = db.query(Order).filter(Order.customer_id == cid).all()
     history = []
+    
     for o in orders:
-        items_list = o.items if o.items else []
-        total_items = sum([i.quantity for i in items_list])
-        details = [{
-            "product_name": i.product_name, 
-            "variant_id": i.variant_id, 
-            "variant_info": i.variant_info, 
-            "quantity": i.quantity, 
-            "price": i.price
-        } for i in items_list]
+        # Lấy timestamp thực tế để sắp xếp
+        ts = int(o.created_ts) if (hasattr(o, 'created_ts') and o.created_ts) else int(o.created_at.timestamp() * 1000)
         
-        amt = getattr(o, "total_amount", getattr(o, "total_money", 0))
-        qty = getattr(o, "total_qty", total_items)
-        
-        # include a numeric timestamp (epoch ms) for stable high-resolution sorting
-        if hasattr(o, 'created_ts') and o.created_ts:
-            ts = int(o.created_ts)
-        else:
-            ts = int(o.created_at.timestamp() * 1000) if hasattr(o.created_at, 'timestamp') else 0
+        # CHUẨN HÓA DỮ LIỆU ITEMS: Phải có variant_id thì UI mới sửa được
+        items_detail = []
+        for i in o.items:
+            items_detail.append({
+                "product_name": i.product_name,
+                "variant_id": i.variant_id,  # TRƯỜNG QUAN TRỌNG NHẤT
+                "variant_info": i.variant_info,
+                "quantity": i.quantity,
+                "price": i.price
+            })
+            
         history.append({
             "type": "ORDER",
-            # display date only up to minutes; sort by high-resolution timestamp
             "date": o.created_at.strftime("%Y-%m-%d %H:%M"),
             "sort_ts": ts,
             "desc": f"Xuất đơn hàng #{o.id}",
-            "amount": amt,
+            "amount": o.total_amount,
             "data": {
-                "id": o.id,
+                "id": o.id, # ID đơn hàng
                 "customer": o.customer_name,
-                # display date only up to minutes
+                "customer_name": o.customer_name,
                 "date": o.created_at.strftime("%d/%m %H:%M"),
-                "total_money": amt,
-                "total_qty": qty,
-                "items": details
+                "total_money": o.total_amount,
+                "total_qty": sum(i.quantity for i in o.items),
+                "items": items_detail # Danh sách item đầy đủ ID
             }
         })
     
     logs = db.query(DebtLog).filter(DebtLog.customer_id == cid).all()
     for l in logs:
-        if hasattr(l, 'created_ts') and l.created_ts:
-            l_ts = int(l.created_ts)
-        else:
-            l_ts = int(l.created_at.timestamp() * 1000) if hasattr(l.created_at, 'timestamp') else 0
+        ts_log = int(l.created_ts) if (hasattr(l, 'created_ts') and l.created_ts) else int(l.created_at.timestamp() * 1000)
         history.append({
             "type": "LOG",
             "date": l.created_at.strftime("%Y-%m-%d %H:%M"),
-            "sort_ts": l_ts,
+            "sort_ts": ts_log,
             "desc": l.note,
             "amount": l.change_amount,
             "data": None,
             "log_id": l.id
         })
         
-    # Sort by high-resolution timestamp so entries created within the same
-    # minute are ordered correctly (newer first).
-    return sorted(history, key=lambda x: x.get('sort_ts', 0), reverse=True)
+    return sorted(history, key=lambda x: x['sort_ts'], reverse=True)
 
 
 @app.post("/customers/{cid}/history")
@@ -300,18 +285,27 @@ def create_debt_log(cid: int, data: DebtLogCreate, db: Session = Depends(get_db)
         raise HTTPException(status_code=404, detail="Khách hàng không tồn tại")
     try:
         amt = data.change_amount
-        # parse created_at if provided
-        created_at = datetime.now()
+        now = datetime.now() 
+
+        display_dt = now
         if data.created_at:
-            created_at = datetime.strptime(data.created_at, "%Y-%m-%d %H:%M")
+            try:
+                display_dt = datetime.strptime(data.created_at, "%Y-%m-%d %H:%M")
+            except:
+                pass
 
         cust.debt += amt
-        # use the provided created_at for created_ts if available
-        try:
-            ts_ms = int(created_at.timestamp() * 1000)
-        except Exception:
-            ts_ms = int(datetime.utcnow().timestamp() * 1000)
-        db.add(DebtLog(customer_id=cust.id, change_amount=amt, new_balance=cust.debt, note=data.note, created_at=created_at, created_ts=ts_ms))
+
+        ts_ms = int(now.timestamp() * 1000)
+        
+        db.add(DebtLog(
+            customer_id=cust.id, 
+            change_amount=amt, 
+            new_balance=cust.debt, 
+            note=data.note, 
+            created_at=display_dt, 
+            created_ts=ts_ms
+        ))
         db.commit()
         return {"status": "created"}
     except Exception as e:
@@ -331,14 +325,12 @@ def update_debt_log(cid: int, log_id: int, data: DebtLogUpdate, db: Session = De
         old_amt = log.change_amount
         new_amt = data.change_amount
         diff = new_amt - old_amt
-        # update customer debt
         cust.debt += diff
         log.change_amount = new_amt
         log.note = data.note
         if data.created_at:
             new_dt = datetime.strptime(data.created_at, "%Y-%m-%d %H:%M")
             log.created_at = new_dt
-            # update created_ts to match provided time (as epoch ms)
             log.created_ts = int(new_dt.timestamp() * 1000)
         log.new_balance = cust.debt
         db.commit()
@@ -499,11 +491,7 @@ def update_order_api(order_id: int, data: CheckoutRequest, db: Session = Depends
 def get_orders(page: int = 1, limit: int = 20, db: Session = Depends(get_db)):
     skip = (page - 1) * limit
     total = db.query(Order).count()
-    # order by high-resolution timestamp if available, fallback to created_at
-    try:
-        orders = db.query(Order).order_by(desc(Order.created_ts)).offset(skip).limit(limit).all()
-    except Exception:
-        orders = db.query(Order).order_by(desc(Order.created_at)).offset(skip).limit(limit).all()
+    orders = db.query(Order).order_by(desc(Order.id)).offset(skip).limit(limit).all()
     
     result = []
     for o in orders:
@@ -529,7 +517,6 @@ def get_orders(page: int = 1, limit: int = 20, db: Session = Depends(get_db)):
             "total_qty": calc_qty,
             "items": items_list
         })
-        
     return {"data": result, "total": total, "page": page, "limit": limit}
 
 @app.delete("/orders/{order_id}")

@@ -1,10 +1,7 @@
 Traceback (most recent call last):
-  File "D:\Dev\APP\StuffStorageManager\run_app.py", line 54, in <module>
-    window = MainWindow()
-  File "D:\Dev\APP\StuffStorageManager\frontend\ui.py", line 1110, in __init__
-    self.page_his = self.setup_history_page()
-                    ~~~~~~~~~~~~~~~~~~~~~~~^^
-  File "D:\Dev\APP\StuffStorageManager\frontend\ui.py", line 1595, in setup_history_page
-    self.ht_table.cellDoubleClicked.connect(self.ht_cell_dblclick)
-                                            ^^^^^^^^^^^^^^^^^^^^^
-AttributeError: 'MainWindow' object has no attribute 'ht_cell_dblclick'
+  File "D:\Dev\APP\StuffStorageManager\run_app.py", line 44, in <module>
+    from frontend.ui import MainWindow
+  File "D:\Dev\APP\StuffStorageManager\frontend\ui.py", line 1677
+    def refresh_debt_table(self):
+                                 ^
+IndentationError: unindent does not match any outer indentation level

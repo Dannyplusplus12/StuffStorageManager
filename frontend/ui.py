@@ -696,50 +696,47 @@ class CustomerHistoryDialog(QDialog):
         self.load(cust_id)
 
     def load(self, cid):
+        from datetime import datetime
+        self.tb.setUpdatesEnabled(False)
+        self.tb.setSortingEnabled(False)
         self.tb.setRowCount(0) 
         try:
             resp = requests.get(f"{API_URL}/customers/{cid}/history")
             if resp.status_code != 200:
-                print(f"Lỗi load lịch sử: HTTP {resp.status_code}")
-                QMessageBox.warning(self, "Lỗi", f"Không thể tải lịch sử (HTTP {resp.status_code})")
                 return
-            try:
-                rs = resp.json()
-            except Exception as e:
-                print("Lỗi parse JSON lịch sử:", e)
-                QMessageBox.warning(self, "Lỗi", "Dữ liệu lịch sử không hợp lệ từ server.")
-                return
-            if not isinstance(rs, list):
-                print("Lỗi load lịch sử: server trả về không phải danh sách")
-                return
+            
+            rs = resp.json()
             for r in rs:
                 ri = self.tb.rowCount()
                 self.tb.insertRow(ri)
                 
-                i_date = QTableWidgetItem(r['date'])
-                i_date.setToolTip(r['date'])
-                # Lưu metadata vào UserRole để dễ thao tác (order data or log id)
+                raw_date = r['date']
+                try:
+                    dt_obj = datetime.strptime(raw_date, "%Y-%m-%d %H:%M")
+                    formatted_date = dt_obj.strftime("%d/%m/%Y %H:%M")
+                except:
+                    formatted_date = raw_date
+
+                i_date = QTableWidgetItem(formatted_date)
+                i_date.setToolTip(formatted_date)
+                i_date.setData(Qt.ItemDataRole.UserRole, r.get('exact_ts'))
                 self.tb.setItem(ri, 0, i_date)
                 
                 is_order = (r['type'] == "ORDER")
-                display_type = "Xuất đơn hàng" if is_order else "Điều chỉnh"
-                typ = QTableWidgetItem(display_type)
+                typ = QTableWidgetItem("Xuất đơn hàng" if is_order else "Điều chỉnh")
                 typ.setForeground(QColor("blue") if is_order else QColor("green"))
                 self.tb.setItem(ri, 1, typ)
                 
-                i_desc = QTableWidgetItem(r['desc'])
-                i_desc.setToolTip(r['desc'])
-                self.tb.setItem(ri, 2, i_desc)
+                self.tb.setItem(ri, 2, QTableWidgetItem(str(r['desc'])))
                 
-                amt = QTableWidgetItem(f"{r['amount']:+,}")
-                amt.setForeground(QColor("red") if r['amount']>0 else QColor("green"))
-                self.tb.setItem(ri, 3, amt)
+                amt_val = r['amount']
+                amt_str = f"{amt_val:+,}".replace(",", ".")
+                amt_item = QTableWidgetItem(amt_str)
+                amt_item.setForeground(QColor("red") if amt_val > 0 else QColor("green"))
+                self.tb.setItem(ri, 3, amt_item)
                 
-                # Phân biệt ORDER và LOG: tạo widget tương ứng
                 if is_order:
-                    # store full order data for quick access
                     self.tb.item(ri, 0).setData(Qt.ItemDataRole.UserRole, r['data'])
-
                     btn_view = QPushButton("Xem")
                     btn_view.setObjectName("SecondaryBtn")
                     btn_view.setCursor(Qt.CursorShape.PointingHandCursor)
@@ -748,9 +745,8 @@ class CustomerHistoryDialog(QDialog):
                     w_view = QWidget(); l_view = QHBoxLayout(w_view); l_view.setContentsMargins(0,0,0,0); l_view.setAlignment(Qt.AlignmentFlag.AlignCenter); l_view.addWidget(btn_view); self.tb.setCellWidget(ri, 4, w_view)
 
                     btn_edit = QPushButton("Sửa")
-                    btn_edit.setCursor(Qt.CursorShape.PointingHandCursor)
-                    # Use SecondaryBtn style so button looks clickable and has hover effect
                     btn_edit.setObjectName("SecondaryBtn")
+                    btn_edit.setCursor(Qt.CursorShape.PointingHandCursor)
                     btn_edit.clicked.connect(lambda _, d=r['data']: (self.accept(), self.parent().load_order_to_edit(d)))
                     w_edit = QWidget(); l_edit = QHBoxLayout(w_edit); l_edit.setContentsMargins(0,0,0,0); l_edit.setAlignment(Qt.AlignmentFlag.AlignCenter); l_edit.addWidget(btn_edit); self.tb.setCellWidget(ri, 5, w_edit)
 
@@ -758,23 +754,16 @@ class CustomerHistoryDialog(QDialog):
                     btn_del.setObjectName("DelCustBtn")
                     btn_del.setFixedSize(30, 25)
                     btn_del.setCursor(Qt.CursorShape.PointingHandCursor)
-                    order_id = r['data'].get('id')
-                    btn_del.clicked.connect(lambda _, oid=order_id: self.delete_invoice(oid))
+                    btn_del.clicked.connect(lambda _, oid=r['data'].get('id'): self.delete_invoice(oid))
                     w_del = QWidget(); l_del = QHBoxLayout(w_del); l_del.setContentsMargins(0,0,0,0); l_del.setAlignment(Qt.AlignmentFlag.AlignCenter); l_del.addWidget(btn_del); self.tb.setCellWidget(ri, 6, w_del)
                 else:
-                    # LOG: lưu log id vào UserRole
-                    log_id = r.get('log_id')
-                    self.tb.item(ri, 0).setData(Qt.ItemDataRole.UserRole, { 'log_id': log_id })
-
-                    btn_view = QPushButton("")
-                    btn_view.setEnabled(False)
-                    btn_view.setCursor(Qt.CursorShape.ArrowCursor)
+                    self.tb.item(ri, 0).setData(Qt.ItemDataRole.UserRole, { 'log_id': r.get('log_id') })
+                    btn_view = QPushButton(""); btn_view.setEnabled(False)
                     self.tb.setCellWidget(ri, 4, btn_view)
 
                     btn_edit = QPushButton("Sửa")
                     btn_edit.setObjectName("SecondaryBtn")
                     btn_edit.setCursor(Qt.CursorShape.PointingHandCursor)
-                    # ensure hover shows pointer and stronger visual
                     btn_edit.clicked.connect(lambda _, row=ri, rec=r: self.edit_log(rec))
                     w_edit = QWidget(); l_edit = QHBoxLayout(w_edit); l_edit.setContentsMargins(0,0,0,0); l_edit.setAlignment(Qt.AlignmentFlag.AlignCenter); l_edit.addWidget(btn_edit); self.tb.setCellWidget(ri, 5, w_edit)
 
@@ -782,11 +771,12 @@ class CustomerHistoryDialog(QDialog):
                     btn_del.setObjectName("DelCustBtn")
                     btn_del.setFixedSize(30, 25)
                     btn_del.setCursor(Qt.CursorShape.PointingHandCursor)
-                    btn_del.clicked.connect(lambda _, lid=log_id: self.delete_log(lid))
+                    btn_del.clicked.connect(lambda _, lid=r.get('log_id'): self.delete_log(lid))
                     w_del = QWidget(); l_del = QHBoxLayout(w_del); l_del.setContentsMargins(0,0,0,0); l_del.setAlignment(Qt.AlignmentFlag.AlignCenter); l_del.addWidget(btn_del); self.tb.setCellWidget(ri, 6, w_del)
-                    
         except Exception as e:
-            print("Lỗi load lịch sử:", e)
+            print(f"Lỗi hiển thị: {e}")
+        finally:
+            self.tb.setUpdatesEnabled(True)
 
     def clk(self, r, c): 
         if c in [4, 5, 6]: return
@@ -1656,12 +1646,11 @@ class MainWindow(QMainWindow):
         self.debt_table.horizontalHeader().setSectionResizeMode(5, QHeaderView.ResizeMode.Fixed)
         self.debt_table.setColumnWidth(5, 50)
         self.debt_table.verticalHeader().setDefaultSectionSize(40)
-        # Bỏ các trigger edit mặc định để Delegate hoạt động tốt hơn
-        self.debt_table.setEditTriggers(QAbstractItemView.EditTrigger.DoubleClicked | QAbstractItemView.EditTrigger.SelectedClicked | QAbstractItemView.EditTrigger.AnyKeyPressed | QAbstractItemView.EditTrigger.CurrentChanged)
         
-        # --- CÀI ĐẶT DELEGATE CHO CỘT NỢ (CỘT 3) ---
+        # Mở khóa các Trigger để cho phép sửa trực tiếp Tên và SĐT trên bảng
+        self.debt_table.setEditTriggers(QAbstractItemView.EditTrigger.DoubleClicked | QAbstractItemView.EditTrigger.AnyKeyPressed | QAbstractItemView.EditTrigger.EditKeyPressed)
+        
         self.debt_table.setItemDelegateForColumn(3, MathDelegate(self.debt_table))
-        # Kết nối sự kiện thay đổi dữ liệu (để gọi API)
         self.debt_table.itemChanged.connect(self.on_debt_cell_changed)
         
         l.addWidget(self.debt_table)
@@ -1675,7 +1664,7 @@ class MainWindow(QMainWindow):
         main_layout.addWidget(left_panel, 1)
         main_layout.addWidget(right_panel, 0)
         return w
-    
+
     def refresh_debt_table(self):
         self.debt_table.setUpdatesEnabled(False)
         self.debt_table.setSortingEnabled(False)
@@ -1686,16 +1675,17 @@ class MainWindow(QMainWindow):
             for i, c in enumerate(custs):
                 self.debt_table.insertRow(i)
                 item_id = QTableWidgetItem(str(c['id']))
-                item_id.setFlags(item_id.flags() ^ Qt.ItemFlag.ItemIsEditable)
+                item_id.setFlags(item_id.flags() & ~Qt.ItemFlag.ItemIsEditable) # Khóa ID
                 self.debt_table.setItem(i, 0, item_id)
-                self.debt_table.setItem(i, 1, QTableWidgetItem(c['name']))
-                self.debt_table.setItem(i, 2, QTableWidgetItem(c['phone']))
                 
-                # CHỈ CẦN LƯU GIÁ TRỊ VÀO EditRole/DisplayRole
+                # Cho phép sửa Tên và SĐT
+                self.debt_table.setItem(i, 1, QTableWidgetItem(str(c['name'])))
+                self.debt_table.setItem(i, 2, QTableWidgetItem(str(c['phone'])))
+                
                 item_debt = QTableWidgetItem()
-                item_debt.setData(Qt.ItemDataRole.EditRole, str(c['debt'])) # Giá trị thực cho Delegate
-                item_debt.setData(Qt.ItemDataRole.DisplayRole, f"{c['debt']:,}") # Hiển thị có dấu phẩy
-                item_debt.setData(Qt.ItemDataRole.UserRole, c['debt']) # Lưu giá trị gốc để tính toán
+                item_debt.setData(Qt.ItemDataRole.EditRole, str(c['debt']))
+                item_debt.setData(Qt.ItemDataRole.DisplayRole, f"{c['debt']:,}")
+                item_debt.setData(Qt.ItemDataRole.UserRole, c['debt'])
                 
                 if c['debt'] > 0: item_debt.setForeground(QColor("red"))
                 else: item_debt.setForeground(QColor("black"))
@@ -1712,10 +1702,8 @@ class MainWindow(QMainWindow):
                 btn_del.setFixedSize(30, 25)
                 btn_del.setCursor(Qt.CursorShape.PointingHandCursor)
                 btn_del.clicked.connect(lambda _, cid=c['id']: self.delete_customer(cid))
-                container = QWidget()
-                layout_cen = QHBoxLayout(container)
-                layout_cen.setContentsMargins(0,0,0,0)
-                layout_cen.setAlignment(Qt.AlignmentFlag.AlignCenter)
+                container = QWidget(); layout_cen = QHBoxLayout(container)
+                layout_cen.setContentsMargins(0,0,0,0); layout_cen.setAlignment(Qt.AlignmentFlag.AlignCenter)
                 layout_cen.addWidget(btn_del)
                 self.debt_table.setCellWidget(i, 5, container)
         except: pass
@@ -1741,29 +1729,24 @@ class MainWindow(QMainWindow):
     def on_debt_cell_changed(self, item):
         row = item.row()
         col = item.column()
-        if col != 3: return # Chỉ xử lý cột Nợ
+        if col not in [1, 2, 3]: return # Lắng nghe thay đổi ở Tên, SĐT và Nợ
+        
         try:
             cid_item = self.debt_table.item(row, 0)
             if not cid_item: return
             cid = int(cid_item.text())
-        except: return
-        
-        name = self.debt_table.item(row, 1).text().strip()
-        phone = self.debt_table.item(row, 2).text().strip()
-        
-        debt = 0
-        if col == 3:
-            # Dữ liệu đã được MathDelegate xử lý và lưu vào UserRole
-            debt = int(item.data(Qt.ItemDataRole.UserRole) or 0)
             
-            self.debt_table.blockSignals(True)
-            if debt > 0: item.setForeground(QColor("red"))
-            else: item.setForeground(QColor("black"))
-            self.debt_table.blockSignals(False)
-        else:
+            name = self.debt_table.item(row, 1).text().strip()
+            phone = self.debt_table.item(row, 2).text().strip()
             debt = int(self.debt_table.item(row, 3).data(Qt.ItemDataRole.UserRole) or 0)
+
+            if col == 3:
+                self.debt_table.blockSignals(True)
+                if debt > 0: item.setForeground(QColor("red"))
+                else: item.setForeground(QColor("black"))
+                self.debt_table.blockSignals(False)
             
-        try:
+            # Gửi yêu cầu cập nhật thông tin khách hàng (bao gồm cả tên và SĐT mới)
             requests.put(f"{API_URL}/customers/{cid}", json={"name": name, "phone": phone, "debt": debt})
         except:
             self.refresh_debt_table()
@@ -1864,6 +1847,7 @@ class MainWindow(QMainWindow):
         if self.current_page_his < self.total_pages_his: self.load_history_page(self.current_page_his + 1)
     
     def on_his_loaded(self, incoming_data):
+        from datetime import datetime
         safe_orders_list = []
         data = incoming_data if isinstance(incoming_data, dict) else (incoming_data[0] if isinstance(incoming_data, tuple) else {})
         if isinstance(incoming_data, dict):
@@ -1888,9 +1872,16 @@ class MainWindow(QMainWindow):
             try:
                 if not isinstance(o, dict): continue
                 self.ht_table.insertRow(i)
-                item_date = QTableWidgetItem(str(o.get('created_at') or o.get('date', '')))
-                item_date.setToolTip(item_date.text())
-                # store order object for quick access (edit date)
+                
+                raw_dt = str(o.get('created_at') or o.get('date', ''))
+                try:
+                    dt_obj = datetime.strptime(raw_dt, "%Y-%m-%d %H:%M")
+                    display_dt = dt_obj.strftime("%d/%m/%Y %H:%M")
+                except:
+                    display_dt = raw_dt
+
+                item_date = QTableWidgetItem(display_dt)
+                item_date.setToolTip(display_dt)
                 item_date.setData(Qt.ItemDataRole.UserRole, o)
                 self.ht_table.setItem(i, 0, item_date)
                 
@@ -1898,7 +1889,6 @@ class MainWindow(QMainWindow):
                 item_cust.setToolTip(item_cust.text())
                 self.ht_table.setItem(i, 1, item_cust)
                 
-                # Prefer computing total from items (quantity * price) to avoid relying on a possibly incorrect stored total
                 items_list = o.get('items') or []
                 if items_list:
                     try:
@@ -1907,6 +1897,7 @@ class MainWindow(QMainWindow):
                         val_amt = o.get('total_amount') if o.get('total_amount') is not None else o.get('total_money', 0)
                 else:
                     val_amt = o.get('total_amount') if o.get('total_amount') is not None else o.get('total_money', 0)
+                
                 item_amt = QTableWidgetItem(f"{val_amt:,}")
                 item_amt.setToolTip(item_amt.text())
                 self.ht_table.setItem(i, 2, item_amt)
@@ -1927,10 +1918,8 @@ class MainWindow(QMainWindow):
                 btn_edit.setCursor(Qt.CursorShape.PointingHandCursor)
                 btn_edit.setStyleSheet("color: #e65100; font-weight: bold; border: none;")
                 btn_edit.clicked.connect(lambda _, x=o: self.load_order_to_edit(x))
-                w_edit = QWidget()
-                l_edit = QHBoxLayout(w_edit)
-                l_edit.setContentsMargins(0,0,0,0)
-                l_edit.setAlignment(Qt.AlignmentFlag.AlignCenter)
+                w_edit = QWidget(); l_edit = QHBoxLayout(w_edit)
+                l_edit.setContentsMargins(0,0,0,0); l_edit.setAlignment(Qt.AlignmentFlag.AlignCenter)
                 l_edit.addWidget(btn_edit)
                 self.ht_table.setCellWidget(i, 5, w_edit)
                 
@@ -1939,16 +1928,14 @@ class MainWindow(QMainWindow):
                 btn_del.setFixedSize(30, 25)
                 btn_del.setCursor(Qt.CursorShape.PointingHandCursor)
                 btn_del.clicked.connect(lambda _, x=o: self.delete_order(x.get('id')))
-                container = QWidget()
-                ly = QHBoxLayout(container)
-                ly.setContentsMargins(0,0,0,0)
-                ly.setAlignment(Qt.AlignmentFlag.AlignCenter)
+                container = QWidget(); ly = QHBoxLayout(container)
+                ly.setContentsMargins(0,0,0,0); ly.setAlignment(Qt.AlignmentFlag.AlignCenter)
                 ly.addWidget(btn_del)
                 self.ht_table.setCellWidget(i, 6, container)
             except: continue
+            
         self.ht_table.setUpdatesEnabled(True)
-        self.ht_table.setSortingEnabled(True)
-
+        self.ht_table.setSortingEnabled(False)
     def load_order_to_edit(self, order_data):
         self.editing_order_id = order_data['id']
         self.cart = []
