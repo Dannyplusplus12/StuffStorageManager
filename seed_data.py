@@ -10,7 +10,8 @@ DB_NAME = "shop.db"
 # 1. Xóa DB cũ
 if os.path.exists(DB_NAME):
     os.remove(DB_NAME)
-    print(f"🗑️  Đã xóa file {DB_NAME} cũ.")
+    # avoid non-ascii characters to keep console encoding safe in all environments
+    print(f"Removed old DB file {DB_NAME}.")
 
 DATABASE_URL = f"sqlite:///{DB_NAME}"
 engine = create_engine(DATABASE_URL, connect_args={"check_same_thread": False})
@@ -83,7 +84,8 @@ class OrderItem(Base):
 def create_sample_data():
     Base.metadata.create_all(bind=engine)
     db = SessionLocal()
-    print("🚀 Bắt đầu sinh dữ liệu mẫu...")
+    # avoid emoji to prevent encoding errors on some consoles
+    print("Starting to generate sample data...")
 
     # 1. SẢN PHẨM
     shoe_models = [
@@ -126,7 +128,7 @@ def create_sample_data():
             all_variants.append(var)
     
     db.commit()
-    print(f"✅ Tạo xong sản phẩm.")
+    print("Created products.")
 
     # 2. KHÁCH HÀNG
     customer_names = [("Kho Sỉ Chị Hạnh", "0909123456"), ("Shop Giày Đà Nẵng", "0912345678"), ("Shop Online Thảo Vy", "0905111222")]
@@ -141,7 +143,7 @@ def create_sample_data():
     all_variants = db.query(Variant).all()
     customers = db.query(Customer).all()
     num_orders = 15
-    print(f"🔄 Đang sinh {num_orders} đơn hàng...")
+    print(f"Generating {num_orders} orders...")
 
     for _ in range(num_orders):
         cust = random.choice(customers)
@@ -186,7 +188,7 @@ def create_sample_data():
 
     db.commit()
     db.close()
-    print(f"🎉 HOÀN TẤT! Đã xóa lỗi trùng lặp hóa đơn.")
+    print("Done. Sample data created.")
 
 if __name__ == "__main__":
     create_sample_data()

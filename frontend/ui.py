@@ -254,6 +254,7 @@ class MathDelegate(QStyledItemDelegate):
 class ColorGroupWidget(QFrame):
     def __init__(self, color_name="", is_even=False, parent_layout=None):
         super().__init__()
+        self.parent_layout = parent_layout # Lưu lại layout cha
         self.setFrameShape(QFrame.Shape.NoFrame)
         self.setStyleSheet(f"background-color: {'#fdfbf7' if is_even else '#ffffff'}; border-radius: 6px; margin-bottom: 5px; border: 1px solid #eee;")
         self.layout = QVBoxLayout(self)
@@ -266,6 +267,14 @@ class ColorGroupWidget(QFrame):
         self.color_inp.setStyleSheet("font-weight: bold; border: 1px solid #ccc; background: white;")
         self.color_inp.returnPressed.connect(self.add_size_row)
         
+        # Nút Duplicate mới
+        btn_dup = QPushButton("📑") 
+        btn_dup.setToolTip("Nhân bản nhóm màu này")
+        btn_dup.setObjectName("IconBtn")
+        btn_dup.setFixedSize(30,30)
+        btn_dup.setCursor(Qt.CursorShape.PointingHandCursor)
+        btn_dup.clicked.connect(self.duplicate_self)
+
         btn_del = QPushButton("X")
         btn_del.setObjectName("IconBtn")
         btn_del.setFixedSize(30,30)
@@ -274,6 +283,7 @@ class ColorGroupWidget(QFrame):
         
         h.addWidget(QLabel("Màu:"))
         h.addWidget(self.color_inp)
+        h.addWidget(btn_dup) # Thêm nút nhân bản vào hàng ngang
         h.addWidget(btn_del)
         self.layout.addLayout(h)
         
@@ -286,6 +296,18 @@ class ColorGroupWidget(QFrame):
         btn_add.setObjectName("SecondaryBtn")
         btn_add.clicked.connect(self.add_size_row)
         self.layout.addWidget(btn_add)
+
+    def duplicate_self(self):
+        current_data = self.get_data()
+        if self.parent():
+            parent_layout = self.parent().layout()
+            new_group = ColorGroupWidget(self.color_inp.text() + " (Copy)", not (self.palette().window().color() == QColor('#ffffff')))
+            parent_layout.insertWidget(parent_layout.indexOf(self) + 1, new_group)
+            for data in current_data:
+                new_group.add_size_row(data)
+            
+            new_group.color_inp.setFocus()
+            new_group.color_inp.selectAll()
 
     def add_size_row(self, data=None):
         row = QWidget()
@@ -333,7 +355,8 @@ class ColorGroupWidget(QFrame):
         s_inp.setFocus()
         return row
     
-    def remove_size_row(self, w): w.setParent(None)
+    def remove_size_row(self, w):
+        w.setParent(None)
     def delete_self(self):
         msg = QMessageBox(self)
         msg.setWindowTitle("Xác nhận")
@@ -670,13 +693,25 @@ class CustomerHistoryDialog(QDialog):
         self.tb.cellDoubleClicked.connect(self.tb_dblclick)
         
         l.addWidget(self.tb)
-        l.addWidget(QLabel("<i>* Nút Xóa chỉ xóa dữ liệu, không hoàn tiền.</i>"))
         self.load(cust_id)
 
     def load(self, cid):
         self.tb.setRowCount(0) 
         try:
-            rs = requests.get(f"{API_URL}/customers/{cid}/history").json()
+            resp = requests.get(f"{API_URL}/customers/{cid}/history")
+            if resp.status_code != 200:
+                print(f"Lỗi load lịch sử: HTTP {resp.status_code}")
+                QMessageBox.warning(self, "Lỗi", f"Không thể tải lịch sử (HTTP {resp.status_code})")
+                return
+            try:
+                rs = resp.json()
+            except Exception as e:
+                print("Lỗi parse JSON lịch sử:", e)
+                QMessageBox.warning(self, "Lỗi", "Dữ liệu lịch sử không hợp lệ từ server.")
+                return
+            if not isinstance(rs, list):
+                print("Lỗi load lịch sử: server trả về không phải danh sách")
+                return
             for r in rs:
                 ri = self.tb.rowCount()
                 self.tb.insertRow(ri)
@@ -1237,6 +1272,13 @@ class MainWindow(QMainWindow):
         QTimer.singleShot(100, lambda: (self.switch_page(0), self.load_products_for_grid(), self.load_customer_suggestions()))
 
     def switch_page(self, i):
+        # If switching away from POS/EDIT mode, cancel any in-progress order editing
+        if i != 0:
+            try:
+                self.cancel_editing()
+            except Exception:
+                pass
+
         if i == 0:
             self.mode = "POS"
             self.rs.setCurrentIndex(0)
@@ -1253,6 +1295,42 @@ class MainWindow(QMainWindow):
         else:
             self.stack.setCurrentIndex(2)
             self.refresh_history()
+
+    def cancel_editing(self):
+        """Reset POS editing state so returning to POS shows an empty cart.
+
+        This is invoked when user navigates away or closes the app to avoid
+        lingering "editing order" state that would confuse users.
+        """
+        try:
+            self.editing_order_id = None
+            self.cart = []
+            # reset checkout button
+            try:
+                self.btn_checkout.setText("Xuất hàng")
+            except Exception:
+                pass
+            # clear customer inputs
+            try:
+                self.cust_name_inp.clear()
+                self.cust_phone_inp.clear()
+            except Exception:
+                pass
+            # refresh UI
+            try:
+                self.update_cart_ui()
+            except Exception:
+                pass
+        except Exception:
+            pass
+
+    def closeEvent(self, event):
+        # Ensure any editing state is cancelled when the window is closed
+        try:
+            self.cancel_editing()
+        except Exception:
+            pass
+        super().closeEvent(event)
 
     def setup_grid_layout(self, p):
         l = QHBoxLayout(p)
@@ -1820,7 +1898,15 @@ class MainWindow(QMainWindow):
                 item_cust.setToolTip(item_cust.text())
                 self.ht_table.setItem(i, 1, item_cust)
                 
-                val_amt = o.get('total_amount') if o.get('total_amount') is not None else o.get('total_money', 0)
+                # Prefer computing total from items (quantity * price) to avoid relying on a possibly incorrect stored total
+                items_list = o.get('items') or []
+                if items_list:
+                    try:
+                        val_amt = sum(int(it.get('quantity', 0)) * int(it.get('price', 0)) for it in items_list)
+                    except Exception:
+                        val_amt = o.get('total_amount') if o.get('total_amount') is not None else o.get('total_money', 0)
+                else:
+                    val_amt = o.get('total_amount') if o.get('total_amount') is not None else o.get('total_money', 0)
                 item_amt = QTableWidgetItem(f"{val_amt:,}")
                 item_amt.setToolTip(item_amt.text())
                 self.ht_table.setItem(i, 2, item_amt)

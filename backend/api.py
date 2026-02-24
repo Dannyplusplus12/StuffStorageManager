@@ -3,7 +3,8 @@ from pydantic import BaseModel
 from typing import List, Optional
 from sqlalchemy import desc
 from sqlalchemy.orm import Session
-from backend.database import SessionLocal, Product, Variant, Order, OrderItem, Customer, DebtLog
+from backend.database import SessionLocal, Product, Variant, Order, OrderItem, Customer, DebtLog, engine
+from sqlalchemy import text
 from datetime import datetime  # <--- ĐÃ THÊM IMPORT NÀY
 
 from pydantic import BaseModel
@@ -23,6 +24,27 @@ class OrderDateUpdate(BaseModel):
     created_at: str  # YYYY-MM-DD HH:MM
 
 app = FastAPI()
+
+# Ensure DB has `created_ts` columns (migration/backfill for existing DBs)
+def ensure_created_ts_columns():
+    try:
+        with engine.connect() as conn:
+            for table in ("orders", "debt_logs"):
+                info = conn.execute(text(f"PRAGMA table_info('{table}')")).fetchall()
+                cols = [r[1] for r in info]
+                if 'created_ts' not in cols:
+                    # add column
+                    conn.execute(text(f"ALTER TABLE {table} ADD COLUMN created_ts INTEGER"))
+                    # backfill from created_at where possible (convert to epoch ms)
+                    if table == 'orders':
+                        conn.execute(text("UPDATE orders SET created_ts = CAST(strftime('%s', created_at) AS INTEGER) * 1000 WHERE created_at IS NOT NULL"))
+                    else:
+                        conn.execute(text("UPDATE debt_logs SET created_ts = CAST(strftime('%s', created_at) AS INTEGER) * 1000 WHERE created_at IS NOT NULL"))
+    except Exception as e:
+        # Migration is best effort — do not crash the app if this fails
+        print("Warning: ensure_created_ts_columns failed:", e)
+
+ensure_created_ts_columns()
 
 # --- DEPENDENCY: KẾT NỐI DB ---
 def get_db():
@@ -168,7 +190,7 @@ def create_customer_manual(data: CustomerCreate, db: Session = Depends(get_db)):
         db.flush()
         
         if data.debt != 0:
-            db.add(DebtLog(customer_id=new_cust.id, change_amount=data.debt, new_balance=data.debt, note="Khởi tạo thủ công"))
+            db.add(DebtLog(customer_id=new_cust.id, change_amount=data.debt, new_balance=data.debt, note="Khởi tạo thủ công", created_ts=int(datetime.utcnow().timestamp() * 1000)))
         
         db.commit()
         db.refresh(new_cust)
@@ -194,7 +216,7 @@ def update_customer_excel(cid: int, data: CustomerUpdate, db: Session = Depends(
     cust.debt = data.debt
     
     if diff != 0:
-        db.add(DebtLog(customer_id=cust.id, change_amount=diff, new_balance=cust.debt, note="Điều chỉnh thủ công"))
+        db.add(DebtLog(customer_id=cust.id, change_amount=diff, new_balance=cust.debt, note="Điều chỉnh thủ công", created_ts=int(datetime.utcnow().timestamp() * 1000)))
         
     db.commit()
     return {"status": "ok"}
@@ -227,33 +249,48 @@ def get_customer_history(cid: int, db: Session = Depends(get_db)):
         amt = getattr(o, "total_amount", getattr(o, "total_money", 0))
         qty = getattr(o, "total_qty", total_items)
         
+        # include a numeric timestamp (epoch ms) for stable high-resolution sorting
+        if hasattr(o, 'created_ts') and o.created_ts:
+            ts = int(o.created_ts)
+        else:
+            ts = int(o.created_at.timestamp() * 1000) if hasattr(o.created_at, 'timestamp') else 0
         history.append({
             "type": "ORDER",
+            # display date only up to minutes; sort by high-resolution timestamp
             "date": o.created_at.strftime("%Y-%m-%d %H:%M"),
+            "sort_ts": ts,
             "desc": f"Xuất đơn hàng #{o.id}",
             "amount": amt,
             "data": {
-                "id": o.id, 
-                "customer": o.customer_name, 
+                "id": o.id,
+                "customer": o.customer_name,
+                # display date only up to minutes
                 "date": o.created_at.strftime("%d/%m %H:%M"),
-                "total_money": amt, 
-                "total_qty": qty, 
+                "total_money": amt,
+                "total_qty": qty,
                 "items": details
             }
         })
     
     logs = db.query(DebtLog).filter(DebtLog.customer_id == cid).all()
     for l in logs:
+        if hasattr(l, 'created_ts') and l.created_ts:
+            l_ts = int(l.created_ts)
+        else:
+            l_ts = int(l.created_at.timestamp() * 1000) if hasattr(l.created_at, 'timestamp') else 0
         history.append({
             "type": "LOG",
             "date": l.created_at.strftime("%Y-%m-%d %H:%M"),
+            "sort_ts": l_ts,
             "desc": l.note,
             "amount": l.change_amount,
             "data": None,
             "log_id": l.id
         })
         
-    return sorted(history, key=lambda x: x['date'], reverse=True)
+    # Sort by high-resolution timestamp so entries created within the same
+    # minute are ordered correctly (newer first).
+    return sorted(history, key=lambda x: x.get('sort_ts', 0), reverse=True)
 
 
 @app.post("/customers/{cid}/history")
@@ -269,7 +306,12 @@ def create_debt_log(cid: int, data: DebtLogCreate, db: Session = Depends(get_db)
             created_at = datetime.strptime(data.created_at, "%Y-%m-%d %H:%M")
 
         cust.debt += amt
-        db.add(DebtLog(customer_id=cust.id, change_amount=amt, new_balance=cust.debt, note=data.note, created_at=created_at))
+        # use the provided created_at for created_ts if available
+        try:
+            ts_ms = int(created_at.timestamp() * 1000)
+        except Exception:
+            ts_ms = int(datetime.utcnow().timestamp() * 1000)
+        db.add(DebtLog(customer_id=cust.id, change_amount=amt, new_balance=cust.debt, note=data.note, created_at=created_at, created_ts=ts_ms))
         db.commit()
         return {"status": "created"}
     except Exception as e:
@@ -294,7 +336,10 @@ def update_debt_log(cid: int, log_id: int, data: DebtLogUpdate, db: Session = De
         log.change_amount = new_amt
         log.note = data.note
         if data.created_at:
-            log.created_at = datetime.strptime(data.created_at, "%Y-%m-%d %H:%M")
+            new_dt = datetime.strptime(data.created_at, "%Y-%m-%d %H:%M")
+            log.created_at = new_dt
+            # update created_ts to match provided time (as epoch ms)
+            log.created_ts = int(new_dt.timestamp() * 1000)
         log.new_balance = cust.debt
         db.commit()
         return {"status": "updated"}
@@ -327,7 +372,9 @@ def update_order_date(order_id: int, data: OrderDateUpdate, db: Session = Depend
     if not order:
         raise HTTPException(status_code=404, detail="Đơn hàng không tồn tại")
     try:
-        order.created_at = datetime.strptime(data.created_at, "%Y-%m-%d %H:%M")
+        new_dt = datetime.strptime(data.created_at, "%Y-%m-%d %H:%M")
+        order.created_at = new_dt
+        order.created_ts = int(new_dt.timestamp() * 1000)
         db.commit()
         return {"status": "updated"}
     except Exception as e:
@@ -363,6 +410,8 @@ def checkout(data: CheckoutRequest, db: Session = Depends(get_db)):
             customer_name=customer.name if customer else "Khách lẻ",
             customer_id=customer.id if customer else None
         )
+        # set high-resolution timestamp
+        new_order.created_ts = int(datetime.utcnow().timestamp() * 1000)
         db.add(new_order)
         db.flush()
         
@@ -426,7 +475,9 @@ def update_order_api(order_id: int, data: CheckoutRequest, db: Session = Depends
         old_order.customer_name = c_name if c_name else "Khách lẻ"
         old_order.customer_id = customer.id if customer else None
         old_order.total_amount = total_new
-        old_order.created_at = datetime.now() # <--- ĐÃ SỬA LỖI TẠI ĐÂY
+        now_dt = datetime.now()
+        old_order.created_at = now_dt
+        old_order.created_ts = int(now_dt.timestamp() * 1000)
 
         for item in data.cart:
             db.add(OrderItem(
@@ -448,7 +499,11 @@ def update_order_api(order_id: int, data: CheckoutRequest, db: Session = Depends
 def get_orders(page: int = 1, limit: int = 20, db: Session = Depends(get_db)):
     skip = (page - 1) * limit
     total = db.query(Order).count()
-    orders = db.query(Order).order_by(desc(Order.created_at)).offset(skip).limit(limit).all()
+    # order by high-resolution timestamp if available, fallback to created_at
+    try:
+        orders = db.query(Order).order_by(desc(Order.created_ts)).offset(skip).limit(limit).all()
+    except Exception:
+        orders = db.query(Order).order_by(desc(Order.created_at)).offset(skip).limit(limit).all()
     
     result = []
     for o in orders:
@@ -483,10 +538,28 @@ def delete_order_only(order_id: int, db: Session = Depends(get_db)):
     if not order:
         raise HTTPException(status_code=404, detail="Hóa đơn không tồn tại")
     try:
+        # 1) Restore variant stock from items
+        for item in order.items:
+            if item.variant_id:
+                var = db.query(Variant).filter(Variant.id == item.variant_id).first()
+                if var:
+                    var.stock = (var.stock or 0) + (item.quantity or 0)
+
+        # 2) Revert customer debt if linked
+        if order.customer_id:
+            cust = db.query(Customer).filter(Customer.id == order.customer_id).first()
+            if cust and order.total_amount:
+                # subtract order amount from customer's debt
+                try:
+                    cust.debt = (cust.debt or 0) - int(order.total_amount or 0)
+                except Exception:
+                    cust.debt = (cust.debt or 0) - (order.total_amount or 0)
+
+        # 3) Delete order items and order itself
         db.query(OrderItem).filter(OrderItem.order_id == order_id).delete()
         db.delete(order)
         db.commit()
-        return {"detail": "Đã xóa hóa đơn"}
+        return {"detail": "Đã xóa hóa đơn và hoàn tác kho + công nợ"}
     except Exception as e:
         db.rollback()
         raise HTTPException(status_code=500, detail=str(e))

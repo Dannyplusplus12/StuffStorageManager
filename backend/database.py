@@ -57,6 +57,8 @@ class DebtLog(Base):
     new_balance = Column(Integer) # Dư nợ sau khi đổi
     note = Column(String) # Lý do (vd: "Mua hàng đơn #10", "Trả nợ", "Điều chỉnh")
     created_at = Column(DateTime, default=datetime.now)
+    # high-resolution epoch milliseconds for stable sorting when many entries share the same minute
+    created_ts = Column(Integer, default=lambda: int(datetime.utcnow().timestamp() * 1000))
     
     customer = relationship("Customer", back_populates="logs")
 
@@ -67,6 +69,8 @@ class Order(Base):
     customer_name = Column(String) # Vẫn giữ để hiển thị nhanh
     customer_id = Column(Integer, ForeignKey("customers.id"), nullable=True) # Link vào hồ sơ khách
     created_at = Column(DateTime, default=datetime.now)
+    # high-resolution epoch milliseconds for stable sorting
+    created_ts = Column(Integer, default=lambda: int(datetime.utcnow().timestamp() * 1000))
     total_amount = Column(Integer)
     
     items = relationship("OrderItem", back_populates="order")
