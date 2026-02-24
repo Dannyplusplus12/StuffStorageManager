@@ -1,7 +1,7 @@
 Traceback (most recent call last):
-  File "D:\Dev\APP\StuffStorageManager\run_app.py", line 44, in <module>
+  File "D:\Dev\APP\StuffStorageManager\run_app.py", line 38, in <module>
     from frontend.ui import MainWindow
-  File "D:\Dev\APP\StuffStorageManager\frontend\ui.py", line 1677
+  File "D:\Dev\APP\StuffStorageManager\frontend\ui.py", line 1657
     def refresh_debt_table(self):
                                  ^
 IndentationError: unindent does not match any outer indentation level

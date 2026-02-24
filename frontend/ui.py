@@ -49,7 +49,7 @@ SHOPEE_THEME = """
     QPushButton#SecondaryBtn { background-color: #ffffff; color: #333333; border: 1px solid #cccccc; padding: 6px 12px; }
     /* hover: subtle background change, do not change text color */
     QPushButton#SecondaryBtn:hover { background-color: #fff5f2; border-color: #ee4d2d; }
-    QLineEdit { border: 1px solid #ddd; padding: 6px; border-radius: 2px; background: white; color: #333; }
+    QLineEdit { border: 1px solid #ddd; padding: 6px; border-radius: 2px; background: white; color: #333; font-size: 14px}
     QLineEdit:focus { border: 1px solid #ee4d2d; background: #fffdfb; }
     QTableWidget { border: 1px solid #ddd; background: white; gridline-color: #eee; color: #333; selection-background-color: #fff5f2; selection-color: #ee4d2d; font-size: 13px; }
     QHeaderView::section { background-color: #f8f8f8; padding: 6px; border: none; border-bottom: 1px solid #ddd; font-weight: bold; color: #555; }
@@ -378,7 +378,6 @@ class AddCustomerPanel(QWidget):
         l.setContentsMargins(10, 10, 10, 10)
         l.setAlignment(Qt.AlignmentFlag.AlignTop)
         
-        l.addWidget(QLabel("Thêm Khách Hàng Mới", objectName="HeaderTitle"))
         l.addSpacing(10)
         
         l.addWidget(QLabel("Tên khách hàng (*):"))
@@ -1086,7 +1085,6 @@ class AddProductPanel(QWidget):
         l = QVBoxLayout(self)
         l.setContentsMargins(10, 10, 10, 10)
         
-        l.addWidget(QLabel("Thêm Sản Phẩm Mới", objectName="HeaderTitle"))
         self.name_inp = QLineEdit()
         self.name_inp.setPlaceholderText("Tên giày...")
         l.addWidget(self.name_inp)
@@ -1245,7 +1243,6 @@ class MainWindow(QMainWindow):
         QTimer.singleShot(100, lambda: (self.switch_page(0), self.load_products_for_grid(), self.load_customer_suggestions()))
 
     def switch_page(self, i):
-        # If switching away from POS/EDIT mode, cancel any in-progress order editing
         if i != 0:
             try:
                 self.cancel_editing()
@@ -1256,12 +1253,10 @@ class MainWindow(QMainWindow):
             self.mode = "POS"
             self.rs.setCurrentIndex(0)
             self.stack.setCurrentIndex(0)
-            self.ht.setText("Xuất Hàng")
         elif i == 1:
             self.mode = "INV"
             self.rs.setCurrentIndex(1)
             self.stack.setCurrentIndex(0)
-            self.ht.setText("Quản Lý Kho (Sửa)")
         elif i == 2:
             self.stack.setCurrentIndex(1)
             self.refresh_debt_table()
@@ -1312,16 +1307,19 @@ class MainWindow(QMainWindow):
         ll = QVBoxLayout(lp)
         ll.setContentsMargins(0,0,0,0)
         
-        h = QHBoxLayout()
-        self.ht = QLabel("Xuất Hàng")
-        self.ht.setObjectName("HeaderTitle")
-        s = QLineEdit()
-        s.setPlaceholderText("🔍 Tìm kiếm (Tên SP)...")
-        s.textChanged.connect(self.on_search_text_changed)
-        h.addWidget(self.ht)
-        h.addStretch()
-        h.addWidget(s)
-        ll.addLayout(h)
+        search_container = QHBoxLayout()
+        self.search_inp = QLineEdit()
+        self.search_inp.setPlaceholderText("🔍 Tìm kiếm tên sản phẩm...")
+        self.search_inp.setFixedWidth(500)
+        self.search_inp.setMinimumHeight(45)
+        self.search_inp.textChanged.connect(self.on_search_text_changed)
+        
+        search_container.addStretch()
+        search_container.addWidget(self.search_inp)
+        search_container.addStretch()
+        
+        ll.addLayout(search_container)
+        ll.addSpacing(10)
         
         self.gs = QScrollArea()
         self.gs.setWidgetResizable(True)
@@ -1332,7 +1330,6 @@ class MainWindow(QMainWindow):
         self.pg.setSpacing(10)
         self.gs.setWidget(self.gc)
         ll.addWidget(self.gs)
-        # Connect scroll bar to enable lazy loading when user scrolls near bottom
         self.gs.verticalScrollBar().valueChanged.connect(self.on_scroll)
         l.addWidget(lp, 1) 
 
@@ -1352,8 +1349,8 @@ class MainWindow(QMainWindow):
         self.cust_name_inp = QLineEdit()
         self.cust_name_inp.setPlaceholderText("Nhập tên khách")
         self.cust_name_inp.setCompleter(self.cust_completer)
-        self.cust_name_inp.setStyleSheet("padding: 8px; border: 1px solid #ee4d2d;")
         cl.addWidget(self.cust_name_inp)
+        
         self.cust_phone_inp = QLineEdit()
         self.cust_phone_inp.setPlaceholderText("Số điện thoại")
         cl.addWidget(self.cust_phone_inp)
@@ -1366,13 +1363,9 @@ class MainWindow(QMainWindow):
         self.ct.itemChanged.connect(self.on_cart_qty_changed)
         self.ct.setSelectionBehavior(QAbstractItemView.SelectionBehavior.SelectRows)
         self.ct.horizontalHeader().setSectionResizeMode(0, QHeaderView.ResizeMode.Stretch)
-        self.ct.horizontalHeader().setSectionResizeMode(1, QHeaderView.ResizeMode.Fixed)
         self.ct.setColumnWidth(1, 35)
-        self.ct.horizontalHeader().setSectionResizeMode(2, QHeaderView.ResizeMode.Fixed)
         self.ct.setColumnWidth(2, 80)
-        self.ct.horizontalHeader().setSectionResizeMode(3, QHeaderView.ResizeMode.Fixed)
         self.ct.setColumnWidth(3, 25)
-        self.ct.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
         cl.addWidget(self.ct)
         
         self.lbl_total = QLabel("0 món - 0 đ")
@@ -1384,8 +1377,6 @@ class MainWindow(QMainWindow):
         self.btn_checkout.setMinimumHeight(50)
         self.btn_checkout.setCursor(Qt.CursorShape.PointingHandCursor)
         self.btn_checkout.clicked.connect(self.checkout)
-        # Slightly enhance visual affordance programmatically for checkout primary action
-        self.btn_checkout.setStyleSheet("font-weight: bold; padding: 12px 20px;")
         cl.addWidget(self.btn_checkout)
         
         self.rs.addWidget(cw)
@@ -1606,36 +1597,38 @@ class MainWindow(QMainWindow):
         l = QVBoxLayout(left_panel)
         l.setContentsMargins(0, 0, 0, 0)
         
-        h = QHBoxLayout()
-        h.addWidget(QLabel("Quản lý Công Nợ", objectName="HeaderTitle"))
-        self.debt_search = QLineEdit()
-        self.debt_search.setPlaceholderText("🔍 Tìm tên hoặc SĐT...")
-        self.debt_search.setFixedWidth(250)
-        self.debt_search.textChanged.connect(self.filter_debt_table)
-        h.addWidget(self.debt_search)
+        header_layout = QVBoxLayout()
         
-        b = QPushButton("Làm mới")
-        b.setObjectName("SecondaryBtn")
-        b.setCursor(Qt.CursorShape.PointingHandCursor)
-        b.clicked.connect(self.refresh_debt_table)
-        h.addWidget(b)
-        h.addStretch()
-        l.addLayout(h)
+        search_container = QHBoxLayout()
+        self.debt_search = QLineEdit()
+        self.debt_search.setPlaceholderText("🔍 Tìm tên hoặc số điện thoại khách hàng...")
+        self.debt_search.setFixedWidth(500)
+        self.debt_search.setMinimumHeight(45)
+        self.debt_search.textChanged.connect(self.filter_debt_table)
+        
+        btn_refresh = QPushButton("Làm mới")
+        btn_refresh.setObjectName("SecondaryBtn")
+        btn_refresh.setFixedSize(100, 45)
+        btn_refresh.setCursor(Qt.CursorShape.PointingHandCursor)
+        btn_refresh.clicked.connect(self.refresh_debt_table)
+        
+        search_container.addStretch()
+        search_container.addWidget(self.debt_search)
+        search_container.addWidget(btn_refresh)
+        search_container.addStretch()
+        
+        header_layout.addLayout(search_container)
+        l.addLayout(header_layout)
+        l.addSpacing(10)
         
         self.debt_table = QTableWidget(0, 6)
         self.debt_table.setHorizontalHeaderLabels(["ID", "Tên Khách", "SĐT", "Dư Nợ (VNĐ)", "Lịch sử", "Xóa"])
         self.debt_table.setColumnHidden(0, True)
         self.debt_table.horizontalHeader().setSectionResizeMode(1, QHeaderView.ResizeMode.Stretch)
-        self.debt_table.horizontalHeader().setSectionResizeMode(5, QHeaderView.ResizeMode.Fixed)
         self.debt_table.setColumnWidth(5, 50)
-        self.debt_table.verticalHeader().setDefaultSectionSize(40)
-        
-        # Mở khóa các Trigger để cho phép sửa trực tiếp Tên và SĐT trên bảng
-        self.debt_table.setEditTriggers(QAbstractItemView.EditTrigger.DoubleClicked | QAbstractItemView.EditTrigger.AnyKeyPressed | QAbstractItemView.EditTrigger.EditKeyPressed)
-        
+        self.debt_table.setEditTriggers(QAbstractItemView.EditTrigger.DoubleClicked | QAbstractItemView.EditTrigger.AnyKeyPressed)
         self.debt_table.setItemDelegateForColumn(3, MathDelegate(self.debt_table))
         self.debt_table.itemChanged.connect(self.on_debt_cell_changed)
-        
         l.addWidget(self.debt_table)
         
         right_panel = QWidget()
@@ -1744,7 +1737,6 @@ class MainWindow(QMainWindow):
         w = QWidget()
         l = QVBoxLayout(w)
         h = QHBoxLayout()
-        h.addWidget(QLabel("Lịch Sử Hóa Đơn"))
         b = QPushButton("Làm mới")
         b.setObjectName("SecondaryBtn")
         b.setCursor(Qt.CursorShape.PointingHandCursor)
