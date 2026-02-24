@@ -49,7 +49,7 @@ SHOPEE_THEME = """
     QPushButton#SecondaryBtn { background-color: #ffffff; color: #333333; border: 1px solid #cccccc; padding: 6px 12px; }
     /* hover: subtle background change, do not change text color */
     QPushButton#SecondaryBtn:hover { background-color: #fff5f2; border-color: #ee4d2d; }
-    QLineEdit { border: 1px solid #ddd; padding: 6px; border-radius: 2px; background: white; color: #333; font-size: 14px}
+    QLineEdit { border: 1px solid #ddd; padding: 6px; border-radius: 2px; background: white; color: #333; font-size: 12px}
     QLineEdit:focus { border: 1px solid #ee4d2d; background: #fffdfb; }
     QTableWidget { border: 1px solid #ddd; background: white; gridline-color: #eee; color: #333; selection-background-color: #fff5f2; selection-color: #ee4d2d; font-size: 13px; }
     QHeaderView::section { background-color: #f8f8f8; padding: 6px; border: none; border-bottom: 1px solid #ddd; font-weight: bold; color: #555; }
@@ -855,7 +855,7 @@ class ProductBuyDialog(QDialog):
         img.setPixmap(get_centered_image(self.product['image'], QSize(90, 90)))
         i = QVBoxLayout()
         i.addWidget(QLabel(f"<h2>{self.product['name']}</h2>"))
-        i.addWidget(QLabel(f"Giá: <span style='color:#ee4d2d; font-weight:bold'>{self.product['price_range']} đ</span>"))
+        i.addWidget(QLabel(f"Giá: <span style='color:#ee4d2d; font-weight:bold'>{self.product['price_range']} k</span>"))
         h.addWidget(img)
         h.addLayout(i)
         l.addLayout(h)
@@ -897,7 +897,7 @@ class ProductBuyDialog(QDialog):
                 lb_sz = QLabel(f"Size {v['size']}")
                 lb_sz.setStyleSheet(f"background-color: {bg}" if bg else "")
                 
-                lb_pr = QLabel(f"{v['price']:,}đ (Kho: {v['stock']}){status_txt}")
+                lb_pr = QLabel(f"{v['price']:,}k (Kho: {v['stock']}){status_txt}")
                 lb_pr.setStyleSheet(f"background-color: {bg}" if bg else "")
                 
                 g.addWidget(lb_sz, j, 0)
@@ -1473,7 +1473,7 @@ class MainWindow(QMainWindow):
         
         l.addWidget(img)
         l.addWidget(n)
-        l.addWidget(QLabel(f"{p['price_range']} đ"))
+        l.addWidget(QLabel(f"{p['price_range']} k"))
         return card
     
     def on_card_click(self, p):
@@ -1508,7 +1508,7 @@ class MainWindow(QMainWindow):
         for it in self.cart:
             total += it['price'] * it['quantity']
             qty += it['quantity']
-        self.lbl_total.setText(f"Tổng: {qty} món - {total:,} đ")
+        self.lbl_total.setText(f"Tổng: {qty} món - {total:,} k")
 
     def update_cart_ui(self):
         self.ct.blockSignals(True)
@@ -1545,7 +1545,7 @@ class MainWindow(QMainWindow):
             self.ct.setCellWidget(i, 3, b)
             
         self.ct.resizeRowsToContents()
-        self.lbl_total.setText(f"Tổng: {qty} món - {total:,} đ")
+        self.lbl_total.setText(f"Tổng: {qty} món - {total:,} k")
         self.ct.blockSignals(False)
         
     def remove_cart(self, i):
