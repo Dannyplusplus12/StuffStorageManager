@@ -31,9 +31,6 @@
 !frontend/
 !frontend/*.py
 
-# Flutter frontend - ALL files and folders
-!flutter_frontend/
-!flutter_frontend/**
 
 # Python cache & venv
 **/__pycache__/
