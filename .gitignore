@@ -1,53 +1,59 @@
 *
 /*/
 
+# Root level whitelists
 !.gitignore
-!backend/
-!backend/api.py
-!backend/database.py
-!backend/requirements.txt
-!backend/server.py
-!backend/railway.toml
-!backend/Procfile
-!frontend/
-!frontend/ui.py
-!flutter_frontend/
-!crash_log.txt
-!requirements.txt
-!requirements-server.txt
-!seed_data.py
-!shop.db
+!README.md
+!README_DEV.md
+!SETUP.md
+!GITIGNORE_CHECKLIST.md
 !PROJECT_CONTEXT.md
 !Procfile
 !railway.toml
-!*.py
-!*.md
-!*.txt
-!*.toml
-!*.json
+!server.py
+!run_app.py
+!seed_data.py
+!requirements.txt
+!requirements-server.txt
+!crash_log.txt
+!shop.db
+!config.json
+!note.txt
 
-# Python
+# Backend folder and files
+!backend/
+!backend/*.py
+!backend/*.txt
+!backend/*.toml
+!backend/Procfile
+
+# Frontend (Python legacy)
+!frontend/
+!frontend/*.py
+
+# Flutter frontend - ALL files and folders
+!flutter_frontend/
+!flutter_frontend/**
+
+# Python cache & venv
 **/__pycache__/
 **/*.pyc
-**/__pycache__/
 *.egg-info/
 .Python
 build/
 dist/
 *.egg
-
-# Virtual environments
 venv/
 env/
 ENV/
 .venv
 
-# Environment variables
+# Environment
 .env
 .env.local
 .env.*.local
 
-# Flutter & Dart
+# Flutter & Dart - BUILD OUTPUTS ONLY
 flutter_frontend/build/
 flutter_frontend/.dart_tool/
 flutter_frontend/.flutter-plugins
@@ -56,6 +62,7 @@ flutter_frontend/.packages
 flutter_frontend/pubspec.lock
 flutter_frontend/**/.g.dart
 flutter_frontend/**/*.g.dart
+flutter_frontend/**/doc/api/
 
 # IDE
 .vs/
@@ -78,6 +85,7 @@ Thumbs.db
 *.log
 logs/
 npm-debug.log
+
 yarn-error.log
 
 # Misc
