@@ -3,11 +3,12 @@ from pydantic import BaseModel
 from typing import List, Optional
 from sqlalchemy import desc
 from sqlalchemy.orm import Session
-from backend.database import SessionLocal, Product, Variant, Order, OrderItem, Customer, DebtLog, engine
+try:
+    from backend.database import SessionLocal, Product, Variant, Order, OrderItem, Customer, DebtLog, engine, is_sqlite, Base
+except ImportError:
+    from database import SessionLocal, Product, Variant, Order, OrderItem, Customer, DebtLog, engine, is_sqlite, Base
 from sqlalchemy import text
-from datetime import datetime  # <--- ĐÃ THÊM IMPORT NÀY
-
-from pydantic import BaseModel
+from datetime import datetime
 
 
 class DebtLogCreate(BaseModel):
@@ -26,6 +27,8 @@ class OrderDateUpdate(BaseModel):
 app = FastAPI()
 
 def ensure_created_ts_columns():
+    if not is_sqlite:
+        return  # Only needed for SQLite migration
     try:
         with engine.connect() as conn:
             for table in ("orders", "debt_logs"):
@@ -38,6 +41,8 @@ def ensure_created_ts_columns():
     except Exception as e:
         print("Warning: ensure_created_ts_columns failed:", e)
 
+# Create tables (needed for first deploy on new DB)
+Base.metadata.create_all(bind=engine)
 ensure_created_ts_columns()
 
 # --- DEPENDENCY: KẾT NỐI DB ---

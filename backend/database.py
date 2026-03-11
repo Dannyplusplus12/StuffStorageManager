@@ -9,14 +9,24 @@ def get_db_path():
         application_path = os.path.dirname(sys.executable)
     else:
         current_dir = os.path.dirname(os.path.abspath(__file__))
-        application_path = os.path.dirname(current_dir) 
+        if os.path.basename(current_dir) == 'backend':
+            application_path = os.path.dirname(current_dir)
+        else:
+            application_path = current_dir
     return os.path.join(application_path, "shop.db")
 
-db_path = get_db_path()
-DATABASE_URL = f"sqlite:///{db_path}"
+# Railway / cloud: set DATABASE_URL env var (e.g. postgresql://...)
+# Local desktop: falls back to SQLite
+DATABASE_URL = os.environ.get("DATABASE_URL")
+if not DATABASE_URL:
+    db_path = get_db_path()
+    DATABASE_URL = f"sqlite:///{db_path}"
+
+is_sqlite = DATABASE_URL.startswith("sqlite")
 
 Base = declarative_base()
-engine = create_engine(DATABASE_URL, connect_args={"check_same_thread": False})
+connect_args = {"check_same_thread": False} if is_sqlite else {}
+engine = create_engine(DATABASE_URL, connect_args=connect_args)
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 
 # 1. Product & Variant (Giữ nguyên)

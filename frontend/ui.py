@@ -1,6 +1,7 @@
 import sys
 import shutil
 import os
+import json
 import requests
 import re
 import time
@@ -9,7 +10,23 @@ from PyQt6.QtWidgets import *
 from PyQt6.QtCore import Qt, QThread, pyqtSignal, QSize, QTimer, QStringListModel, QDateTime
 from PyQt6.QtGui import QPixmap, QIntValidator, QColor, QCursor, QStandardItemModel, QStandardItem, QKeySequence
 
-API_URL = "http://127.0.0.1:8000"
+def _load_api_url():
+    """Load API_URL from config.json (next to exe or project root)."""
+    default = "http://127.0.0.1:8000"
+    try:
+        if getattr(sys, 'frozen', False):
+            base = os.path.dirname(sys.executable)
+        else:
+            base = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+        cfg_path = os.path.join(base, "config.json")
+        if os.path.exists(cfg_path):
+            with open(cfg_path, "r", encoding="utf-8") as f:
+                return json.load(f).get("api_url", default).rstrip("/")
+    except Exception:
+        pass
+    return default
+
+API_URL = _load_api_url()
 
 # --- 1. CSS GIAO DIỆN CHUẨN ---
 SHOPEE_THEME = """
