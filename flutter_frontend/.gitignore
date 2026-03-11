@@ -1,111 +1,39 @@
-# Flutter
+# Flutter - Build outputs only (não ignore source code)
 /build/
-/coverage/
 .dart_tool/
 .flutter-plugins
 .flutter-plugins-dependencies
-.packages
 pubspec.lock
-**/doc/api/
-**/ios/Flutter/.last_build_id
+/coverage/
 
-# iOS/macOS
-**/ios/
-**/macos/
-*.pbxuser
-*.mode1v3
-*.mode2v3
-*.movf
-*.xcconfig
-**/Flutter/Flutter.framework
-**/Flutter/Flutter.podspec
-
-# Android
-**/android/app/debug
-**/android/app/profile
-**/android/app/release
-local.properties
-.gradle/
-
-# Web
-**/web/
-
-# Windows
-**/windows/
-windows/flutter/generated_plugins.cmake
-
-# Linux
-**/linux/
-
-# Generated
+# Generated Dart files
 *.g.dart
 *.config.dart
-app.*.symbols
-app.*.map.json
+**/doc/api/
 
-# IDE - VS Code
-.vscode/
-.vscode/settings.json
-.vscode/launch.json
+# Local machine specific
+.packages
+.pub-cache/
 
-# IDE - IntelliJ
-.idea/
-*.iml
-*.ipr
-*.iws
-.classpath
+# Platform build folders (source code files like windows/CMakeLists.txt WILL be tracked)
+/build/
+/ios/build/
+/android/build/
+/macos/build/
+/web/build/
+/windows/build/
+/linux/build/
+.gradle/
 
-# IDE - Sublime
-*.sublime-workspace
+# Generated platform files only
+**/ios/Flutter/.last_build_id
+local.properties
+windows/flutter/generated_plugins.cmake
+**/.dart_tool/
+**/.flutter/
 
-# IDE - Android Studio
-.gradle
-gradlew
-gradlew.bat
-
-# OS Files
-.DS_Store
-Thumbs.db
-.AppleDouble
-.LSOverride
-._*
-.Spotlight-V100
-.Trashes
-
-# Miscellaneous
-*.class
-*.log
-*.pyc
-*.swp
-.atom/
-.build/
-.buildlog/
-.history
-.svn/
-.swiftpm/
-migrate_working_dir/
-
-# Logs
-npm-debug.log
-yarn-error.log
-logs/
-
-# Environment
-.env
-.env.local
-.env.*.local
-
-# Secrets & Keys
-*.pem
-*.key
+# Build/Cache
 *.jks
 *.keystore
-config.json
-secrets.json
 
-# Build artifacts
-dist/
-output/
-temp/
-.tmp/
 
