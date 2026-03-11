@@ -5,16 +5,85 @@
 !backend/
 !backend/api.py
 !backend/database.py
+!backend/requirements.txt
+!backend/server.py
+!backend/railway.toml
+!backend/Procfile
 !frontend/
 !frontend/ui.py
+!flutter_frontend/
 !crash_log.txt
 !requirements.txt
+!requirements-server.txt
 !seed_data.py
 !shop.db
+!PROJECT_CONTEXT.md
+!Procfile
+!railway.toml
+!*.py
+!*.md
+!*.txt
+!*.toml
+!*.json
 
+# Python
 **/__pycache__/
 **/*.pyc
-.vs/
+**/__pycache__/
+*.egg-info/
+.Python
+build/
+dist/
+*.egg
+
+# Virtual environments
 venv/
+env/
+ENV/
+.venv
+
+# Environment variables
 .env
-/seed_data.py
+.env.local
+.env.*.local
+
+# Flutter & Dart
+flutter_frontend/build/
+flutter_frontend/.dart_tool/
+flutter_frontend/.flutter-plugins
+flutter_frontend/.flutter-plugins-dependencies
+flutter_frontend/.packages
+flutter_frontend/pubspec.lock
+flutter_frontend/**/.g.dart
+flutter_frontend/**/*.g.dart
+
+# IDE
+.vs/
+.vscode/
+.idea/
+*.iml
+*.ipr
+*.iws
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+.AppleDouble
+.LSOverride
+
+# Logs
+*.log
+logs/
+npm-debug.log
+yarn-error.log
+
+# Misc
+temp/
+tmp/
+.tmp/
+dist/
+output/
+
