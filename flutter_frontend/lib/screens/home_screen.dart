@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
+import 'dart:io';
 import '../app_pages.dart';
 import '../theme.dart';
+import '../utils/app_mode_manager.dart';
 import 'dashboard_screen.dart';
 import 'pos_screen.dart';
 import 'debt_screen.dart';
@@ -34,14 +36,34 @@ class _HomeScreenState extends State<HomeScreen> {
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      body: Row(
-        children: [
-          _Sidebar(selected: _page, onSelect: _select),
-          Expanded(child: _body()),
-        ],
-      ),
-    );
+    final isMobile = MediaQuery.of(context).size.width < 768;
+
+    if (isMobile) {
+      return Scaffold(
+        body: _body(),
+        bottomNavigationBar: BottomNavigationBar(
+          currentIndex: _page.index,
+          onTap: (index) => _select(AppPage.values[index]),
+          type: BottomNavigationBarType.fixed,
+          items: [
+            BottomNavigationBarItem(icon: const Icon(Icons.dashboard_outlined), activeIcon: const Icon(Icons.dashboard), label: 'Tổng quan'),
+            BottomNavigationBarItem(icon: const Icon(Icons.point_of_sale_outlined), activeIcon: const Icon(Icons.point_of_sale), label: 'Xuất hàng'),
+            BottomNavigationBarItem(icon: const Icon(Icons.inventory_2_outlined), activeIcon: const Icon(Icons.inventory_2), label: 'Kho'),
+            BottomNavigationBarItem(icon: const Icon(Icons.people_outline), activeIcon: const Icon(Icons.people), label: 'Công nợ'),
+            BottomNavigationBarItem(icon: const Icon(Icons.receipt_long_outlined), activeIcon: const Icon(Icons.receipt_long), label: 'Hóa đơn'),
+          ],
+        ),
+      );
+    } else {
+      return Scaffold(
+        body: Row(
+          children: [
+            _Sidebar(selected: _page, onSelect: _select),
+            Expanded(child: _body()),
+          ],
+        ),
+      );
+    }
   }
 
   Widget _body() {

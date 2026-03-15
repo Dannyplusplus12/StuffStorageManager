@@ -41,9 +41,30 @@ def ensure_created_ts_columns():
     except Exception as e:
         print("Warning: ensure_created_ts_columns failed:", e)
 
+def ensure_is_draft_column():
+    """Add is_draft column to orders table if not exists"""
+    try:
+        with engine.connect() as conn:
+            if is_sqlite:
+                info = conn.execute(text("PRAGMA table_info('orders')")).fetchall()
+                cols = [r[1] for r in info]
+                if 'is_draft' not in cols:
+                    conn.execute(text("ALTER TABLE orders ADD COLUMN is_draft INTEGER DEFAULT 1"))
+                    conn.commit()
+            else:
+                # PostgreSQL
+                try:
+                    conn.execute(text("ALTER TABLE orders ADD COLUMN is_draft INTEGER DEFAULT 1"))
+                    conn.commit()
+                except:
+                    pass  # Column might already exist
+    except Exception as e:
+        print("Warning: ensure_is_draft_column failed:", e)
+
 # Create tables (needed for first deploy on new DB)
 Base.metadata.create_all(bind=engine)
 ensure_created_ts_columns()
+ensure_is_draft_column()
 
 # --- DEPENDENCY: KẾT NỐI DB ---
 def get_db():
@@ -552,6 +573,178 @@ def delete_order_only(order_id: int, db: Session = Depends(get_db)):
         db.delete(order)
         db.commit()
         return {"detail": "Đã xóa hóa đơn và hoàn tác kho + công nợ"}
+    except Exception as e:
+        db.rollback()
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+# ───────────────────────────────────────────────────────────────
+# NEW: DRAFT ORDERS & APPROVAL SYSTEM (FOR STAFF APP)
+# ───────────────────────────────────────────────────────────────
+
+@app.post("/checkout/draft")
+def checkout_draft(data: CheckoutRequest, db: Session = Depends(get_db)):
+    """
+    Create a DRAFT order (is_draft=1) from staff app.
+    Order is NOT applied to database yet - waiting for approval.
+    """
+    try:
+        total = sum([item.quantity * item.price for item in data.cart])
+
+        c_name = data.customer_name.strip()
+        customer = None
+
+        if c_name:
+            from sqlalchemy import func
+            customer = db.query(Customer).filter(func.lower(Customer.name) == func.lower(c_name)).first()
+
+            if not customer:
+                customer = Customer(name=c_name, phone=data.customer_phone, debt=0)
+                db.add(customer)
+                db.flush()
+
+        new_order = Order(
+            total_amount=total,
+            customer_name=customer.name if customer else "Khách lẻ",
+            customer_id=customer.id if customer else None,
+            is_draft=1  # ← IMPORTANT: Mark as draft/pending
+        )
+        new_order.created_ts = int(datetime.utcnow().timestamp() * 1000)
+        db.add(new_order)
+        db.flush()
+
+        for item in data.cart:
+            db.add(OrderItem(
+                order_id=new_order.id,
+                product_name=item.product_name,
+                variant_id=item.variant_id,
+                variant_info=f"{item.color}-{item.size}",
+                quantity=item.quantity,
+                price=item.price
+            ))
+
+        db.commit()
+        return {
+            "status": "success",
+            "order_id": new_order.id,
+            "message": "Hóa đơn đã được lưu chờ duyệt"
+        }
+    except Exception as e:
+        db.rollback()
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.get("/orders/pending")
+def get_pending_orders(db: Session = Depends(get_db)):
+    """
+    Get all PENDING orders (is_draft=1) for desktop approval.
+    """
+    try:
+        orders = db.query(Order).filter(Order.is_draft == 1).order_by(desc(Order.created_ts)).all()
+
+        result = []
+        for o in orders:
+            items_list = []
+            calc_qty = 0
+            if o.items:
+                for i in o.items:
+                    calc_qty += i.quantity
+                    items_list.append({
+                        "product_name": i.product_name,
+                        "variant_id": i.variant_id,
+                        "variant_info": i.variant_info,
+                        "quantity": i.quantity,
+                        "price": i.price
+                    })
+
+            result.append({
+                "id": o.id,
+                "created_at": o.created_at.strftime("%Y-%m-%d %H:%M") if o.created_at else "",
+                "customer_name": o.customer_name or "Khách lẻ",
+                "customer_id": o.customer_id,
+                "total_amount": o.total_amount,
+                "total_qty": calc_qty,
+                "is_draft": o.is_draft,
+                "items": items_list
+            })
+
+        return {"data": result, "count": len(result)}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.put("/orders/{order_id}/approve")
+def approve_order(order_id: int, db: Session = Depends(get_db)):
+    """
+    Approve a DRAFT order (is_draft=1) and apply to database:
+    - Deduct stock from variants
+    - Add debt to customer
+    - Mark as_draft=0 (APPROVED)
+    """
+    try:
+        order = db.query(Order).filter(Order.id == order_id).first()
+        if not order:
+            raise HTTPException(status_code=404, detail="Hóa đơn không tồn tại")
+
+        if order.is_draft == 0:
+            raise HTTPException(status_code=400, detail="Hóa đơn này đã được duyệt rồi")
+
+        # 1) Check stock availability
+        for item in order.items:
+            if item.variant_id:
+                var = db.query(Variant).filter(Variant.id == item.variant_id).first()
+                if not var or var.stock < item.quantity:
+                    raise HTTPException(
+                        status_code=400,
+                        detail=f"SP {item.product_name} không đủ hàng ({var.stock if var else 0} tồn kho)"
+                    )
+
+        # 2) Deduct stock
+        for item in order.items:
+            if item.variant_id:
+                var = db.query(Variant).filter(Variant.id == item.variant_id).first()
+                if var:
+                    var.stock -= item.quantity
+
+        # 3) Add debt
+        if order.customer_id:
+            customer = db.query(Customer).filter(Customer.id == order.customer_id).first()
+            if customer:
+                customer.debt += order.total_amount
+
+        # 4) Mark as approved
+        order.is_draft = 0
+        db.commit()
+
+        return {
+            "status": "success",
+            "message": f"Hóa đơn #{order_id} đã được duyệt và áp dụng"
+        }
+    except Exception as e:
+        db.rollback()
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.delete("/orders/{order_id}/reject")
+def reject_order(order_id: int, db: Session = Depends(get_db)):
+    """
+    Reject a DRAFT order - simply delete it.
+    No stock or debt changes since order was never applied.
+    """
+    try:
+        order = db.query(Order).filter(Order.id == order_id).first()
+        if not order:
+            raise HTTPException(status_code=404, detail="Hóa đơn không tồn tại")
+
+        if order.is_draft == 0:
+            raise HTTPException(status_code=400, detail="Không thể từ chối hóa đơn đã duyệt")
+
+        # Simply delete the draft order
+        db.query(OrderItem).filter(OrderItem.order_id == order_id).delete()
+        db.delete(order)
+        db.commit()
+
+        return {"status": "success", "message": f"Hóa đơn #{order_id} đã bị từ chối"}
     except Exception as e:
         db.rollback()
         raise HTTPException(status_code=500, detail=str(e))

@@ -140,4 +140,57 @@ class ApiService {
       'recentOrders': ordersMap['data'] as List<Order>,
     };
   }
+
+  // ── Draft Orders (Staff App) ──
+  /// Create a DRAFT order (pending approval)
+  static Future<Map<String, dynamic>> checkoutDraft({
+    required String customerName,
+    String customerPhone = '',
+    required List<CartItem> cart,
+  }) async {
+    final r = await http.post(
+      Uri.parse('$_b/checkout/draft'),
+      headers: _headers,
+      body: jsonEncode({
+        'customer_name': customerName,
+        'customer_phone': customerPhone,
+        'cart': cart.map((e) => e.toJson()).toList(),
+      }),
+    );
+    if (r.statusCode == 200) {
+      return jsonDecode(utf8.decode(r.bodyBytes));
+    }
+    throw Exception(jsonDecode(utf8.decode(r.bodyBytes))['detail'] ?? 'Lỗi tạo hóa đơn nháp');
+  }
+
+  /// Get all pending orders
+  static Future<List<Order>> getPendingOrders() async {
+    final r = await http.get(Uri.parse('$_b/orders/pending')).timeout(_timeout);
+    if (r.statusCode == 200) {
+      final data = jsonDecode(utf8.decode(r.bodyBytes));
+      return (data['data'] as List).map((e) => Order.fromJson(e)).toList();
+    }
+    throw Exception('Lỗi tải hóa đơn chờ duyệt');
+  }
+
+  /// Approve a draft order
+  static Future<Map<String, dynamic>> approveOrder(int orderId) async {
+    final r = await http.put(
+      Uri.parse('$_b/orders/$orderId/approve'),
+      headers: _headers,
+    );
+    if (r.statusCode == 200) {
+      return jsonDecode(utf8.decode(r.bodyBytes));
+    }
+    throw Exception(jsonDecode(utf8.decode(r.bodyBytes))['detail'] ?? 'Lỗi duyệt hóa đơn');
+  }
+
+  /// Reject (delete) a draft order
+  static Future<Map<String, dynamic>> rejectOrder(int orderId) async {
+    final r = await http.delete(Uri.parse('$_b/orders/$orderId/reject'));
+    if (r.statusCode == 200) {
+      return jsonDecode(utf8.decode(r.bodyBytes));
+    }
+    throw Exception(jsonDecode(utf8.decode(r.bodyBytes))['detail'] ?? 'Lỗi từ chối hóa đơn');
+  }
 }

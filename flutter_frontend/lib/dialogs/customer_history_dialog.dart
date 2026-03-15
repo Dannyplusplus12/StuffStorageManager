@@ -85,7 +85,7 @@ class _CustomerHistoryDialogState extends State<CustomerHistoryDialog> {
     if (h.data == null) return;
     final d = h.data!;
     final items = (d['items'] as List? ?? []).map((i) => OrderItem.fromJson(i as Map<String, dynamic>)).toList();
-    final o = Order(id: d['id'] ?? 0, createdAt: d['date'] ?? '', customerName: d['customer_name'] ?? d['customer'] ?? '', totalAmount: (d['total_money'] ?? 0) as int, totalQty: (d['total_qty'] ?? 0) as int, items: items);
+    final o = Order(id: d['id'] ?? 0, createdAt: d['date'] ?? '', customerName: d['customer_name'] ?? d['customer'] ?? '', totalAmount: (d['total_money'] ?? 0) as int, totalQty: (d['total_qty'] ?? 0) as int, isDraft: (d['is_draft'] ?? 0) as int, items: items);
     showDialog(context: context, builder: (_) => OrderDetailDialog(order: o));
   }
 
