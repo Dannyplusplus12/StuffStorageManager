@@ -1,13 +1,17 @@
 # PROJECT CONTEXT — StuffStorageManager
 > **Mục đích file này:** Copy nội dung bên dưới và paste vào đầu cuộc hội thoại mới với AI để AI hiểu toàn bộ tình hình dự án, không cần giải thích lại.
 > 
-> **Cập nhật lần cuối:** Tháng 6/2025
+> **Cập nhật lần cuối:** Tháng 3/2026
 
 ---
 
 ## 1. TỔNG QUAN DỰ ÁN
 
-**StuffStorageManager** — Ứng dụng quản lý kho hàng, xuất hàng, công nợ khách hàng cho cửa hàng giày.
+**StuffStorageManager** — Hệ thống quản lý kho hàng, xuất hàng, công nợ khách hàng.
+
+Hiện có 2 nhóm client:
+- **Desktop app (chính)**: quản trị đầy đủ + duyệt hóa đơn nháp từ mobile staff
+- **Flutter app (mobile child app)**: phân quyền VIEWER/STAFF bằng PIN nội bộ
 
 ### Kiến trúc: Client-Server tách biệt
 ```
@@ -31,6 +35,15 @@ D:\Dev\APP\StuffStorageManager\          ← Git repo chính (GitHub: Dannyplusp
 │
 ├── frontend\
 │   └── ui.py                            ← TOÀN BỘ GUI (PyQt6) — POS, Kho, Công nợ, Hóa đơn
+
+├── flutter_frontend\                    ← Flutter app (mobile + desktop runtime)
+│   ├── lib\main.dart                    ← Entry app, route desktop/mobile theo device
+│   ├── lib\screens\home_screen.dart    ← Desktop Flutter UI (sidebar)
+│   ├── lib\screens\mobile_home_screen.dart ← Mobile child app UI theo role
+│   ├── lib\utils\app_mode_manager.dart ← PIN mode manager (VIEWER/STAFF)
+│   ├── lib\dialogs\staff_pin_dialog.dart ← Popup nhập PIN (mặc định 1111)
+│   ├── lib\services\notification_service.dart ← Polling trạng thái pending
+│   └── lib\utils\device_detector.dart  ← Detect mobile/desktop
 │
 ├── backend\
 │   ├── api.py                           ← FastAPI app (bản dev, copy sang server-repo khi deploy)
@@ -68,7 +81,7 @@ D:\Dev\APP\StuffStorageManager\          ← Git repo chính (GitHub: Dannyplusp
 - **GitHub:** `https://github.com/Dannyplusplus12/StuffStorageManager`
 - **Branch:** `main`
 - **Chứa:** frontend, backend (dev), scripts, .exe config
-- **⚠️ .gitignore rất strict** — chỉ track `backend/api.py`, `backend/database.py`, `frontend/ui.py`, `requirements.txt`, `seed_data.py`, `shop.db`
+- **⚠️ .gitignore rất strict** — chỉ push source/config cần thiết; không push build output, log, DB local backup
 
 ### Repo 2: Server deploy (nằm trong thư mục `server-repo/`)
 - **Path local:** `D:\Dev\APP\StuffStorageManager\server-repo`
@@ -100,14 +113,14 @@ D:\Dev\APP\StuffStorageManager\          ← Git repo chính (GitHub: Dannyplusp
 
 ---
 
-## 5. DATABASE SCHEMA (6 bảng)
+## 5. DATABASE SCHEMA (6 bảng + cột draft)
 
 ```sql
 products (id, name, description, image_path)
 variants (id, product_id FK, color, size, price, stock)
 customers (id, name UNIQUE, phone, debt)
 debt_logs (id, customer_id FK, change_amount, new_balance, note, created_at, created_ts)
-orders (id, customer_name, customer_id FK, created_at, created_ts, total_amount)
+orders (id, customer_name, customer_id FK, created_at, created_ts, total_amount, is_draft)
 order_items (id, order_id FK, product_name, variant_id FK, variant_info, quantity, price)
 ```
 
@@ -163,6 +176,10 @@ copy config.json dist\config.json
 | GET | `/orders?page=&limit=` | Danh sách hóa đơn (phân trang) |
 | DELETE | `/orders/{id}` | Xóa hóa đơn (hoàn tác kho + nợ) |
 | PUT | `/orders/{id}/date` | Sửa ngày giờ đơn hàng |
+| POST | `/checkout/draft` | Tạo hóa đơn nháp từ mobile staff |
+| GET | `/orders/pending` | Danh sách hóa đơn chờ desktop duyệt |
+| PUT | `/orders/{id}/approve` | Desktop duyệt nháp (trừ kho, cộng nợ, chốt đơn) |
+| DELETE | `/orders/{id}/reject` | Desktop từ chối nháp (xóa hoàn toàn) |
 
 ### database.py hỗ trợ dual-mode:
 ```python
@@ -188,6 +205,8 @@ is_sqlite = DATABASE_URL.startswith("sqlite")   # Flag cho migration conditional
 
 | Layer | Công nghệ | Version |
 |-------|-----------|---------|
+| Mobile app | Flutter | 3.41.x |
+| Dart | Dart SDK | 3.11.x |
 | Frontend | PyQt6 | 6.10.2 |
 | Backend | FastAPI | 0.128.8 |
 | ORM | SQLAlchemy | 2.0.46 |
@@ -210,3 +229,33 @@ is_sqlite = DATABASE_URL.startswith("sqlite")   # Flag cho migration conditional
 6. **Backup**: Nên chạy `download_from_cloud.py` định kỳ (tuần/tháng)
 7. **Railway free tier**: Có giới hạn credit. Nếu hết → server tắt (DB vẫn còn)
 8. **`backend/` vs `server-repo/`**: `backend/` là bản dev, `server-repo/` là bản deploy. Luôn giữ sync
+
+9. **Mobile là app con, không bê UI desktop**: mobile có flow riêng, nhẹ hơn desktop
+10. **Phân quyền mobile bắt buộc**:
+   - VIEWER mặc định: chỉ xem kho (read-only)
+   - STAFF (PIN 1111): xem kho + công nợ + lịch sử hóa đơn + tạo hóa đơn nháp
+11. **Chỉ desktop được duyệt/từ chối hóa đơn**: mobile staff không có quyền duyệt
+12. **Nếu `/orders/pending` lỗi trên môi trường cũ**: mobile vẫn phải hiển thị lịch sử từ `/orders`
+
+---
+
+## 11. MOBILE CHILD APP FLOW (Flutter)
+
+### Quy tắc nghiệp vụ
+- App mở lên mặc định `VIEWER`
+- Nhấn `Kích hoạt staff` → nhập PIN `1111` để vào `STAFF`
+- `STAFF` tạo hóa đơn mới dưới dạng **draft** (`is_draft=1`)
+- Desktop nhận pending và quyết định:
+  - `Approve` → chốt đơn + trừ kho + cập nhật công nợ
+  - `Reject` → xóa draft hoàn toàn
+
+### Khả năng theo role
+- **VIEWER**: chỉ xem sản phẩm + tồn kho
+- **STAFF**: xem tồn kho, xem công nợ, xem lịch sử hóa đơn đã duyệt, tạo draft order
+- **Desktop**: đầy đủ quyền + duyệt/từ chối pending
+
+### Notification chiều ngược về staff
+- Mobile polling trạng thái draft đã gửi
+- Khi draft chuyển khỏi pending:
+  - còn tồn tại trong orders → thông báo đã duyệt
+  - không tồn tại → thông báo đã bị từ chối

@@ -15,8 +15,6 @@
 !seed_data.py
 !requirements.txt
 !requirements-server.txt
-!crash_log.txt
-!shop.db
 !config.json
 !note.txt
 
@@ -34,9 +32,6 @@
 # Flutter frontend - ALL files and folders
 !flutter_frontend/
 !flutter_frontend/**
-
-!frontend/
-!frontend/*.py
 
 
 # Python cache & venv
@@ -67,6 +62,14 @@ flutter_frontend/pubspec.lock
 flutter_frontend/**/.g.dart
 flutter_frontend/**/*.g.dart
 flutter_frontend/**/doc/api/
+flutter_frontend/**/.dart_tool/
+flutter_frontend/**/build/
+flutter_frontend/android/.gradle/
+flutter_frontend/android/local.properties
+flutter_frontend/ios/Pods/
+flutter_frontend/macos/Pods/
+flutter_frontend/windows/flutter/ephemeral/
+flutter_frontend/linux/flutter/ephemeral/
 
 # IDE
 .vs/
@@ -89,8 +92,11 @@ Thumbs.db
 *.log
 logs/
 npm-debug.log
+yarn-debug.log
 
 yarn-error.log
+crash_log.txt
+crash-*.txt
 
 # Misc
 temp/
@@ -98,4 +104,11 @@ tmp/
 .tmp/
 dist/
 output/
+
+# Local data / backups (do not push)
+*.db
+*.db-shm
+*.db-wal
+*backup*.db
+shop_backup.db
 
