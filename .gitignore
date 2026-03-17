@@ -17,6 +17,10 @@
 !requirements-server.txt
 !config.json
 !note.txt
+!.github/
+!.github/**
+!ios_ipa_build/
+!ios_ipa_build/**
 
 # Backend folder and files
 !backend/

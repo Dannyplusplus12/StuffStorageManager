@@ -1,0 +1,61 @@
+name: Build iOS Unsigned IPA
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - main
+    paths:
+      - 'flutter_frontend/**'
+      - '.github/workflows/build-ios-unsigned-ipa.yml'
+
+jobs:
+  build-ios-unsigned-ipa:
+    runs-on: macos-latest
+    defaults:
+      run:
+        working-directory: flutter_frontend
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          flutter-version: '3.41.4'
+          channel: stable
+          cache: true
+
+      - name: Install dependencies
+        run: flutter pub get
+
+      - name: Verify iOS platform exists
+        run: |
+          if [ ! -d "ios" ]; then
+            echo "Missing flutter_frontend/ios. Run: flutter create --platforms=ios ."
+            exit 1
+          fi
+
+      - name: Build iOS app without code signing
+        run: flutter build ios --release --no-codesign
+
+      - name: Package unsigned IPA
+        run: |
+          APP_PATH="build/ios/iphoneos/Runner.app"
+          if [ ! -d "$APP_PATH" ]; then
+            echo "Runner.app not found at $APP_PATH"
+            exit 1
+          fi
+          rm -rf build/ios/ipa
+          mkdir -p build/ios/ipa/Payload
+          cp -R "$APP_PATH" build/ios/ipa/Payload/
+          cd build/ios/ipa
+          zip -r ../StuffStorageManager-ios-unsigned.ipa Payload
+
+      - name: Upload unsigned IPA artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: StuffStorageManager-ios-unsigned-ipa
+          path: flutter_frontend/build/ios/StuffStorageManager-ios-unsigned.ipa
+          if-no-files-found: error
