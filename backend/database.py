@@ -82,7 +82,9 @@ class Order(Base):
     # high-resolution epoch milliseconds for stable sorting
     created_ts = Column(Integer, default=lambda: int(datetime.utcnow().timestamp() * 1000))
     total_amount = Column(Integer)
-    is_draft = Column(Integer, default=1)  # 1 = PENDING (chờ duyệt), 0 = APPROVED (đã apply)
+    is_draft = Column(Integer, default=0)  # 1 = PENDING (chờ duyệt), 0 = APPROVED (đã apply)
+    # status: 'pending' | 'accepted' | 'completed'
+    status = Column(String, default='completed')
 
     items = relationship("OrderItem", back_populates="order")
     customer_rel = relationship("Customer", back_populates="orders")

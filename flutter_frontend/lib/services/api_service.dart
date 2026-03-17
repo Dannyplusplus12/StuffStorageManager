@@ -160,6 +160,9 @@ class ApiService {
     if (r.statusCode == 200) {
       return jsonDecode(utf8.decode(r.bodyBytes));
     }
+    if (r.statusCode == 404) {
+      throw Exception('Server chưa hỗ trợ duyệt nháp (thiếu endpoint /checkout/draft). Cần cập nhật backend mới.');
+    }
     throw Exception(jsonDecode(utf8.decode(r.bodyBytes))['detail'] ?? 'Lỗi tạo hóa đơn nháp');
   }
 
@@ -169,6 +172,9 @@ class ApiService {
     if (r.statusCode == 200) {
       final data = jsonDecode(utf8.decode(r.bodyBytes));
       return (data['data'] as List).map((e) => Order.fromJson(e)).toList();
+    }
+    if (r.statusCode == 404) {
+      throw Exception('Server chưa hỗ trợ danh sách đơn chờ duyệt (/orders/pending). Cần cập nhật backend mới.');
     }
     throw Exception('Lỗi tải hóa đơn chờ duyệt');
   }
@@ -185,12 +191,38 @@ class ApiService {
     throw Exception(jsonDecode(utf8.decode(r.bodyBytes))['detail'] ?? 'Lỗi duyệt hóa đơn');
   }
 
-  /// Reject (delete) a draft order
+  /// Reject (delete) a pending order
   static Future<Map<String, dynamic>> rejectOrder(int orderId) async {
     final r = await http.delete(Uri.parse('$_b/orders/$orderId/reject'));
     if (r.statusCode == 200) {
       return jsonDecode(utf8.decode(r.bodyBytes));
     }
     throw Exception(jsonDecode(utf8.decode(r.bodyBytes))['detail'] ?? 'Lỗi từ chối hóa đơn');
+  }
+
+  /// Get all accepted orders (for picker)
+  static Future<List<Order>> getAcceptedOrders() async {
+    final r = await http.get(Uri.parse('$_b/orders/accepted')).timeout(_timeout);
+    if (r.statusCode == 200) {
+      final data = jsonDecode(utf8.decode(r.bodyBytes));
+      return (data['data'] as List).map((e) => Order.fromJson(e)).toList();
+    }
+    final body = r.bodyBytes.isNotEmpty ? jsonDecode(utf8.decode(r.bodyBytes)) : null;
+    throw Exception(body is Map<String, dynamic> ? (body['detail'] ?? 'Lỗi tải đơn hàng đã tiếp nhận') : 'Lỗi tải đơn hàng đã tiếp nhận');
+  }
+
+  /// Picker confirms delivery — deducts stock + records debt
+  static Future<Map<String, dynamic>> confirmOrder(int orderId) async {
+    final r = await http.put(Uri.parse('$_b/orders/$orderId/confirm'), headers: _headers);
+    if (r.statusCode == 200) return jsonDecode(utf8.decode(r.bodyBytes));
+    throw Exception(jsonDecode(utf8.decode(r.bodyBytes))['detail'] ?? 'Lỗi xác nhận đơn hàng');
+  }
+
+  /// Lightweight status check for orderer polling
+  static Future<Map<String, dynamic>?> getOrderStatus(int orderId) async {
+    final r = await http.get(Uri.parse('$_b/orders/$orderId/status')).timeout(_timeout);
+    if (r.statusCode == 200) return jsonDecode(utf8.decode(r.bodyBytes));
+    if (r.statusCode == 404) return null; // rejected/deleted
+    throw Exception('Status check failed: ${r.statusCode}');
   }
 }

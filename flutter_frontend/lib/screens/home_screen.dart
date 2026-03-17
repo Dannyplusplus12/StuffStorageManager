@@ -1,12 +1,12 @@
 import 'package:flutter/material.dart';
-import 'dart:io';
 import '../app_pages.dart';
+import '../services/notification_service.dart';
 import '../theme.dart';
-import '../utils/app_mode_manager.dart';
 import 'dashboard_screen.dart';
 import 'pos_screen.dart';
 import 'debt_screen.dart';
 import 'orders_screen.dart';
+import 'pending_approval_screen.dart';
 
 export '../app_pages.dart';
 
@@ -36,34 +36,14 @@ class _HomeScreenState extends State<HomeScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final isMobile = MediaQuery.of(context).size.width < 768;
-
-    if (isMobile) {
-      return Scaffold(
-        body: _body(),
-        bottomNavigationBar: BottomNavigationBar(
-          currentIndex: _page.index,
-          onTap: (index) => _select(AppPage.values[index]),
-          type: BottomNavigationBarType.fixed,
-          items: [
-            BottomNavigationBarItem(icon: const Icon(Icons.dashboard_outlined), activeIcon: const Icon(Icons.dashboard), label: 'Tổng quan'),
-            BottomNavigationBarItem(icon: const Icon(Icons.point_of_sale_outlined), activeIcon: const Icon(Icons.point_of_sale), label: 'Xuất hàng'),
-            BottomNavigationBarItem(icon: const Icon(Icons.inventory_2_outlined), activeIcon: const Icon(Icons.inventory_2), label: 'Kho'),
-            BottomNavigationBarItem(icon: const Icon(Icons.people_outline), activeIcon: const Icon(Icons.people), label: 'Công nợ'),
-            BottomNavigationBarItem(icon: const Icon(Icons.receipt_long_outlined), activeIcon: const Icon(Icons.receipt_long), label: 'Hóa đơn'),
-          ],
-        ),
-      );
-    } else {
-      return Scaffold(
-        body: Row(
-          children: [
-            _Sidebar(selected: _page, onSelect: _select),
-            Expanded(child: _body()),
-          ],
-        ),
-      );
-    }
+    return Scaffold(
+      body: Row(
+        children: [
+          _Sidebar(selected: _page, onSelect: _select),
+          Expanded(child: _body()),
+        ],
+      ),
+    );
   }
 
   Widget _body() {
@@ -78,6 +58,8 @@ class _HomeScreenState extends State<HomeScreen> {
         return DebtScreen(onEditOrder: switchToPosWithOrder);
       case AppPage.orders:
         return OrdersScreen(onEditOrder: switchToPosWithOrder);
+      case AppPage.pendingApproval:
+        return PendingApprovalScreen(onChanged: () => setState(() {}));
     }
   }
 }
@@ -89,6 +71,7 @@ class _Sidebar extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final pendingCount = NotificationService.pendingOrderCount;
     return Container(
       width: 200,
       color: kSidebar,
@@ -128,6 +111,13 @@ class _Sidebar extends StatelessWidget {
           _item(Icons.inventory_2_outlined, Icons.inventory_2, 'Kho hàng', AppPage.inventory),
           _item(Icons.people_outline, Icons.people, 'Công nợ', AppPage.debt),
           _item(Icons.receipt_long_outlined, Icons.receipt_long, 'Hóa đơn', AppPage.orders),
+          _item(
+            Icons.fact_check_outlined,
+            Icons.fact_check,
+            'Duyệt đơn',
+            AppPage.pendingApproval,
+            badgeCount: pendingCount,
+          ),
           const Spacer(),
           const Padding(
             padding: EdgeInsets.all(20),
@@ -138,7 +128,7 @@ class _Sidebar extends StatelessWidget {
     );
   }
 
-  Widget _item(IconData icon, IconData activeIcon, String label, AppPage page) {
+  Widget _item(IconData icon, IconData activeIcon, String label, AppPage page, {int badgeCount = 0}) {
     final active = selected == page;
     return Container(
       margin: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
@@ -169,6 +159,13 @@ class _Sidebar extends StatelessWidget {
                   fontSize: 13,
                 ),
               ),
+              const Spacer(),
+              if (badgeCount > 0)
+                Container(
+                  width: 8,
+                  height: 8,
+                  decoration: const BoxDecoration(color: Colors.red, shape: BoxShape.circle),
+                ),
             ],
           ),
         ),

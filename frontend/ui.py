@@ -675,7 +675,7 @@ class CustomerHistoryDialog(QDialog):
         l.addLayout(h_top)
 
         self.tb = QTableWidget(0, 7)
-        self.tb.setHorizontalHeaderLabels(["Ngày giờ", "Loại", "Nội dung", "Số tiền", "Xem", "Sửa", "Xóa"])
+        self.tb.setHorizontalHeaderLabels(["Ngày giờ", "Loại", "Nội dung", "Số tiền", "Xem", "Sửa", "Hoàn tác"])
         
         self.tb.horizontalHeader().setSectionResizeMode(2, QHeaderView.ResizeMode.Stretch)
         self.tb.horizontalHeader().setSectionResizeMode(4, QHeaderView.ResizeMode.Fixed)
@@ -824,7 +824,9 @@ class CustomerHistoryDialog(QDialog):
         msg.setText("Bạn có chắc chắn muốn xóa bản ghi điều chỉnh này? (Không hoàn tiền)")
         msg.setIcon(QMessageBox.Icon.Warning)
         btn_co = msg.addButton("Có", QMessageBox.ButtonRole.YesRole)
+        btn_co.setCursor(Qt.CursorShape.PointingHandCursor)
         btn_khong = msg.addButton("Không", QMessageBox.ButtonRole.NoRole)
+        btn_khong.setCursor(Qt.CursorShape.PointingHandCursor)
         msg.exec()
         if msg.clickedButton() == btn_co:
             try:
@@ -1242,6 +1244,7 @@ class MainWindow(QMainWindow):
         mk_nav("✏️ Kho hàng", 1)
         mk_nav("👥 Công nợ", 2)
         mk_nav("🧾 Hóa đơn", 3)
+        mk_nav("📋 Chờ duyệt", 4)
         sl.addStretch()
         main.addWidget(sb)
 
@@ -1255,6 +1258,10 @@ class MainWindow(QMainWindow):
         
         self.page_his = self.setup_history_page()
         self.stack.addWidget(self.page_his)
+
+        self.page_pending = self.setup_pending_page()
+        self.stack.addWidget(self.page_pending)
+
         main.addWidget(self.stack)
         
         QTimer.singleShot(100, lambda: (self.switch_page(0), self.load_products_for_grid(), self.load_customer_suggestions()))
@@ -1277,9 +1284,12 @@ class MainWindow(QMainWindow):
         elif i == 2:
             self.stack.setCurrentIndex(1)
             self.refresh_debt_table()
-        else:
+        elif i == 3:
             self.stack.setCurrentIndex(2)
             self.refresh_history()
+        else:
+            self.stack.setCurrentIndex(3)
+            self.load_pending_page()
 
     def cancel_editing(self):
         """Reset POS editing state so returning to POS shows an empty cart.
@@ -1749,254 +1759,119 @@ class MainWindow(QMainWindow):
             custs = requests.get(f"{API_URL}/customers").json()
             self.cust_completer.setModel(QStringListModel([c['name'] for c in custs]))
         except: pass
-    
-    def setup_history_page(self):
+
+    # ─── PENDING ORDERS PAGE ───────────────────────────────────────
+    def setup_pending_page(self):
         w = QWidget()
         l = QVBoxLayout(w)
         h = QHBoxLayout()
         b = QPushButton("Làm mới")
         b.setObjectName("SecondaryBtn")
         b.setCursor(Qt.CursorShape.PointingHandCursor)
-        b.clicked.connect(lambda: self.load_history_page(1))
+        b.clicked.connect(self.load_pending_page)
         h.addWidget(b)
         h.addStretch()
+        self.lbl_pending_count = QLabel("0 đơn đang chờ")
+        self.lbl_pending_count.setStyleSheet("font-weight: bold; color: #e65100;")
+        h.addWidget(self.lbl_pending_count)
         l.addLayout(h)
-        
-        self.ht_table = QTableWidget(0, 7)
-        self.ht_table.setHorizontalHeaderLabels(["Ngày giờ", "Khách hàng", "Tổng tiền", "SL", "Chi tiết", "Sửa", "Xóa"])
-        self.ht_table.horizontalHeader().setSectionResizeMode(1, QHeaderView.ResizeMode.Stretch)
-        self.ht_table.horizontalHeader().setSectionResizeMode(5, QHeaderView.ResizeMode.Fixed)
-        self.ht_table.horizontalHeader().setSectionResizeMode(6, QHeaderView.ResizeMode.Fixed)
-        self.ht_table.setColumnWidth(5, 60)
-        self.ht_table.setColumnWidth(6, 60)
-        self.ht_table.setEditTriggers(QAbstractItemView.EditTrigger.NoEditTriggers)
-        self.ht_table.setSelectionBehavior(QAbstractItemView.SelectionBehavior.SelectRows)
-        self.ht_table.cellDoubleClicked.connect(self.ht_cell_dblclick)
-        l.addWidget(self.ht_table)
-        
-        pagination_layout = QHBoxLayout()
-        pagination_layout.addStretch()
-        self.btn_prev = QPushButton("< Trước")
-        self.btn_prev.setObjectName("SecondaryBtn")
-        self.btn_prev.setFixedWidth(80)
-        self.btn_prev.setCursor(Qt.CursorShape.PointingHandCursor)
-        self.btn_prev.clicked.connect(self.prev_page)
-        self.lbl_page = QLabel("Trang 1")
-        self.lbl_page.setStyleSheet("font-weight: bold; margin: 0 10px;")
-        self.btn_next = QPushButton("Sau >")
-        self.btn_next.setObjectName("SecondaryBtn")
-        self.btn_next.setFixedWidth(80)
-        self.btn_next.setCursor(Qt.CursorShape.PointingHandCursor)
-        self.btn_next.clicked.connect(self.next_page)
-        pagination_layout.addWidget(self.btn_prev)
-        pagination_layout.addWidget(self.lbl_page)
-        pagination_layout.addWidget(self.btn_next)
-        pagination_layout.addStretch()
-        l.addLayout(pagination_layout)
+
+        self.pt_table = QTableWidget(0, 6)
+        self.pt_table.setHorizontalHeaderLabels(["Ngày giờ", "Khách hàng", "Tổng tiền", "SL", "Tiếp nhận", "Từ chối"])
+        self.pt_table.horizontalHeader().setSectionResizeMode(1, QHeaderView.ResizeMode.Stretch)
+        self.pt_table.horizontalHeader().setSectionResizeMode(4, QHeaderView.ResizeMode.Fixed)
+        self.pt_table.horizontalHeader().setSectionResizeMode(5, QHeaderView.ResizeMode.Fixed)
+        self.pt_table.setColumnWidth(4, 90)
+        self.pt_table.setColumnWidth(5, 70)
+        self.pt_table.setEditTriggers(QAbstractItemView.EditTrigger.NoEditTriggers)
+        self.pt_table.setSelectionBehavior(QAbstractItemView.SelectionBehavior.SelectRows)
+        l.addWidget(self.pt_table)
         return w
-    
-    def load_history_page(self, page):
-        self.current_page_his = page
-        self.btn_prev.setEnabled(False)
-        self.btn_next.setEnabled(False)
-        self.lbl_page.setText(f"Đang tải trang {page}...")
-        self.hw_his = APIGetWorker(f"/orders?page={page}&limit=20")
-        self.hw_his.data_ready.connect(self.on_his_loaded)
-        self.hw_his.start()
 
-    def ht_cell_dblclick(self, r, c):
-        """Handle double-clicks on the history table to allow editing order date.
+    def load_pending_page(self):
+        self.hw_pending = APIGetWorker("/orders/pending")
+        self.hw_pending.data_ready.connect(self.on_pending_loaded)
+        self.hw_pending.start()
 
-        Opens DateEditDialog when double-clicking the date column of an order row.
-        After successful edit reload the current history page.
-        """
-        try:
-            if c != 0: return
-            item = self.ht_table.item(r, 0)
-            if not item: return
-            meta = item.data(Qt.ItemDataRole.UserRole)
-            if not meta or not isinstance(meta, dict): return
-            oid = meta.get('id')
-            if not oid: return
-            initial = meta.get('created_at') or item.text()
-            dlg = DateEditDialog(oid, initial, parent=self)
-            if dlg.exec():
-                # reload current page to reflect updated date
-                try:
-                    self.load_history_page(self.current_page_his)
-                except:
-                    pass
-        except Exception:
-            pass
-
-    def refresh_history(self):
-        self.load_history_page(1)
-
-    def prev_page(self):
-        if self.current_page_his > 1: self.load_history_page(self.current_page_his - 1)
-
-    def next_page(self):
-        if self.current_page_his < self.total_pages_his: self.load_history_page(self.current_page_his + 1)
-    
-    def on_his_loaded(self, incoming_data):
+    def on_pending_loaded(self, data):
         from datetime import datetime
-        safe_orders_list = []
-        data = incoming_data if isinstance(incoming_data, dict) else (incoming_data[0] if isinstance(incoming_data, tuple) else {})
-        if isinstance(incoming_data, dict):
-            safe_orders_list = incoming_data.get("data", [])
-            total = incoming_data.get("total", 0)
-            page = incoming_data.get("page", 1)
-            import math
-            limit = 20
-            self.total_pages_his = math.ceil(total / limit) if limit > 0 else 1
-            self.current_page_his = page
-            self.lbl_page.setText(f"Trang {self.current_page_his} / {self.total_pages_his}")
-            self.btn_prev.setEnabled(self.current_page_his > 1)
-            self.btn_next.setEnabled(self.current_page_his < self.total_pages_his)
-        elif isinstance(incoming_data, list):
-            safe_orders_list = incoming_data
-        
-        self.ht_table.setUpdatesEnabled(False)
-        self.ht_table.setSortingEnabled(False)
-        self.ht_table.setRowCount(0)
-        
-        for i, o in enumerate(safe_orders_list):
-            try:
-                if not isinstance(o, dict): continue
-                self.ht_table.insertRow(i)
-                
-                raw_dt = str(o.get('created_at') or o.get('date', ''))
-                try:
-                    dt_obj = datetime.strptime(raw_dt, "%Y-%m-%d %H:%M")
-                    display_dt = dt_obj.strftime("%d/%m/%Y %H:%M")
-                except:
-                    display_dt = raw_dt
+        orders = []
+        if isinstance(data, dict):
+            orders = data.get("data", [])
+            count = data.get("count", len(orders))
+            self.lbl_pending_count.setText(f"{count} đơn đang chờ")
+        elif isinstance(data, list):
+            orders = data
 
-                item_date = QTableWidgetItem(display_dt)
-                item_date.setToolTip(display_dt)
-                item_date.setData(Qt.ItemDataRole.UserRole, o)
-                self.ht_table.setItem(i, 0, item_date)
-                
-                item_cust = QTableWidgetItem(str(o.get('customer_name') or o.get('customer') or "Khách lẻ"))
-                item_cust.setToolTip(item_cust.text())
-                self.ht_table.setItem(i, 1, item_cust)
-                
-                items_list = o.get('items') or []
-                if items_list:
-                    try:
-                        val_amt = sum(int(it.get('quantity', 0)) * int(it.get('price', 0)) for it in items_list)
-                    except Exception:
-                        val_amt = o.get('total_amount') if o.get('total_amount') is not None else o.get('total_money', 0)
-                else:
-                    val_amt = o.get('total_amount') if o.get('total_amount') is not None else o.get('total_money', 0)
-                
-                item_amt = QTableWidgetItem(f"{val_amt:,}")
-                item_amt.setToolTip(item_amt.text())
-                self.ht_table.setItem(i, 2, item_amt)
-                
-                item_qty = QTableWidgetItem(str(o.get('total_qty', 0)))
-                item_qty.setToolTip(item_qty.text())
-                self.ht_table.setItem(i, 3, item_qty)
-                
-                btn = QPushButton("Xem")
-                btn.setObjectName("SecondaryBtn")
-                btn.setCursor(Qt.CursorShape.PointingHandCursor)
-                btn.setStyleSheet("color:blue; text-decoration: underline; border:none;")
-                btn.clicked.connect(lambda _, x=o: OrderDetailDialog(x, self).exec())
-                self.ht_table.setCellWidget(i, 4, btn)
-                
-                btn_edit = QPushButton("Sửa")
-                btn_edit.setObjectName("SecondaryBtn")
-                btn_edit.setCursor(Qt.CursorShape.PointingHandCursor)
-                btn_edit.setStyleSheet("color: #e65100; font-weight: bold; border: none;")
-                btn_edit.clicked.connect(lambda _, x=o: self.load_order_to_edit(x))
-                w_edit = QWidget(); l_edit = QHBoxLayout(w_edit)
-                l_edit.setContentsMargins(0,0,0,0); l_edit.setAlignment(Qt.AlignmentFlag.AlignCenter)
-                l_edit.addWidget(btn_edit)
-                self.ht_table.setCellWidget(i, 5, w_edit)
-                
-                btn_del = QPushButton("X")
-                btn_del.setObjectName("DelCustBtn")
-                btn_del.setFixedSize(30, 25)
-                btn_del.setCursor(Qt.CursorShape.PointingHandCursor)
-                btn_del.clicked.connect(lambda _, x=o: self.delete_order(x.get('id')))
-                container = QWidget(); ly = QHBoxLayout(container)
-                ly.setContentsMargins(0,0,0,0); ly.setAlignment(Qt.AlignmentFlag.AlignCenter)
-                ly.addWidget(btn_del)
-                self.ht_table.setCellWidget(i, 6, container)
-            except: continue
-            
-        self.ht_table.setUpdatesEnabled(True)
-        self.ht_table.setSortingEnabled(False)
-    def load_order_to_edit(self, order_data):
-        self.editing_order_id = order_data['id']
-        self.cart = []
-        
-        items = order_data.get('items', [])
-        for item in items:
-            v_info = item.get('variant_info', "")
-            if '-' in v_info:
-                color, size = v_info.split('-', 1)
-            else:
-                color, size = "", v_info
-            
-            vid = item.get('variant_id') 
-            if not vid: 
-                QMessageBox.warning(self, "Lỗi", "Đơn hàng cũ không hỗ trợ sửa (Thiếu ID).")
-                self.editing_order_id = None
-                return
-            
-            raw_qty = item.get('quantity')
-            if raw_qty is None:
-                raw_qty = item.get('qty') 
-            
-            raw_price = item.get('price')
+        self.pt_table.setUpdatesEnabled(False)
+        self.pt_table.setRowCount(0)
 
+        for i, o in enumerate(orders):
+            if not isinstance(o, dict): continue
+            self.pt_table.insertRow(i)
+
+            raw_dt = str(o.get('created_at', ''))
             try:
-                qty = int(raw_qty) if raw_qty is not None else 0
-                price = int(raw_price) if raw_price is not None else 0
+                dt_obj = datetime.strptime(raw_dt, "%Y-%m-%d %H:%M")
+                display_dt = dt_obj.strftime("%d/%m/%Y %H:%M")
             except:
-                qty = 0
-                price = 0
+                display_dt = raw_dt
 
-            self.cart.append({
-                "variant_id": vid,
-                "product_name": item.get('product_name') or item.get('name', ''), 
-                "color": color,
-                "size": size,
-                "quantity": qty,
-                "price": price
-            })
-            
-        c_name = order_data.get('customer_name') or order_data.get('customer') or ""
-        self.cust_name_inp.setText(str(c_name))
-        
-        self.update_cart_ui()
-        self.btn_checkout.setText(f"Cập nhật Đơn #{self.editing_order_id}")
-        self.switch_page(0)
+            self.pt_table.setItem(i, 0, QTableWidgetItem(display_dt))
+            self.pt_table.setItem(i, 1, QTableWidgetItem(str(o.get('customer_name', 'Khách lẻ'))))
+            self.pt_table.setItem(i, 2, QTableWidgetItem(f"{o.get('total_amount', 0):,}"))
+            self.pt_table.setItem(i, 3, QTableWidgetItem(str(o.get('total_qty', 0))))
 
-    def delete_order(self, order_id):
+            btn_accept = QPushButton("✔ Tiếp nhận")
+            btn_accept.setObjectName("SecondaryBtn")
+            btn_accept.setStyleSheet("color: #2e7d32; font-weight: bold; border: none;")
+            btn_accept.setCursor(Qt.CursorShape.PointingHandCursor)
+            btn_accept.clicked.connect(lambda _, x=o: self.accept_pending_order(x.get('id')))
+            w_acc = QWidget(); la = QHBoxLayout(w_acc)
+            la.setContentsMargins(0,0,0,0); la.setAlignment(Qt.AlignmentFlag.AlignCenter)
+            la.addWidget(btn_accept)
+            self.pt_table.setCellWidget(i, 4, w_acc)
+
+            btn_reject = QPushButton("✘")
+            btn_reject.setObjectName("DelCustBtn")
+            btn_reject.setFixedSize(35, 25)
+            btn_reject.setCursor(Qt.CursorShape.PointingHandCursor)
+            btn_reject.clicked.connect(lambda _, x=o: self.reject_pending_order(x.get('id')))
+            w_rej = QWidget(); lr = QHBoxLayout(w_rej)
+            lr.setContentsMargins(0,0,0,0); lr.setAlignment(Qt.AlignmentFlag.AlignCenter)
+            lr.addWidget(btn_reject)
+            self.pt_table.setCellWidget(i, 5, w_rej)
+
+        self.pt_table.setUpdatesEnabled(True)
+
+    def accept_pending_order(self, order_id):
+        if not order_id: return
+        try:
+            resp = requests.put(f"{API_URL}/orders/{order_id}/approve")
+            if resp.status_code == 200:
+                self.load_pending_page()
+            else:
+                QMessageBox.warning(self, "Lỗi", f"Không tiếp nhận được: {resp.text}")
+        except Exception as e:
+            QMessageBox.critical(self, "Lỗi kết nối", str(e))
+
+    def reject_pending_order(self, order_id):
         if not order_id: return
         msg = QMessageBox(self)
-        msg.setWindowTitle("Xác nhận xóa")
-        msg.setText(f"Bạn có chắc chắn muốn xóa Hóa đơn?")
+        msg.setWindowTitle("Xác nhận từ chối")
+        msg.setText(f"Từ chối và xóa đơn #{order_id}?")
         msg.setIcon(QMessageBox.Icon.Warning)
-        
-        btn_co = msg.addButton("Có", QMessageBox.ButtonRole.YesRole)
+        btn_co = msg.addButton("Từ chối", QMessageBox.ButtonRole.YesRole)
         btn_co.setCursor(Qt.CursorShape.PointingHandCursor)
-        
         btn_khong = msg.addButton("Không", QMessageBox.ButtonRole.NoRole)
         btn_khong.setCursor(Qt.CursorShape.PointingHandCursor)
-        
         msg.exec()
         if msg.clickedButton() == btn_co:
             try:
-                resp = requests.delete(f"{API_URL}/orders/{order_id}")
-                if resp.status_code == 200: 
-                    self.load_history_page(self.current_page_his)
-                else: 
-                    QMessageBox.warning(self, "Lỗi", f"Không xóa được: {resp.text}")
-            except Exception as e: 
+                resp = requests.delete(f"{API_URL}/orders/{order_id}/reject")
+                if resp.status_code == 200:
+                    self.load_pending_page()
+                else:
+                    QMessageBox.warning(self, "Lỗi", f"Không từ chối được: {resp.text}")
+            except Exception as e:
                 QMessageBox.critical(self, "Lỗi kết nối", str(e))
-
-def run_gui(): app = QApplication(sys.argv); window = MainWindow(); window.showMaximized(); sys.exit(app.exec())

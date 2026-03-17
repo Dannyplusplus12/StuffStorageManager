@@ -1,5 +1,4 @@
 ﻿import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
 import '../models/product.dart';
 import '../models/order.dart';
 import '../services/api_service.dart';
@@ -280,7 +279,17 @@ class PosScreenState extends State<PosScreen> {
 
   void _buyProduct(Product p) async {
     final result = await showDialog<List<CartItem>>(context: context, builder: (_) => ProductBuyDialog(product: p));
-    if (result != null && result.isNotEmpty) setState(() => _cart.addAll(result));
+    if (result == null || result.isEmpty) return;
+    setState(() {
+      for (final add in result) {
+        final idx = _cart.indexWhere((e) => e.variantId == add.variantId);
+        if (idx >= 0) {
+          _cart[idx].quantity += add.quantity;
+        } else {
+          _cart.add(add);
+        }
+      }
+    });
   }
 
   void _editProduct(Product p) async {
@@ -324,11 +333,11 @@ class PosScreenState extends State<PosScreen> {
               : _suggestions.where((s) => s.toLowerCase().contains(v.text.toLowerCase())),
           onSelected: (s) => _custNameCtrl.text = s,
           fieldViewBuilder: (ctx, ctrl, fn, onSub) {
-            ctrl.addListener(() => _custNameCtrl.text = ctrl.text);
             return TextField(
               controller: ctrl, focusNode: fn,
               decoration: const InputDecoration(
                   hintText: 'Ten khach hang', prefixIcon: Icon(Icons.person_outline, size: 18)),
+              onChanged: (v) => _custNameCtrl.text = v,
             );
           },
         ),
@@ -426,20 +435,17 @@ class PosScreenState extends State<PosScreen> {
               ]),
             ),
             const SizedBox(width: 6),
-            SizedBox(
-              width: 50, height: 32,
-              child: TextField(
-                controller: TextEditingController(text: '${it.quantity}'),
-                keyboardType: TextInputType.number,
-                inputFormatters: [FilteringTextInputFormatter.digitsOnly],
-                textAlign: TextAlign.center,
-                style: const TextStyle(fontSize: 13, fontWeight: FontWeight.bold),
-                decoration: const InputDecoration(contentPadding: EdgeInsets.all(4)),
-                onChanged: (v) {
-                  final q = int.tryParse(v);
-                  if (q != null && q > 0) setState(() => it.quantity = q);
-                },
-              ),
+            _QtyEditor(
+              quantity: it.quantity,
+              onChanged: (q) {
+                if (q <= 0) return;
+                setState(() => it.quantity = q);
+              },
+              onIncrement: () => setState(() => it.quantity += 1),
+              onDecrement: () {
+                if (it.quantity <= 1) return;
+                setState(() => it.quantity -= 1);
+              },
             ),
             const SizedBox(width: 4),
             IconButton(
@@ -451,6 +457,101 @@ class PosScreenState extends State<PosScreen> {
           ]),
         );
       },
+    );
+  }
+}
+
+class _QtyEditor extends StatefulWidget {
+  final int quantity;
+  final ValueChanged<int> onChanged;
+  final VoidCallback onIncrement;
+  final VoidCallback onDecrement;
+
+  const _QtyEditor({
+    required this.quantity,
+    required this.onChanged,
+    required this.onIncrement,
+    required this.onDecrement,
+  });
+
+  @override
+  State<_QtyEditor> createState() => _QtyEditorState();
+}
+
+class _QtyEditorState extends State<_QtyEditor> {
+  late final TextEditingController _controller;
+  final FocusNode _focusNode = FocusNode();
+
+  @override
+  void initState() {
+    super.initState();
+    _controller = TextEditingController(text: '${widget.quantity}');
+  }
+
+  @override
+  void didUpdateWidget(covariant _QtyEditor oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.quantity != widget.quantity && !_focusNode.hasFocus) {
+      _controller.text = '${widget.quantity}';
+    }
+  }
+
+  @override
+  void dispose() {
+    _focusNode.dispose();
+    _controller.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 2, vertical: 1),
+      decoration: BoxDecoration(
+        border: Border.all(color: kBorder),
+        borderRadius: BorderRadius.circular(6),
+        color: Colors.white,
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          InkWell(
+            onTap: widget.onDecrement,
+            child: const Padding(
+              padding: EdgeInsets.symmetric(horizontal: 6, vertical: 5),
+              child: Icon(Icons.remove, size: 14),
+            ),
+          ),
+          SizedBox(
+            width: 38,
+            child: TextField(
+              controller: _controller,
+              focusNode: _focusNode,
+              textAlign: TextAlign.center,
+              keyboardType: TextInputType.number,
+              decoration: const InputDecoration(border: InputBorder.none, isCollapsed: true),
+              onChanged: (v) {
+                final q = int.tryParse(v);
+                if (q != null && q > 0) widget.onChanged(q);
+              },
+              onEditingComplete: () {
+                final q = int.tryParse(_controller.text);
+                if (q == null || q <= 0) {
+                  _controller.text = '${widget.quantity}';
+                }
+                _focusNode.unfocus();
+              },
+            ),
+          ),
+          InkWell(
+            onTap: widget.onIncrement,
+            child: const Padding(
+              padding: EdgeInsets.symmetric(horizontal: 6, vertical: 5),
+              child: Icon(Icons.add, size: 14),
+            ),
+          ),
+        ],
+      ),
     );
   }
 }

@@ -1,17 +1,21 @@
 import 'package:flutter/material.dart';
 import '../utils/app_mode_manager.dart';
 
-class StaffPinDialog extends StatefulWidget {
-  const StaffPinDialog({super.key});
+class RolePinDialog extends StatefulWidget {
+  final AppMode requestedRole;
+  const RolePinDialog({super.key, required this.requestedRole});
 
   @override
-  State<StaffPinDialog> createState() => _StaffPinDialogState();
+  State<RolePinDialog> createState() => _RolePinDialogState();
 }
 
-class _StaffPinDialogState extends State<StaffPinDialog> {
+class _RolePinDialogState extends State<RolePinDialog> {
   final _pinController = TextEditingController();
   bool _isLoading = false;
   String? _errorMsg;
+
+  String get _roleLabel =>
+      widget.requestedRole == AppMode.orderer ? 'Người soạn đơn' : 'Người giao hàng';
 
   @override
   void dispose() {
@@ -24,23 +28,11 @@ class _StaffPinDialogState extends State<StaffPinDialog> {
       setState(() => _errorMsg = 'Nhập mã PIN');
       return;
     }
-
     setState(() => _isLoading = true);
-    
-    bool success = await AppModeManager.verifyPin(_pinController.text);
-    
+    final success = await AppModeManager.verifyPin(_pinController.text, widget.requestedRole);
     setState(() => _isLoading = false);
-    
     if (success) {
-      if (mounted) {
-        Navigator.pop(context, true);
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('✅ Đã kích hoạt chế độ MANAGER'),
-            duration: Duration(seconds: 2),
-          ),
-        );
-      }
+      if (mounted) Navigator.pop(context, true);
     } else {
       setState(() => _errorMsg = 'PIN sai. Thử lại!');
       _pinController.clear();
@@ -50,7 +42,7 @@ class _StaffPinDialogState extends State<StaffPinDialog> {
   @override
   Widget build(BuildContext context) {
     return AlertDialog(
-      title: const Text('🔐 Nhập mã PIN nhân viên'),
+      title: Text('🔐 PIN — $_roleLabel'),
       content: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
@@ -71,14 +63,6 @@ class _StaffPinDialogState extends State<StaffPinDialog> {
             onChanged: (_) => setState(() => _errorMsg = null),
             onSubmitted: (_) => _isLoading ? null : _onConfirm(),
           ),
-          if (_errorMsg != null)
-            Padding(
-              padding: const EdgeInsets.only(top: 8),
-              child: Text(
-                _errorMsg!,
-                style: const TextStyle(color: Colors.red, fontSize: 12),
-              ),
-            ),
         ],
       ),
       actions: [
@@ -89,14 +73,15 @@ class _StaffPinDialogState extends State<StaffPinDialog> {
         ElevatedButton(
           onPressed: _isLoading ? null : _onConfirm,
           child: _isLoading
-              ? const SizedBox(
-                  width: 16,
-                  height: 16,
-                  child: CircularProgressIndicator(strokeWidth: 2),
-                )
+              ? const SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2))
               : const Text('Xác nhận'),
         ),
       ],
     );
   }
+}
+
+// backward compat alias
+class StaffPinDialog extends RolePinDialog {
+  const StaffPinDialog({super.key}) : super(requestedRole: AppMode.orderer);
 }

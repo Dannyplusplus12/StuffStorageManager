@@ -131,8 +131,8 @@ class _EditProductDialogState extends State<EditProductDialog> {
             Row(children: [
               const Text('Màu: '),
               Expanded(
-                child: TextField(
-                  controller: TextEditingController(text: g.color),
+                child: TextFormField(
+                  initialValue: g.color,
                   decoration: const InputDecoration(hintText: 'Tên màu'),
                   onChanged: (v) => g.color = v,
                   style: const TextStyle(fontWeight: FontWeight.bold),
@@ -160,7 +160,14 @@ class _EditProductDialogState extends State<EditProductDialog> {
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 2),
       child: Row(children: [
-        SizedBox(width: 60, child: TextField(controller: TextEditingController(text: r.size), decoration: const InputDecoration(hintText: 'Size'), onChanged: (v) => r.size = v)),
+        SizedBox(
+          width: 60,
+          child: TextFormField(
+            initialValue: r.size,
+            decoration: const InputDecoration(hintText: 'Size'),
+            onChanged: (v) => r.size = v,
+          ),
+        ),
         const SizedBox(width: 4),
         Expanded(child: _ScrollableNumberField(
           value: r.price,
@@ -200,6 +207,7 @@ class _ScrollableNumberField extends StatefulWidget {
 
 class _ScrollableNumberFieldState extends State<_ScrollableNumberField> {
   late TextEditingController _controller;
+  final FocusNode _focusNode = FocusNode();
 
   @override
   void initState() {
@@ -210,13 +218,14 @@ class _ScrollableNumberFieldState extends State<_ScrollableNumberField> {
   @override
   void didUpdateWidget(_ScrollableNumberField oldWidget) {
     super.didUpdateWidget(oldWidget);
-    if (oldWidget.value != widget.value) {
+    if (oldWidget.value != widget.value && !_focusNode.hasFocus) {
       _controller.text = '${widget.value}';
     }
   }
 
   @override
   void dispose() {
+    _focusNode.dispose();
     _controller.dispose();
     super.dispose();
   }
@@ -245,6 +254,7 @@ class _ScrollableNumberFieldState extends State<_ScrollableNumberField> {
       },
       child: TextField(
         controller: _controller,
+        focusNode: _focusNode,
         decoration: InputDecoration(hintText: widget.hintText),
         keyboardType: TextInputType.number,
         inputFormatters: [FilteringTextInputFormatter.digitsOnly],

@@ -49,15 +49,23 @@ def ensure_is_draft_column():
                 info = conn.execute(text("PRAGMA table_info('orders')")).fetchall()
                 cols = [r[1] for r in info]
                 if 'is_draft' not in cols:
-                    conn.execute(text("ALTER TABLE orders ADD COLUMN is_draft INTEGER DEFAULT 1"))
+                    conn.execute(text("ALTER TABLE orders ADD COLUMN is_draft INTEGER DEFAULT 0"))
+                    conn.execute(text("UPDATE orders SET is_draft = 0 WHERE is_draft IS NULL"))
                     conn.commit()
             else:
                 # PostgreSQL
                 try:
-                    conn.execute(text("ALTER TABLE orders ADD COLUMN is_draft INTEGER DEFAULT 1"))
+                    conn.execute(text("ALTER TABLE orders ADD COLUMN is_draft INTEGER DEFAULT 0"))
+                    conn.execute(text("UPDATE orders SET is_draft = 0 WHERE is_draft IS NULL"))
                     conn.commit()
                 except:
-                    pass  # Column might already exist
+                    conn.rollback()
+                    # Column might already exist; still normalize NULL values
+                    try:
+                        conn.execute(text("UPDATE orders SET is_draft = 0 WHERE is_draft IS NULL"))
+                        conn.commit()
+                    except:
+                        pass
     except Exception as e:
         print("Warning: ensure_is_draft_column failed:", e)
 
@@ -65,6 +73,41 @@ def ensure_is_draft_column():
 Base.metadata.create_all(bind=engine)
 ensure_created_ts_columns()
 ensure_is_draft_column()
+
+def ensure_status_column():
+    """Migrate orders table from is_draft to status column"""
+    try:
+        with engine.connect() as conn:
+            if is_sqlite:
+                info = conn.execute(text("PRAGMA table_info('orders')")).fetchall()
+                cols = [r[1] for r in info]
+                if 'status' not in cols:
+                    conn.execute(text("ALTER TABLE orders ADD COLUMN status VARCHAR DEFAULT 'completed'"))
+                    conn.execute(text("UPDATE orders SET status = 'pending' WHERE is_draft = 1"))
+                    conn.execute(text("UPDATE orders SET status = 'completed' WHERE is_draft = 0 OR is_draft IS NULL"))
+                    conn.commit()
+            else:
+                # PostgreSQL: try adding column (fails silently if already exists)
+                try:
+                    conn.execute(text("ALTER TABLE orders ADD COLUMN status VARCHAR DEFAULT 'completed'"))
+                    conn.commit()
+                except Exception:
+                    conn.rollback()
+                # Migrate existing data from is_draft
+                try:
+                    conn.execute(text(
+                        "UPDATE orders SET status = 'pending' WHERE is_draft = 1 AND (status IS NULL OR status = 'completed')"
+                    ))
+                    conn.execute(text(
+                        "UPDATE orders SET status = 'completed' WHERE (is_draft = 0 OR is_draft IS NULL) AND status IS NULL"
+                    ))
+                    conn.commit()
+                except Exception:
+                    conn.rollback()
+    except Exception as e:
+        print("Warning: ensure_status_column failed:", e)
+
+ensure_status_column()
 
 # --- DEPENDENCY: KẾT NỐI DB ---
 def get_db():
@@ -215,6 +258,8 @@ def create_customer_manual(data: CustomerCreate, db: Session = Depends(get_db)):
         db.commit()
         db.refresh(new_cust)
         return {"status": "created", "id": new_cust.id}
+    except HTTPException:
+        raise
     except Exception as e:
         db.rollback()
         raise HTTPException(status_code=500, detail=str(e))
@@ -334,6 +379,8 @@ def create_debt_log(cid: int, data: DebtLogCreate, db: Session = Depends(get_db)
         ))
         db.commit()
         return {"status": "created"}
+    except HTTPException:
+        raise
     except Exception as e:
         db.rollback()
         raise HTTPException(status_code=500, detail=str(e))
@@ -361,6 +408,8 @@ def update_debt_log(cid: int, log_id: int, data: DebtLogUpdate, db: Session = De
         log.new_balance = cust.debt
         db.commit()
         return {"status": "updated"}
+    except HTTPException:
+        raise
     except Exception as e:
         db.rollback()
         raise HTTPException(status_code=500, detail=str(e))
@@ -379,6 +428,8 @@ def delete_debt_log(cid: int, log_id: int, db: Session = Depends(get_db)):
         db.delete(log)
         db.commit()
         return {"status": "deleted"}
+    except HTTPException:
+        raise
     except Exception as e:
         db.rollback()
         raise HTTPException(status_code=500, detail=str(e))
@@ -426,7 +477,9 @@ def checkout(data: CheckoutRequest, db: Session = Depends(get_db)):
         new_order = Order(
             total_amount=total,
             customer_name=customer.name if customer else "Khách lẻ",
-            customer_id=customer.id if customer else None
+            customer_id=customer.id if customer else None,
+            is_draft=0,
+            status='completed'
         )
         # set high-resolution timestamp
         new_order.created_ts = int(datetime.utcnow().timestamp() * 1000)
@@ -455,7 +508,9 @@ def update_order_api(order_id: int, data: CheckoutRequest, db: Session = Depends
         old_order = db.query(Order).filter(Order.id == order_id).first()
         if not old_order:
             raise HTTPException(status_code=404, detail="Không tìm thấy đơn hàng")
-
+        if old_order.status != 'completed':
+            raise HTTPException(status_code=400, detail="Chỉ có thể sửa đơn hàng đã hoàn thành")
+        
         # 1. Hoàn tác đơn cũ
         for item in old_order.items:
             if item.variant_id:
@@ -516,8 +571,8 @@ def update_order_api(order_id: int, data: CheckoutRequest, db: Session = Depends
 @app.get("/orders")
 def get_orders(page: int = 1, limit: int = 20, db: Session = Depends(get_db)):
     skip = (page - 1) * limit
-    total = db.query(Order).count()
-    orders = db.query(Order).order_by(desc(Order.id)).offset(skip).limit(limit).all()
+    total = db.query(Order).filter(Order.status == 'completed').count()
+    orders = db.query(Order).filter(Order.status == 'completed').order_by(desc(Order.id)).offset(skip).limit(limit).all()
     
     result = []
     for o in orders:
@@ -550,6 +605,8 @@ def delete_order_only(order_id: int, db: Session = Depends(get_db)):
     order = db.query(Order).filter(Order.id == order_id).first()
     if not order:
         raise HTTPException(status_code=404, detail="Hóa đơn không tồn tại")
+    if order.status != 'completed':
+        raise HTTPException(status_code=400, detail="Chỉ có thể xóa/hoàn tác đơn hàng đã hoàn thành")
     try:
         # 1) Restore variant stock from items
         for item in order.items:
@@ -585,8 +642,8 @@ def delete_order_only(order_id: int, db: Session = Depends(get_db)):
 @app.post("/checkout/draft")
 def checkout_draft(data: CheckoutRequest, db: Session = Depends(get_db)):
     """
-    Create a DRAFT order (is_draft=1) from staff app.
-    Order is NOT applied to database yet - waiting for approval.
+    Create a PENDING order from orderer app.
+    Stock and debt are NOT applied yet — waiting for staff accept → picker confirm.
     """
     try:
         total = sum([item.quantity * item.price for item in data.cart])
@@ -607,7 +664,8 @@ def checkout_draft(data: CheckoutRequest, db: Session = Depends(get_db)):
             total_amount=total,
             customer_name=customer.name if customer else "Khách lẻ",
             customer_id=customer.id if customer else None,
-            is_draft=1  # ← IMPORTANT: Mark as draft/pending
+            is_draft=1,
+            status='pending'
         )
         new_order.created_ts = int(datetime.utcnow().timestamp() * 1000)
         db.add(new_order)
@@ -627,7 +685,7 @@ def checkout_draft(data: CheckoutRequest, db: Session = Depends(get_db)):
         return {
             "status": "success",
             "order_id": new_order.id,
-            "message": "Hóa đơn đã được lưu chờ duyệt"
+            "message": "Đơn hàng đã gửi chờ staff tiếp nhận"
         }
     except Exception as e:
         db.rollback()
@@ -636,11 +694,9 @@ def checkout_draft(data: CheckoutRequest, db: Session = Depends(get_db)):
 
 @app.get("/orders/pending")
 def get_pending_orders(db: Session = Depends(get_db)):
-    """
-    Get all PENDING orders (is_draft=1) for desktop approval.
-    """
+    """Get all PENDING orders (status='pending') for staff to accept/reject."""
     try:
-        orders = db.query(Order).filter(Order.is_draft == 1).order_by(desc(Order.created_ts)).all()
+        orders = db.query(Order).filter(Order.status == 'pending').order_by(desc(Order.created_ts)).all()
 
         result = []
         for o in orders:
@@ -664,7 +720,7 @@ def get_pending_orders(db: Session = Depends(get_db)):
                 "customer_id": o.customer_id,
                 "total_amount": o.total_amount,
                 "total_qty": calc_qty,
-                "is_draft": o.is_draft,
+                "status": o.status,
                 "items": items_list
             })
 
@@ -673,21 +729,94 @@ def get_pending_orders(db: Session = Depends(get_db)):
         raise HTTPException(status_code=500, detail=str(e))
 
 
+@app.get("/orders/accepted")
+def get_accepted_orders(db: Session = Depends(get_db)):
+    """Get all ACCEPTED orders (status='accepted') for picker to confirm."""
+    try:
+        orders = db.query(Order).filter(Order.status == 'accepted').order_by(desc(Order.created_ts)).all()
+
+        result = []
+        for o in orders:
+            items_list = []
+            calc_qty = 0
+            if o.items:
+                for i in o.items:
+                    calc_qty += i.quantity
+                    items_list.append({
+                        "product_name": i.product_name,
+                        "variant_id": i.variant_id,
+                        "variant_info": i.variant_info,
+                        "quantity": i.quantity,
+                        "price": i.price
+                    })
+
+            result.append({
+                "id": o.id,
+                "created_at": o.created_at.strftime("%Y-%m-%d %H:%M") if o.created_at else "",
+                "customer_name": o.customer_name or "Khách lẻ",
+                "customer_id": o.customer_id,
+                "total_amount": o.total_amount,
+                "total_qty": calc_qty,
+                "status": o.status,
+                "items": items_list
+            })
+
+        return {"data": result, "count": len(result)}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.get("/orders/{order_id}/status")
+def get_order_status(order_id: int, db: Session = Depends(get_db)):
+    """Lightweight status check for orderer polling. Returns 404 if deleted/rejected."""
+    order = db.query(Order).filter(Order.id == order_id).first()
+    if not order:
+        raise HTTPException(status_code=404, detail="Đơn hàng không tồn tại hoặc đã bị từ chối")
+    return {"id": order_id, "status": order.status}
+
+
 @app.put("/orders/{order_id}/approve")
 def approve_order(order_id: int, db: Session = Depends(get_db)):
     """
-    Approve a DRAFT order (is_draft=1) and apply to database:
-    - Deduct stock from variants
-    - Add debt to customer
-    - Mark as_draft=0 (APPROVED)
+    Staff accepts a PENDING order → moves to ACCEPTED for picker.
+    Stock and debt are NOT changed yet (picker confirm handles that).
     """
     try:
         order = db.query(Order).filter(Order.id == order_id).first()
         if not order:
             raise HTTPException(status_code=404, detail="Hóa đơn không tồn tại")
 
-        if order.is_draft == 0:
-            raise HTTPException(status_code=400, detail="Hóa đơn này đã được duyệt rồi")
+        if order.status != 'pending':
+            raise HTTPException(status_code=400, detail="Chỉ có thể tiếp nhận đơn đang chờ duyệt")
+
+        order.status = 'accepted'
+        order.is_draft = 1  # keep is_draft consistent (still not finalized)
+        db.commit()
+
+        return {
+            "status": "success",
+            "message": f"Đơn #{order_id} đã được tiếp nhận, chuyển cho picker soạn hàng"
+        }
+    except Exception as e:
+        db.rollback()
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.put("/orders/{order_id}/confirm")
+def confirm_order(order_id: int, db: Session = Depends(get_db)):
+    """
+    Picker confirms delivery → applies to database:
+    - Deduct stock from variants
+    - Add debt to customer + DebtLog
+    - Mark status='completed'
+    """
+    try:
+        order = db.query(Order).filter(Order.id == order_id).first()
+        if not order:
+            raise HTTPException(status_code=404, detail="Hóa đơn không tồn tại")
+
+        if order.status != 'accepted':
+            raise HTTPException(status_code=400, detail="Chỉ có thể xác nhận đơn hàng đã được tiếp nhận")
 
         # 1) Check stock availability
         for item in order.items:
@@ -706,19 +835,27 @@ def approve_order(order_id: int, db: Session = Depends(get_db)):
                 if var:
                     var.stock -= item.quantity
 
-        # 3) Add debt
+        # 3) Add customer debt + log
         if order.customer_id:
             customer = db.query(Customer).filter(Customer.id == order.customer_id).first()
             if customer:
                 customer.debt += order.total_amount
+                db.add(DebtLog(
+                    customer_id=customer.id,
+                    change_amount=order.total_amount,
+                    new_balance=customer.debt,
+                    note=f"Giao hàng đơn #{order_id}",
+                    created_ts=int(datetime.utcnow().timestamp() * 1000)
+                ))
 
-        # 4) Mark as approved
+        # 4) Mark as completed
+        order.status = 'completed'
         order.is_draft = 0
         db.commit()
 
         return {
             "status": "success",
-            "message": f"Hóa đơn #{order_id} đã được duyệt và áp dụng"
+            "message": f"Đơn #{order_id} đã xác nhận giao hàng và cập nhật kho + công nợ"
         }
     except Exception as e:
         db.rollback()
@@ -728,23 +865,22 @@ def approve_order(order_id: int, db: Session = Depends(get_db)):
 @app.delete("/orders/{order_id}/reject")
 def reject_order(order_id: int, db: Session = Depends(get_db)):
     """
-    Reject a DRAFT order - simply delete it.
-    No stock or debt changes since order was never applied.
+    Staff rejects a PENDING order — deletes it completely.
+    No stock/debt changes (nothing was applied yet).
     """
     try:
         order = db.query(Order).filter(Order.id == order_id).first()
         if not order:
             raise HTTPException(status_code=404, detail="Hóa đơn không tồn tại")
 
-        if order.is_draft == 0:
-            raise HTTPException(status_code=400, detail="Không thể từ chối hóa đơn đã duyệt")
+        if order.status != 'pending':
+            raise HTTPException(status_code=400, detail="Chỉ có thể từ chối đơn đang chờ duyệt")
 
-        # Simply delete the draft order
         db.query(OrderItem).filter(OrderItem.order_id == order_id).delete()
         db.delete(order)
         db.commit()
 
-        return {"status": "success", "message": f"Hóa đơn #{order_id} đã bị từ chối"}
+        return {"status": "success", "message": f"Đơn #{order_id} đã bị từ chối và xóa"}
     except Exception as e:
         db.rollback()
         raise HTTPException(status_code=500, detail=str(e))

@@ -23,7 +23,7 @@ class Order {
   final int? customerId;
   final int totalAmount;
   final int totalQty;
-  final int isDraft;  // 1 = PENDING, 0 = APPROVED
+  final String status;  // 'pending' | 'accepted' | 'completed'
   final List<OrderItem> items;
 
   Order({
@@ -33,7 +33,7 @@ class Order {
     this.customerId,
     required this.totalAmount,
     required this.totalQty,
-    required this.isDraft,
+    required this.status,
     required this.items,
   });
 
@@ -44,7 +44,7 @@ class Order {
         customerId: j['customer_id'],
         totalAmount: (j['total_amount'] ?? 0) is int ? j['total_amount'] : (j['total_amount'] as num).toInt(),
         totalQty: (j['total_qty'] ?? 0) as int,
-        isDraft: (j['is_draft'] ?? 0) as int,
+        status: j['status'] ?? (j['is_draft'] == 1 ? 'pending' : 'completed'),
         items: (j['items'] as List? ?? []).map((i) => OrderItem.fromJson(i)).toList(),
       );
 
@@ -55,12 +55,16 @@ class Order {
         'customer_id': customerId,
         'total_amount': totalAmount,
         'total_qty': totalQty,
-        'is_draft': isDraft,
+        'status': status,
         'items': items.map((i) => {'product_name': i.productName, 'variant_id': i.variantId, 'variant_info': i.variantInfo, 'quantity': i.quantity, 'price': i.price}).toList(),
       };
 
-  bool get isPending => isDraft == 1;
-  bool get isApproved => isDraft == 0;
+  bool get isPending => status == 'pending';
+  bool get isAccepted => status == 'accepted';
+  bool get isCompleted => status == 'completed';
+  // backward compat
+  bool get isApproved => isCompleted;
+  int get isDraft => isPending || isAccepted ? 1 : 0;
 }
 
 class CartItem {

@@ -1,48 +1,50 @@
 import 'package:shared_preferences/shared_preferences.dart';
 
-enum AppMode { VIEWER, MANAGER }
+enum AppMode { none, orderer, picker }
 
 class AppModeManager {
-  static AppMode _mode = AppMode.VIEWER;
-  static const String _staffModeKey = 'is_staff_mode';
-  static const String _modeTimestampKey = 'staff_mode_timestamp';
-  
-  // Valid PIN for staff mode
-  static const String _validPin = '1111';
-  
+  static AppMode _mode = AppMode.none;
+  static const String _modeKey = 'app_mode';
+
+  static const String _ordererPin = '0000';
+  static const String _pickerPin = '1111';
+
   static AppMode get mode => _mode;
-  
-  static bool get isViewer => _mode == AppMode.VIEWER;
-  static bool get isManager => _mode == AppMode.MANAGER;
-  
-  /// Initialize mode from SharedPreferences
+
+  static bool get isNone => _mode == AppMode.none;
+  static bool get isOrderer => _mode == AppMode.orderer;
+  static bool get isPicker => _mode == AppMode.picker;
+  static bool get isManager => _mode != AppMode.none;
+
   static Future<void> init() async {
     final prefs = await SharedPreferences.getInstance();
-    bool saved = prefs.getBool(_staffModeKey) ?? false;
-    
-    if (saved) {
-      _mode = AppMode.MANAGER;
-    } else {
-      _mode = AppMode.VIEWER;
+    final saved = prefs.getString(_modeKey) ?? 'none';
+    switch (saved) {
+      case 'orderer':
+        _mode = AppMode.orderer;
+        break;
+      case 'picker':
+        _mode = AppMode.picker;
+        break;
+      default:
+        _mode = AppMode.none;
     }
   }
-  
-  /// Verify PIN and enable manager mode
-  static Future<bool> verifyPin(String pin) async {
-    if (pin == _validPin) {
-      _mode = AppMode.MANAGER;
+
+  static Future<bool> verifyPin(String pin, AppMode requestedMode) async {
+    final expected = requestedMode == AppMode.orderer ? _ordererPin : _pickerPin;
+    if (pin == expected) {
+      _mode = requestedMode;
       final prefs = await SharedPreferences.getInstance();
-      await prefs.setBool(_staffModeKey, true);
-      await prefs.setInt(_modeTimestampKey, DateTime.now().millisecondsSinceEpoch);
+      await prefs.setString(_modeKey, requestedMode == AppMode.orderer ? 'orderer' : 'picker');
       return true;
     }
     return false;
   }
-  
-  /// Logout from manager mode
+
   static Future<void> logout() async {
-    _mode = AppMode.VIEWER;
+    _mode = AppMode.none;
     final prefs = await SharedPreferences.getInstance();
-    await prefs.setBool(_staffModeKey, false);
+    await prefs.setString(_modeKey, 'none');
   }
 }

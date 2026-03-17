@@ -44,13 +44,7 @@ class _MyAppState extends State<MyApp> {
       title: 'Quản lý kho & Công nợ',
       debugShowCheckedModeBanner: false,
       theme: buildTheme(),
-      home: Builder(
-        builder: (context) {
-          final shortestSide = MediaQuery.of(context).size.shortestSide;
-          final useMobileLayout = DeviceDetector.isMobile || shortestSide < 700;
-          return useMobileLayout ? const MobileHomeScreen() : const HomeScreen();
-        },
-      ),
+      home: DeviceDetector.isMobile ? const MobileHomeScreen() : const HomeScreen(),
     );
   }
 }
