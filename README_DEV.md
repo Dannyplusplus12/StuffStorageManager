@@ -231,7 +231,7 @@ Cấu hình tại `railway.toml` và `Procfile`
 
 ### Tables
 - `products` - Danh sách sản phẩm
-- `variants` - Biến thể (size, color)
+- `variants` - Màu (size, color)
 - `customers` - Khách hàng
 - `orders` - Hóa đơn
 - `order_items` - Chi tiết hóa đơn

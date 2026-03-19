@@ -702,15 +702,26 @@ def get_pending_orders(db: Session = Depends(get_db)):
         for o in orders:
             items_list = []
             calc_qty = 0
+            has_stock_conflict = False
             if o.items:
                 for i in o.items:
                     calc_qty += i.quantity
+                    current_stock = None
+                    enough_stock = True
+                    if i.variant_id:
+                        var = db.query(Variant).filter(Variant.id == i.variant_id).first()
+                        current_stock = int(var.stock or 0) if var else 0
+                        enough_stock = current_stock >= int(i.quantity or 0)
+                        if not enough_stock:
+                            has_stock_conflict = True
                     items_list.append({
                         "product_name": i.product_name,
                         "variant_id": i.variant_id,
                         "variant_info": i.variant_info,
                         "quantity": i.quantity,
-                        "price": i.price
+                        "price": i.price,
+                        "current_stock": current_stock,
+                        "enough_stock": enough_stock,
                     })
 
             result.append({
@@ -721,6 +732,7 @@ def get_pending_orders(db: Session = Depends(get_db)):
                 "total_amount": o.total_amount,
                 "total_qty": calc_qty,
                 "status": o.status,
+                "has_stock_conflict": has_stock_conflict,
                 "items": items_list
             })
 
@@ -739,15 +751,26 @@ def get_accepted_orders(db: Session = Depends(get_db)):
         for o in orders:
             items_list = []
             calc_qty = 0
+            has_stock_conflict = False
             if o.items:
                 for i in o.items:
                     calc_qty += i.quantity
+                    current_stock = None
+                    enough_stock = True
+                    if i.variant_id:
+                        var = db.query(Variant).filter(Variant.id == i.variant_id).first()
+                        current_stock = int(var.stock or 0) if var else 0
+                        enough_stock = current_stock >= int(i.quantity or 0)
+                        if not enough_stock:
+                            has_stock_conflict = True
                     items_list.append({
                         "product_name": i.product_name,
                         "variant_id": i.variant_id,
                         "variant_info": i.variant_info,
                         "quantity": i.quantity,
-                        "price": i.price
+                        "price": i.price,
+                        "current_stock": current_stock,
+                        "enough_stock": enough_stock,
                     })
 
             result.append({
@@ -758,6 +781,7 @@ def get_accepted_orders(db: Session = Depends(get_db)):
                 "total_amount": o.total_amount,
                 "total_qty": calc_qty,
                 "status": o.status,
+                "has_stock_conflict": has_stock_conflict,
                 "items": items_list
             })
 
@@ -835,18 +859,11 @@ def confirm_order(order_id: int, db: Session = Depends(get_db)):
                 if var:
                     var.stock -= item.quantity
 
-        # 3) Add customer debt + log
+        # 3) Add customer debt (do NOT create DebtLog here to avoid duplicate history with ORDER record)
         if order.customer_id:
             customer = db.query(Customer).filter(Customer.id == order.customer_id).first()
             if customer:
                 customer.debt += order.total_amount
-                db.add(DebtLog(
-                    customer_id=customer.id,
-                    change_amount=order.total_amount,
-                    new_balance=customer.debt,
-                    note=f"Giao hàng đơn #{order_id}",
-                    created_ts=int(datetime.utcnow().timestamp() * 1000)
-                ))
 
         # 4) Mark as completed
         order.status = 'completed'
@@ -855,7 +872,7 @@ def confirm_order(order_id: int, db: Session = Depends(get_db)):
 
         return {
             "status": "success",
-            "message": f"Đơn #{order_id} đã xác nhận giao hàng và cập nhật kho + công nợ"
+            "message": f"Đơn #{order_id} đã xác nhận hoàn thành và cập nhật kho + công nợ"
         }
     except Exception as e:
         db.rollback()

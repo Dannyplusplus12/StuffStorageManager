@@ -1192,7 +1192,7 @@ class AddProductPanel(QWidget):
 
 class MainWindow(QMainWindow):
     def __init__(self):
-        super().__init__()
+        super().__init__
         self.setWindowTitle("Quản lý kho & Công nợ")
         self.resize(1280, 800)
         self.setStyleSheet(SHOPEE_THEME)
@@ -1481,6 +1481,7 @@ class MainWindow(QMainWindow):
         
         total = sum([v['stock'] for v in p['variants']])
         has_low = any(v['stock'] < 20 for v in p['variants'])
+        
         bg = "#fff"
         if total <= 0: bg = "#ef9a9a"
         elif has_low: bg = "#fff59d"
@@ -1568,7 +1569,7 @@ class MainWindow(QMainWindow):
             b = QPushButton("x")
             b.setObjectName("RemoveRowBtn")
             b.setCursor(Qt.CursorShape.PointingHandCursor)
-            b.clicked.connect(lambda _, x=i: self.remove_cart(x))
+            b.clicked.connect(lambda _: self.remove_cart(i))
             self.ct.setCellWidget(i, 3, b)
             
         self.ct.resizeRowsToContents()
@@ -1581,29 +1582,60 @@ class MainWindow(QMainWindow):
 
     def checkout(self):
         if not self.cart: return
-        endpoint = "/checkout"
-        method = requests.post
         payload = {"customer_name": self.cust_name_inp.text(), "customer_phone": self.cust_phone_inp.text(), "cart": self.cart}
+
+        # Edit mode keeps existing behavior (only completed orders are editable)
         if self.editing_order_id:
-            endpoint = f"/orders/{self.editing_order_id}"
-            method = requests.put
+            try:
+                response = requests.put(f"{API_URL}/orders/{self.editing_order_id}", json=payload)
+                if response.status_code == 200:
+                    QMessageBox.information(self, "Thành công", "Đã cập nhật đơn hàng!")
+                    self.cart = []
+                    self.cust_name_inp.clear()
+                    self.cust_phone_inp.clear()
+                    self.editing_order_id = None
+                    self.btn_checkout.setText("Xuất hàng")
+                    self.update_cart_ui()
+                    self.load_products_for_grid(self.current_query)
+                    self.load_customer_suggestions()
+                    self.refresh_debt_table()
+                    self.refresh_history()
+                else:
+                    QMessageBox.warning(self, "Lỗi", f"Thất bại:\n{response.json().get('detail', 'Lỗi')}")
+            except Exception as e:
+                QMessageBox.warning(self, "Lỗi kết nối", str(e))
+            return
+
+        # New desktop staff flow: create draft then auto-approve to picker.
+        # Stock/debt are updated only when picker confirms (/orders/{id}/confirm).
         try:
-            response = method(f"{API_URL}{endpoint}", json=payload)
-            if response.status_code == 200:
-                msg = "Đã cập nhật đơn hàng!" if self.editing_order_id else "Đã xuất kho và tạo hóa đơn!"
-                QMessageBox.information(self, "Thành công", msg)
-                self.cart = []
-                self.cust_name_inp.clear()
-                self.cust_phone_inp.clear()
-                self.editing_order_id = None
-                self.btn_checkout.setText("Xuất hàng")
-                self.update_cart_ui()
-                self.load_products_for_grid(self.current_query)
-                self.load_customer_suggestions()
-                self.refresh_debt_table()
-                self.refresh_history()
-            else:
-                QMessageBox.warning(self, "Lỗi", f"Thất bại:\n{response.json().get('detail', 'Lỗi')}")
+            draft_resp = requests.post(f"{API_URL}/checkout/draft", json=payload)
+            if draft_resp.status_code != 200:
+                QMessageBox.warning(self, "Lỗi", f"Thất bại:\n{draft_resp.json().get('detail', 'Lỗi tạo đơn chờ soạn')}")
+                return
+
+            draft_data = draft_resp.json()
+            order_id = draft_data.get("order_id")
+            if not order_id:
+                QMessageBox.warning(self, "Lỗi", "Không nhận được mã đơn hàng từ server")
+                return
+
+            approve_resp = requests.put(f"{API_URL}/orders/{order_id}/approve")
+            if approve_resp.status_code != 200:
+                QMessageBox.warning(self, "Lỗi", f"Đã tạo đơn #{order_id} nhưng không thể chuyển cho picker:\n{approve_resp.json().get('detail', 'Lỗi tiếp nhận đơn')}")
+                return
+
+            QMessageBox.information(self, "Thành công", f"Đã gửi đơn #{order_id} cho picker xác nhận!")
+            self.cart = []
+            self.cust_name_inp.clear()
+            self.cust_phone_inp.clear()
+            self.editing_order_id = None
+            self.btn_checkout.setText("Xuất hàng")
+            self.update_cart_ui()
+            self.load_products_for_grid(self.current_query)
+            self.load_customer_suggestions()
+            self.refresh_debt_table()
+            self.refresh_history()
         except Exception as e:
             QMessageBox.warning(self, "Lỗi kết nối", str(e))
     
@@ -1776,13 +1808,17 @@ class MainWindow(QMainWindow):
         h.addWidget(self.lbl_pending_count)
         l.addLayout(h)
 
-        self.pt_table = QTableWidget(0, 6)
-        self.pt_table.setHorizontalHeaderLabels(["Ngày giờ", "Khách hàng", "Tổng tiền", "SL", "Tiếp nhận", "Từ chối"])
+        self.pt_table = QTableWidget(0, 8)
+        self.pt_table.setHorizontalHeaderLabels(["Ngày giờ", "Khách hàng", "Tổng tiền", "SL", "Kho", "Chi tiết kho", "Tiếp nhận", "Từ chối"])
         self.pt_table.horizontalHeader().setSectionResizeMode(1, QHeaderView.ResizeMode.Stretch)
         self.pt_table.horizontalHeader().setSectionResizeMode(4, QHeaderView.ResizeMode.Fixed)
         self.pt_table.horizontalHeader().setSectionResizeMode(5, QHeaderView.ResizeMode.Fixed)
-        self.pt_table.setColumnWidth(4, 90)
-        self.pt_table.setColumnWidth(5, 70)
+        self.pt_table.horizontalHeader().setSectionResizeMode(6, QHeaderView.ResizeMode.Fixed)
+        self.pt_table.horizontalHeader().setSectionResizeMode(7, QHeaderView.ResizeMode.Fixed)
+        self.pt_table.setColumnWidth(4, 95)
+        self.pt_table.setColumnWidth(5, 90)
+        self.pt_table.setColumnWidth(6, 90)
+        self.pt_table.setColumnWidth(7, 70)
         self.pt_table.setEditTriggers(QAbstractItemView.EditTrigger.NoEditTriggers)
         self.pt_table.setSelectionBehavior(QAbstractItemView.SelectionBehavior.SelectRows)
         l.addWidget(self.pt_table)
@@ -1817,10 +1853,52 @@ class MainWindow(QMainWindow):
             except:
                 display_dt = raw_dt
 
-            self.pt_table.setItem(i, 0, QTableWidgetItem(display_dt))
-            self.pt_table.setItem(i, 1, QTableWidgetItem(str(o.get('customer_name', 'Khách lẻ'))))
-            self.pt_table.setItem(i, 2, QTableWidgetItem(f"{o.get('total_amount', 0):,}"))
-            self.pt_table.setItem(i, 3, QTableWidgetItem(str(o.get('total_qty', 0))))
+            it_date = QTableWidgetItem(display_dt)
+            it_cust = QTableWidgetItem(str(o.get('customer_name', 'Khách lẻ')))
+            it_amt = QTableWidgetItem(f"{o.get('total_amount', 0):,}")
+            it_qty = QTableWidgetItem(str(o.get('total_qty', 0)))
+
+            items = o.get('items') or []
+            shortage_items = [x for x in items if not x.get('enough_stock', True)]
+            has_conflict = bool(o.get('has_stock_conflict', False) or shortage_items)
+
+            stock_text = "Đủ hàng" if not has_conflict else f"Thiếu {len(shortage_items)}/{len(items)}"
+            it_stock = QTableWidgetItem(stock_text)
+            if has_conflict:
+                it_stock.setForeground(QColor("#d32f2f"))
+            else:
+                it_stock.setForeground(QColor("#2e7d32"))
+
+            tooltip_lines = []
+            for x in items:
+                curr = x.get('current_stock')
+                curr_text = "?" if curr is None else str(curr)
+                tooltip_lines.append(f"- {x.get('product_name', '')} ({x.get('variant_info', '')}): cần {x.get('quantity', 0)} / kho {curr_text}")
+            if tooltip_lines:
+                it_stock.setToolTip("\n".join(tooltip_lines))
+
+            self.pt_table.setItem(i, 0, it_date)
+            self.pt_table.setItem(i, 1, it_cust)
+            self.pt_table.setItem(i, 2, it_amt)
+            self.pt_table.setItem(i, 3, it_qty)
+            self.pt_table.setItem(i, 4, it_stock)
+
+            if has_conflict:
+                for c in range(0, 5):
+                    it = self.pt_table.item(i, c)
+                    if it:
+                        it.setBackground(QColor("#ffebee"))
+
+            btn_stock = QPushButton("Xem")
+            btn_stock.setObjectName("SecondaryBtn")
+            btn_stock.setCursor(Qt.CursorShape.PointingHandCursor)
+            if has_conflict:
+                btn_stock.setStyleSheet("color: #d32f2f; font-weight: bold; border: none;")
+            btn_stock.clicked.connect(lambda _, x=o: self.show_pending_stock_detail(x))
+            w_stock = QWidget(); ls = QHBoxLayout(w_stock)
+            ls.setContentsMargins(0,0,0,0); ls.setAlignment(Qt.AlignmentFlag.AlignCenter)
+            ls.addWidget(btn_stock)
+            self.pt_table.setCellWidget(i, 5, w_stock)
 
             btn_accept = QPushButton("✔ Tiếp nhận")
             btn_accept.setObjectName("SecondaryBtn")
@@ -1830,7 +1908,7 @@ class MainWindow(QMainWindow):
             w_acc = QWidget(); la = QHBoxLayout(w_acc)
             la.setContentsMargins(0,0,0,0); la.setAlignment(Qt.AlignmentFlag.AlignCenter)
             la.addWidget(btn_accept)
-            self.pt_table.setCellWidget(i, 4, w_acc)
+            self.pt_table.setCellWidget(i, 6, w_acc)
 
             btn_reject = QPushButton("✘")
             btn_reject.setObjectName("DelCustBtn")
@@ -1840,38 +1918,132 @@ class MainWindow(QMainWindow):
             w_rej = QWidget(); lr = QHBoxLayout(w_rej)
             lr.setContentsMargins(0,0,0,0); lr.setAlignment(Qt.AlignmentFlag.AlignCenter)
             lr.addWidget(btn_reject)
-            self.pt_table.setCellWidget(i, 5, w_rej)
-
+            self.pt_table.setCellWidget(i, 7, w_rej)
         self.pt_table.setUpdatesEnabled(True)
 
+    def _build_pending_stock_html(self, order_data):
+        items = order_data.get('items') or []
+        if not items:
+            return "<p>Đơn này chưa có chi tiết sản phẩm.</p>", False
+
+        rows = []
+        has_conflict = False
+        for x in items:
+            name = str(x.get('product_name', ''))
+            vinfo = str(x.get('variant_info', ''))
+            req = int(x.get('quantity', 0) or 0)
+            curr = x.get('current_stock')
+            curr_text = "?" if curr is None else str(curr)
+            enough = bool(x.get('enough_stock', True))
+            color = "#2e7d32" if enough else "#d32f2f"
+            icon = "✅" if enough else "❌"
+            if not enough:
+                has_conflict = True
+            rows.append(
+                f"<div style='margin-bottom:8px;color:{color};'>"
+                f"<b>{icon} {name} ({vinfo})</b><br/>"
+                f"<span>Cần: {req} | Kho hiện tại: {curr_text}</span>"
+                f"</div>"
+            )
+
+        header = ""
+        if has_conflict:
+            header = "<p style='color:#d32f2f;'><b>⚠️ Có mặt hàng không đủ tồn kho.</b></p>"
+
+        html = header + "".join(rows)
+        return html, has_conflict
+
+    def _fetch_latest_pending_order(self, order_id):
+        try:
+            resp = requests.get(f"{API_URL}/orders/pending", timeout=10)
+            if resp.status_code != 200:
+                return None
+            payload = resp.json() if resp.content else {}
+            orders = payload.get("data", []) if isinstance(payload, dict) else []
+            for o in orders:
+                if isinstance(o, dict) and int(o.get("id", 0) or 0) == int(order_id):
+                    return o
+            return None
+        except Exception:
+            return None
+
+    def show_pending_stock_detail(self, order_data):
+        if not isinstance(order_data, dict):
+            return
+        title = f"Chi tiết kho đơn #{order_data.get('id', '')}"
+        html, _ = self._build_pending_stock_html(order_data)
+
+        msg = QMessageBox(self)
+        msg.setWindowTitle(title)
+        msg.setTextFormat(Qt.TextFormat.RichText)
+        msg.setText(html)
+        msg.setIcon(QMessageBox.Icon.Information)
+        msg.addButton("Đóng", QMessageBox.ButtonRole.AcceptRole)
+        msg.exec()
+
     def accept_pending_order(self, order_id):
-        if not order_id: return
+        if not order_id:
+            return
+
+        # Always re-read latest stock state before approving
+        latest = self._fetch_latest_pending_order(order_id)
+        if latest is None:
+            QMessageBox.warning(self, "Không tìm thấy", f"Đơn #{order_id} không còn trong danh sách chờ. Danh sách sẽ được làm mới.")
+            self.load_pending_page()
+            return
+
+        html, has_conflict = self._build_pending_stock_html(latest)
+        if has_conflict:
+            msg = QMessageBox(self)
+            msg.setWindowTitle("Cảnh báo tồn kho")
+            msg.setTextFormat(Qt.TextFormat.RichText)
+            msg.setIcon(QMessageBox.Icon.Warning)
+            msg.setText(
+                f"<p><b>Đơn #{order_id} đang thiếu tồn kho.</b></p>"
+                f"{html}"
+                f"<p>Bạn vẫn muốn tiếp nhận đơn này không?</p>"
+            )
+            btn_yes = msg.addButton("Vẫn tiếp nhận", QMessageBox.ButtonRole.YesRole)
+            btn_yes.setCursor(Qt.CursorShape.PointingHandCursor)
+            btn_no = msg.addButton("Không", QMessageBox.ButtonRole.NoRole)
+            btn_no.setCursor(Qt.CursorShape.PointingHandCursor)
+            msg.exec()
+            if msg.clickedButton() != btn_yes:
+                return
+
         try:
             resp = requests.put(f"{API_URL}/orders/{order_id}/approve")
             if resp.status_code == 200:
+                # refresh list after each approval to re-check stock numbers
                 self.load_pending_page()
             else:
                 QMessageBox.warning(self, "Lỗi", f"Không tiếp nhận được: {resp.text}")
+                self.load_pending_page()
         except Exception as e:
             QMessageBox.critical(self, "Lỗi kết nối", str(e))
 
     def reject_pending_order(self, order_id):
-        if not order_id: return
+        if not order_id:
+            return
         msg = QMessageBox(self)
         msg.setWindowTitle("Xác nhận từ chối")
         msg.setText(f"Từ chối và xóa đơn #{order_id}?")
         msg.setIcon(QMessageBox.Icon.Warning)
-        btn_co = msg.addButton("Từ chối", QMessageBox.ButtonRole.YesRole)
-        btn_co.setCursor(Qt.CursorShape.PointingHandCursor)
-        btn_khong = msg.addButton("Không", QMessageBox.ButtonRole.NoRole)
-        btn_khong.setCursor(Qt.CursorShape.PointingHandCursor)
+
+        btn_yes = msg.addButton("Từ chối", QMessageBox.ButtonRole.YesRole)
+        btn_yes.setCursor(Qt.CursorShape.PointingHandCursor)
+        btn_no = msg.addButton("Không", QMessageBox.ButtonRole.NoRole)
+        btn_no.setCursor(Qt.CursorShape.PointingHandCursor)
+
         msg.exec()
-        if msg.clickedButton() == btn_co:
-            try:
-                resp = requests.delete(f"{API_URL}/orders/{order_id}/reject")
-                if resp.status_code == 200:
-                    self.load_pending_page()
-                else:
-                    QMessageBox.warning(self, "Lỗi", f"Không từ chối được: {resp.text}")
-            except Exception as e:
-                QMessageBox.critical(self, "Lỗi kết nối", str(e))
+        if msg.clickedButton() != btn_yes:
+            return
+
+        try:
+            resp = requests.delete(f"{API_URL}/orders/{order_id}/reject")
+            if resp.status_code == 200:
+                self.load_pending_page()
+            else:
+                QMessageBox.warning(self, "Lỗi", f"Không từ chối được: {resp.text}")
+        except Exception as e:
+            QMessageBox.critical(self, "Lỗi kết nối", str(e))

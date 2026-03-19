@@ -3,6 +3,12 @@
 > 
 > **Cập nhật lần cuối:** Tháng 3/2026
 
+## CẬP NHẬT NHANH GẦN NHẤT
+- Đã fix lỗi trùng lịch sử công nợ khi picker xác nhận đơn: trong `backend/api.py` endpoint `/orders/{id}/confirm` chỉ cộng nợ khách hàng, **không tạo thêm `DebtLog`** để tránh trùng với dòng lịch sử `ORDER` (Xuất đơn hàng).
+- Đã cập nhật flow desktop staff trong `frontend/ui.py`: nút xuất hàng giờ tạo `/checkout/draft` rồi tự động `/orders/{id}/approve` để chuyển cho picker; kho + công nợ chỉ cập nhật khi picker xác nhận `/orders/{id}/confirm`.
+- Đã sửa lỗi cú pháp ở `flutter_frontend/lib/screens/mobile_home_screen.dart` trong `_RoleSelectionScreen`: thay `doubleInfinity` -> `double.infinity` và sửa dấu `)` của `ElevatedButton.styleFrom(...)` cho nút `Người soạn hàng` (fix các lỗi build quanh dòng ~88-96).
+- Đã sửa lỗi build Flutter ở `flutter_frontend/lib/screens/mobile_home_screen.dart`: thiếu dấu đóng `)` trong `_openOrdererProductQuickView()` (khối `SafeArea` trong `showModalBottomSheet`), gây lỗi `Can't find ')' to match '('` tại dòng ~502.
+
 ---
 
 ## 1. TỔNG QUAN DỰ ÁN

@@ -4,8 +4,18 @@ class OrderItem {
   final String variantInfo;
   final int quantity;
   final int price;
+  final int? currentStock;
+  final bool? enoughStock;
 
-  OrderItem({required this.productName, this.variantId, required this.variantInfo, required this.quantity, required this.price});
+  OrderItem({
+    required this.productName,
+    this.variantId,
+    required this.variantInfo,
+    required this.quantity,
+    required this.price,
+    this.currentStock,
+    this.enoughStock,
+  });
 
   factory OrderItem.fromJson(Map<String, dynamic> j) => OrderItem(
         productName: j['product_name'] ?? '',
@@ -13,6 +23,8 @@ class OrderItem {
         variantInfo: j['variant_info'] ?? '',
         quantity: (j['quantity'] ?? 0) as int,
         price: (j['price'] ?? 0) as int,
+        currentStock: j['current_stock'],
+        enoughStock: j['enough_stock'],
       );
 }
 
@@ -56,7 +68,17 @@ class Order {
         'total_amount': totalAmount,
         'total_qty': totalQty,
         'status': status,
-        'items': items.map((i) => {'product_name': i.productName, 'variant_id': i.variantId, 'variant_info': i.variantInfo, 'quantity': i.quantity, 'price': i.price}).toList(),
+        'items': items
+            .map((i) => {
+                  'product_name': i.productName,
+                  'variant_id': i.variantId,
+                  'variant_info': i.variantInfo,
+                  'quantity': i.quantity,
+                  'price': i.price,
+                  'current_stock': i.currentStock,
+                  'enough_stock': i.enoughStock,
+                })
+            .toList(),
       };
 
   bool get isPending => status == 'pending';

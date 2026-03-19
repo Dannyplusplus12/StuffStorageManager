@@ -15,7 +15,7 @@ class _RolePinDialogState extends State<RolePinDialog> {
   String? _errorMsg;
 
   String get _roleLabel =>
-      widget.requestedRole == AppMode.orderer ? 'Người soạn đơn' : 'Người giao hàng';
+      widget.requestedRole == AppMode.orderer ? 'Người soạn đơn' : 'Người soạn hàng';
 
   @override
   void dispose() {
