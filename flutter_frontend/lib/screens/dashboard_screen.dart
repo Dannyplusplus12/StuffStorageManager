@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import '../app_pages.dart';
 import '../models/order.dart';
 import '../services/api_service.dart';
@@ -63,10 +64,13 @@ class _DashboardScreenState extends State<DashboardScreen> {
                 style: TextStyle(fontSize: 22, fontWeight: FontWeight.bold, color: kTextPrimary),
               ),
               const Spacer(),
-              OutlinedButton.icon(
-                onPressed: _load,
-                icon: const Icon(Icons.refresh, size: 16),
-                label: const Text('Làm mới'),
+              MouseRegion(
+                cursor: SystemMouseCursors.click,
+                child: OutlinedButton.icon(
+                  onPressed: _load,
+                  icon: const Icon(Icons.refresh, size: 16),
+                  label: const Text('Làm mới'),
+                ),
               ),
             ],
           ),
@@ -160,9 +164,12 @@ class _DashboardScreenState extends State<DashboardScreen> {
                   style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
                 ),
                 const Spacer(),
-                TextButton(
-                  onPressed: () => widget.onNavigate(AppPage.orders),
-                  child: const Text('Xem tất cả →'),
+                MouseRegion(
+                  cursor: SystemMouseCursors.click,
+                  child: TextButton(
+                    onPressed: () => widget.onNavigate(AppPage.orders),
+                    child: const Text('Xem tất cả →'),
+                  ),
                 ),
               ],
             ),

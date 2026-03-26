@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import '../models/customer.dart';
 import '../models/order.dart';
 import '../services/api_service.dart';
@@ -52,8 +53,18 @@ class _CustomerHistoryDialogState extends State<CustomerHistoryDialog> {
         title: const Text('Xác nhận xóa'),
         content: const Text('Xóa bản ghi điều chỉnh này?'),
         actions: [
-          TextButton(onPressed: () => Navigator.pop(context, false), child: const Text('Không')),
-          ElevatedButton(style: ElevatedButton.styleFrom(backgroundColor: Colors.red), onPressed: () => Navigator.pop(context, true), child: const Text('Có')),
+          MouseRegion(
+            cursor: SystemMouseCursors.click,
+            child: TextButton(onPressed: () => Navigator.pop(context, false), child: const Text('Không')),
+          ),
+          MouseRegion(
+            cursor: SystemMouseCursors.click,
+            child: ElevatedButton(
+              style: ElevatedButton.styleFrom(backgroundColor: Colors.red),
+              onPressed: () => Navigator.pop(context, true),
+              child: const Text('Có'),
+            ),
+          ),
         ],
       ),
     );
@@ -70,8 +81,18 @@ class _CustomerHistoryDialogState extends State<CustomerHistoryDialog> {
         title: const Text('Xác nhận xóa'),
         content: const Text('Xóa Hóa đơn này?'),
         actions: [
-          TextButton(onPressed: () => Navigator.pop(context, false), child: const Text('Không')),
-          ElevatedButton(style: ElevatedButton.styleFrom(backgroundColor: Colors.red), onPressed: () => Navigator.pop(context, true), child: const Text('Có')),
+          MouseRegion(
+            cursor: SystemMouseCursors.click,
+            child: TextButton(onPressed: () => Navigator.pop(context, false), child: const Text('Không')),
+          ),
+          MouseRegion(
+            cursor: SystemMouseCursors.click,
+            child: ElevatedButton(
+              style: ElevatedButton.styleFrom(backgroundColor: Colors.red),
+              onPressed: () => Navigator.pop(context, true),
+              child: const Text('Có'),
+            ),
+          ),
         ],
       ),
     );
@@ -116,9 +137,16 @@ class _CustomerHistoryDialogState extends State<CustomerHistoryDialog> {
               Row(children: [
                 Text('Lịch sử — ${widget.custName}', style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
                 const Spacer(),
-                OutlinedButton.icon(icon: const Icon(Icons.add, size: 16), label: const Text('Thêm điều chỉnh'), onPressed: _addLog),
+                MouseRegion(
+                  cursor: SystemMouseCursors.click,
+                  child: OutlinedButton.icon(icon: const Icon(Icons.add, size: 16), label: const Text('Thêm điều chỉnh'), onPressed: _addLog),
+                ),
                 const SizedBox(width: 8),
-                IconButton(icon: const Icon(Icons.close), onPressed: () => Navigator.pop(context)),
+                IconButton(
+                  icon: const Icon(Icons.close),
+                  mouseCursor: SystemMouseCursors.click,
+                  onPressed: () => Navigator.pop(context),
+                ),
               ]),
               const Divider(),
               Expanded(
@@ -148,12 +176,29 @@ class _CustomerHistoryDialogState extends State<CustomerHistoryDialog> {
                                     DataCell(Text(formatSignedCurrency(h.amount), style: TextStyle(color: h.amount > 0 ? Colors.red : Colors.green, fontWeight: FontWeight.bold))),
                                     DataCell(Row(mainAxisSize: MainAxisSize.min, children: [
                                       if (isOrder) ...[
-                                        TextButton(onPressed: () => _viewOrder(h), child: const Text('Xem', style: TextStyle(color: Colors.blue))),
-                                        TextButton(onPressed: () => _editOrder(h), child: const Text('Sửa')),
-                                        IconButton(icon: const Icon(Icons.delete, color: Colors.red, size: 16), onPressed: () => _deleteInvoice(h.data!['id'])),
+                                        MouseRegion(
+                                          cursor: SystemMouseCursors.click,
+                                          child: TextButton(onPressed: () => _viewOrder(h), child: const Text('Xem', style: TextStyle(color: Colors.blue))),
+                                        ),
+                                        MouseRegion(
+                                          cursor: SystemMouseCursors.click,
+                                          child: TextButton(onPressed: () => _editOrder(h), child: const Text('Sửa')),
+                                        ),
+                                        IconButton(
+                                          icon: const Icon(Icons.delete, color: Colors.red, size: 16),
+                                          mouseCursor: SystemMouseCursors.click,
+                                          onPressed: () => _deleteInvoice(h.data!['id']),
+                                        ),
                                       ] else ...[
-                                        TextButton(onPressed: () => _editLog(h), child: const Text('Sửa')),
-                                        IconButton(icon: const Icon(Icons.delete, color: Colors.red, size: 16), onPressed: () => _deleteLog(h.logId!)),
+                                        MouseRegion(
+                                          cursor: SystemMouseCursors.click,
+                                          child: TextButton(onPressed: () => _editLog(h), child: const Text('Sửa')),
+                                        ),
+                                        IconButton(
+                                          icon: const Icon(Icons.delete, color: Colors.red, size: 16),
+                                          mouseCursor: SystemMouseCursors.click,
+                                          onPressed: () => _deleteLog(h.logId!),
+                                        ),
                                       ],
                                     ])),
                                   ]);

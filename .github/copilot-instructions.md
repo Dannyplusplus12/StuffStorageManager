@@ -8,3 +8,6 @@
 - Input fields should behave like normal text editing without automatic text selection/highlighting; keep both quantity controls: +/- buttons and direct typing.
 - Action buttons, such as logout, must be clearly visible; use bright/active colors to avoid faded/disabled-looking styles.
 - Ensure to read and record updates in `PROJECT_CONTEXT.md` for tracking changes and maintaining project integrity.
+
+## Desktop UI Guidelines
+- Interactive buttons in the desktop Flutter UI should show `SystemMouseCursors.click` cursor feedback (not `grab`).

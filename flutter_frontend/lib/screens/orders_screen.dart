@@ -1,5 +1,6 @@
 ﻿import 'dart:math';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import '../models/order.dart';
 import '../services/api_service.dart';
 import '../theme.dart';
@@ -61,11 +62,17 @@ class _OrdersScreenState extends State<OrdersScreen> {
         title: const Text('Xác nhận xóa'),
         content: const Text('Bạn có chắc muốn xóa hóa đơn này?\n(Kho và công nợ sẽ được hoàn tác)'),
         actions: [
-          TextButton(onPressed: () => Navigator.pop(context, false), child: const Text('Không')),
-          ElevatedButton(
-            style: ElevatedButton.styleFrom(backgroundColor: Colors.red),
-            onPressed: () => Navigator.pop(context, true),
-            child: const Text('Có'),
+          MouseRegion(
+            cursor: SystemMouseCursors.click,
+            child: TextButton(onPressed: () => Navigator.pop(context, false), child: const Text('Không')),
+          ),
+          MouseRegion(
+            cursor: SystemMouseCursors.click,
+            child: ElevatedButton(
+              style: ElevatedButton.styleFrom(backgroundColor: Colors.red),
+              onPressed: () => Navigator.pop(context, true),
+              child: const Text('Có'),
+            ),
           ),
         ],
       ),
@@ -85,7 +92,7 @@ class _OrdersScreenState extends State<OrdersScreen> {
     final saved = await showDialog<bool>(
       context: context,
       builder: (_) => AlertDialog(
-        title: const Text('Chinh sua ngay gio'),
+        title: const Text('Chỉnh sửa ngày giờ'),
         content: SizedBox(
           width: 320,
           child: TextField(
@@ -94,20 +101,26 @@ class _OrdersScreenState extends State<OrdersScreen> {
           ),
         ),
         actions: [
-          TextButton(onPressed: () => Navigator.pop(context, false), child: const Text('Huy')),
-          ElevatedButton(
-            onPressed: () async {
-              final nav = Navigator.of(context);
-              final messenger = ScaffoldMessenger.of(context);
-              try {
-                await ApiService.updateOrderDate(o.id, dtCtrl.text.trim());
-                nav.pop(true);
-              } catch (e) {
-                messenger.showSnackBar(
-                    SnackBar(content: Text('$e'), backgroundColor: Colors.red));
-              }
-            },
-            child: const Text('Luu'),
+          MouseRegion(
+            cursor: SystemMouseCursors.click,
+            child: TextButton(onPressed: () => Navigator.pop(context, false), child: const Text('Hủy')),
+          ),
+          MouseRegion(
+            cursor: SystemMouseCursors.click,
+            child: ElevatedButton(
+              onPressed: () async {
+                final nav = Navigator.of(context);
+                final messenger = ScaffoldMessenger.of(context);
+                try {
+                  await ApiService.updateOrderDate(o.id, dtCtrl.text.trim());
+                  nav.pop(true);
+                } catch (e) {
+                  messenger.showSnackBar(
+                      SnackBar(content: Text('$e'), backgroundColor: Colors.red));
+                }
+              },
+              child: const Text('Lưu'),
+            ),
           ),
         ],
       ),
@@ -139,36 +152,82 @@ class _OrdersScreenState extends State<OrdersScreen> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Row(children: [
-            const Text('Hoa don',
-                style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold, color: kTextPrimary)),
-            const SizedBox(width: 8),
-            Container(
-              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
-              decoration:
-                  BoxDecoration(color: kPrimaryLight, borderRadius: BorderRadius.circular(12)),
-              child: Text('$_total hóa đơn',
-                  style: const TextStyle(color: kPrimary, fontSize: 11, fontWeight: FontWeight.w600)),
-            ),
-            const Spacer(),
-            SizedBox(
-              width: 260, height: 38,
-              child: TextField(
-                decoration: const InputDecoration(
-                    hintText: 'Tim theo ten khach...', prefixIcon: Icon(Icons.search, size: 18)),
-                onChanged: (v) => setState(() => _search = v),
-              ),
-            ),
-            const SizedBox(width: 8),
-            SizedBox(
-              height: 38,
-              child: OutlinedButton.icon(
-                onPressed: () => _load(1),
-                icon: const Icon(Icons.refresh, size: 16),
-                label: const Text('Lam moi'),
-              ),
-            ),
-          ]),
+          LayoutBuilder(
+            builder: (ctx, constraints) {
+              final titleSection = Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  const Flexible(
+                    child: Text('Hóa đơn',
+                        style:
+                            TextStyle(fontSize: 20, fontWeight: FontWeight.bold, color: kTextPrimary)),
+                  ),
+                  const SizedBox(width: 8),
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                    decoration: BoxDecoration(color: kPrimaryLight, borderRadius: BorderRadius.circular(12)),
+                    child: Text('$_total hóa đơn',
+                        style: const TextStyle(color: kPrimary, fontSize: 11, fontWeight: FontWeight.w600)),
+                  ),
+                ],
+              );
+
+              Widget searchControls(double width) {
+                final cappedWidth = max(240.0, min(width, 480.0));
+                return SizedBox(
+                  width: cappedWidth,
+                  child: Row(
+                    children: [
+                      Expanded(
+                        child: SizedBox(
+                          height: 38,
+                          child: TextField(
+                            decoration: const InputDecoration(
+                              hintText: 'Tìm theo tên khách...',
+                              prefixIcon: Icon(Icons.search, size: 18),
+                              contentPadding: EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                            ),
+                            onChanged: (v) => setState(() => _search = v),
+                          ),
+                        ),
+                      ),
+                      const SizedBox(width: 8),
+                      SizedBox(
+                        height: 38,
+                        child: MouseRegion(
+                          cursor: SystemMouseCursors.click,
+                          child: OutlinedButton.icon(
+                            onPressed: () => _load(1),
+                            icon: const Icon(Icons.refresh, size: 16),
+                            label: const Text('Làm mới'),
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                );
+              }
+
+              if (constraints.maxWidth < 780) {
+                return Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    titleSection,
+                    const SizedBox(height: 8),
+                    searchControls(constraints.maxWidth),
+                  ],
+                );
+              }
+
+              return Row(
+                children: [
+                  Expanded(child: titleSection),
+                  const SizedBox(width: 12),
+                  searchControls(min(constraints.maxWidth * 0.45, 500)),
+                ],
+              );
+            },
+          ),
           const SizedBox(height: 12),
           Expanded(
             child: _loading
@@ -178,7 +237,7 @@ class _OrdersScreenState extends State<OrdersScreen> {
                         child: Column(mainAxisSize: MainAxisSize.min, children: [
                           Icon(Icons.receipt_long_outlined, size: 64, color: Colors.grey[300]),
                           const SizedBox(height: 12),
-                          const Text('Khong co hoa don', style: TextStyle(color: kTextSecondary)),
+                          const Text('Không có hóa đơn', style: TextStyle(color: kTextSecondary)),
                         ]),
                       )
                     : SingleChildScrollView(
@@ -230,21 +289,28 @@ class _OrdersScreenState extends State<OrdersScreen> {
                                           fontWeight: FontWeight.bold, color: Color(0xFF0284C7))),
                                 )),
                                 DataCell(Row(mainAxisSize: MainAxisSize.min, children: [
-                                  TextButton(
-                                    onPressed: () => showDialog(
-                                        context: context, builder: (_) => OrderDetailDialog(order: o)),
-                                    child: const Text('Xem', style: TextStyle(color: Colors.blue)),
+                                  MouseRegion(
+                                    cursor: SystemMouseCursors.click,
+                                    child: TextButton(
+                                      onPressed: () => showDialog(
+                                          context: context, builder: (_) => OrderDetailDialog(order: o)),
+                                      child: const Text('Xem', style: TextStyle(color: Colors.blue)),
+                                    ),
                                   ),
-                                  TextButton(
-                                    onPressed: () => widget.onEditOrder(o.toJson()),
-                                    child: const Text('Sua',
-                                        style: TextStyle(
-                                            color: Color(0xFFE65100), fontWeight: FontWeight.bold)),
+                                  MouseRegion(
+                                    cursor: SystemMouseCursors.click,
+                                    child: TextButton(
+                                      onPressed: () => widget.onEditOrder(o.toJson()),
+                                      child: const Text('Sửa',
+                                          style: TextStyle(
+                                              color: Color(0xFFE65100), fontWeight: FontWeight.bold)),
+                                    ),
                                   ),
                                   IconButton(
                                     icon: const Icon(Icons.delete, color: Colors.red, size: 18),
+                                    mouseCursor: SystemMouseCursors.click,
                                     onPressed: () => _deleteOrder(o.id),
-                                    tooltip: 'Xoa',
+                                    tooltip: 'Xóa',
                                   ),
                                 ])),
                               ]);
@@ -257,21 +323,27 @@ class _OrdersScreenState extends State<OrdersScreen> {
           Row(
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
-              OutlinedButton.icon(
-                onPressed: _page > 1 ? () => _load(_page - 1) : null,
-                icon: const Icon(Icons.chevron_left, size: 16),
-                label: const Text('Truoc'),
+              MouseRegion(
+                cursor: _page > 1 ? SystemMouseCursors.click : SystemMouseCursors.basic,
+                child: OutlinedButton.icon(
+                  onPressed: _page > 1 ? () => _load(_page - 1) : null,
+                  icon: const Icon(Icons.chevron_left, size: 16),
+                  label: const Text('Truoc'),
+                ),
               ),
               Padding(
                 padding: const EdgeInsets.symmetric(horizontal: 16),
                 child: Text('Trang $_page / $_totalPages',
                     style: const TextStyle(fontWeight: FontWeight.bold)),
               ),
-              OutlinedButton.icon(
-                onPressed: _page < _totalPages ? () => _load(_page + 1) : null,
-                icon: const Icon(Icons.chevron_right, size: 16),
-                label: const Text('Sau'),
-                iconAlignment: IconAlignment.end,
+              MouseRegion(
+                cursor: _page < _totalPages ? SystemMouseCursors.click : SystemMouseCursors.basic,
+                child: OutlinedButton.icon(
+                  onPressed: _page < _totalPages ? () => _load(_page + 1) : null,
+                  icon: const Icon(Icons.chevron_right, size: 16),
+                  label: const Text('Sau'),
+                  iconAlignment: IconAlignment.end,
+                ),
               ),
             ],
           ),

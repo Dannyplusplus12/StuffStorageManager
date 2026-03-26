@@ -1,4 +1,7 @@
+import 'dart:math' as math;
+
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import '../models/customer.dart';
 import '../services/api_service.dart';
 import '../theme.dart';
@@ -71,11 +74,17 @@ class _DebtScreenState extends State<DebtScreen> {
         title: const Text('Cảnh báo'),
         content: const Text('Xóa khách hàng?\n(Toàn bộ lịch sử và công nợ sẽ mất)'),
         actions: [
-          TextButton(onPressed: () => Navigator.pop(context, false), child: const Text('Không')),
-          ElevatedButton(
-            style: ElevatedButton.styleFrom(backgroundColor: Colors.red),
-            onPressed: () => Navigator.pop(context, true),
-            child: const Text('Có'),
+          MouseRegion(
+            cursor: SystemMouseCursors.click,
+            child: TextButton(onPressed: () => Navigator.pop(context, false), child: const Text('Không')),
+          ),
+          MouseRegion(
+            cursor: SystemMouseCursors.click,
+            child: ElevatedButton(
+              style: ElevatedButton.styleFrom(backgroundColor: Colors.red),
+              onPressed: () => Navigator.pop(context, true),
+              child: const Text('Có'),
+            ),
           ),
         ],
       ),
@@ -117,23 +126,29 @@ class _DebtScreenState extends State<DebtScreen> {
           ]),
         ),
         actions: [
-          TextButton(onPressed: () => Navigator.pop(context, false), child: const Text('Hủy')),
-          ElevatedButton(
-            onPressed: () async {
-              final nav = Navigator.of(context);
-              final messenger = ScaffoldMessenger.of(context);
-              try {
-                await ApiService.updateCustomer(c.id,
-                    name: nameCtrl.text.trim(),
-                    phone: phoneCtrl.text.trim(),
-                    debt: int.tryParse(debtCtrl.text.replaceAll('.', '')) ?? c.debt);
-                nav.pop(true);
-              } catch (e) {
-                messenger.showSnackBar(
-                    SnackBar(content: Text('$e'), backgroundColor: Colors.red));
-              }
-            },
-            child: const Text('Lưu'),
+          MouseRegion(
+            cursor: SystemMouseCursors.click,
+            child: TextButton(onPressed: () => Navigator.pop(context, false), child: const Text('Hủy')),
+          ),
+          MouseRegion(
+            cursor: SystemMouseCursors.click,
+            child: ElevatedButton(
+              onPressed: () async {
+                final nav = Navigator.of(context);
+                final messenger = ScaffoldMessenger.of(context);
+                try {
+                  await ApiService.updateCustomer(c.id,
+                      name: nameCtrl.text.trim(),
+                      phone: phoneCtrl.text.trim(),
+                      debt: int.tryParse(debtCtrl.text.replaceAll('.', '')) ?? c.debt);
+                  nav.pop(true);
+                } catch (e) {
+                  messenger.showSnackBar(
+                      SnackBar(content: Text('$e'), backgroundColor: Colors.red));
+                }
+              },
+              child: const Text('Lưu'),
+            ),
           ),
         ],
       ),
@@ -163,36 +178,85 @@ class _DebtScreenState extends State<DebtScreen> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Row(children: [
-            const Text('Công nợ khách hàng',
-                style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold, color: kTextPrimary)),
-            const SizedBox(width: 8),
-            Container(
-              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
-              decoration:
-                  BoxDecoration(color: const Color(0xFFFEE2E2), borderRadius: BorderRadius.circular(12)),
-              child: Text('Tổng nợ: ${formatCurrency(_totalDebt)} đ',
-                  style: const TextStyle(color: kDanger, fontSize: 11, fontWeight: FontWeight.bold)),
-            ),
-            const Spacer(),
-            SizedBox(
-              width: 280, height: 38,
-              child: TextField(
-                decoration: const InputDecoration(
-                    hintText: 'Tìm tên hoặc SĐT...', prefixIcon: Icon(Icons.search, size: 18)),
-                onChanged: (v) => setState(() => _filter = v.toLowerCase().trim()),
-              ),
-            ),
-            const SizedBox(width: 8),
-            SizedBox(
-              height: 38,
-              child: OutlinedButton.icon(
-                onPressed: _load,
-                icon: const Icon(Icons.refresh, size: 16),
-                label: const Text('Làm mới'),
-              ),
-            ),
-          ]),
+          LayoutBuilder(
+            builder: (ctx, constraints) {
+              final titleBadge = Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  const Flexible(
+                    child: Text('Công nợ khách hàng',
+                        style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold, color: kTextPrimary)),
+                  ),
+                  const SizedBox(width: 8),
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                    decoration: BoxDecoration(
+                      color: const Color(0xFFFEE2E2),
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                    child: Text('Tổng nợ: ${formatCurrency(_totalDebt)} đ',
+                        style: const TextStyle(color: kDanger, fontSize: 11, fontWeight: FontWeight.bold)),
+                  ),
+                ],
+              );
+
+              Widget searchControls(double width) {
+                final cappedWidth = math.max(240.0, math.min(width, 460.0));
+                return SizedBox(
+                  width: cappedWidth,
+                  child: Row(
+                    mainAxisSize: MainAxisSize.max,
+                    children: [
+                      Expanded(
+                        child: SizedBox(
+                          height: 38,
+                          child: TextField(
+                            decoration: const InputDecoration(
+                              hintText: 'Tìm tên hoặc SĐT...',
+                              prefixIcon: Icon(Icons.search, size: 18),
+                              coxntentPadding: EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                            ),
+                            onChanged: (v) => setState(() => _filter = v.toLowerCase().trim()),
+                          ),
+                        ),
+                      ),
+                      const SizedBox(width: 8),
+                      SizedBox(
+                        height: 38,
+                        child: MouseRegion(
+                          cursor: SystemMouseCursors.click,
+                          child: OutlinedButton.icon(
+                            onPressed: _load,
+                            icon: const Icon(Icons.refresh, size: 16),
+                            label: const Text('Làm mới'),
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                );
+              }
+
+              if (constraints.maxWidth < 780) {
+                return Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    titleBadge,
+                    const SizedBox(height: 8),
+                    searchControls(constraints.maxWidth),
+                  ],
+                );
+              }
+
+              return Row(
+                children: [
+                  Expanded(child: titleBadge),
+                  const SizedBox(width: 12),
+                  searchControls(math.min(constraints.maxWidth * 0.45, 480)),
+                ],
+              );
+            },
+          ),
           const SizedBox(height: 12),
           Expanded(
             child: _loading
@@ -246,21 +310,25 @@ class _DebtScreenState extends State<DebtScreen> {
                                 DataCell(Text(c.phone.isNotEmpty ? c.phone : '-'),
                                     onTap: () => _editCustomer(c)),
                                 DataCell(
-                                  Text('${formatCurrency(c.debt)} d',
+                                  Text('${formatCurrency(c.debt)} đ',
                                       style: TextStyle(
                                           color: c.debt > 0 ? kDanger : kSuccess,
                                           fontWeight: FontWeight.bold)),
                                   onTap: () => _editCustomer(c),
                                 ),
                                 DataCell(Row(mainAxisSize: MainAxisSize.min, children: [
-                                  TextButton.icon(
-                                    onPressed: () => _openHistory(c),
-                                    icon: const Icon(Icons.history, size: 14),
-                                    label: const Text('Lịch sử'),
-                                    style: TextButton.styleFrom(foregroundColor: Colors.blue),
+                                  MouseRegion(
+                                    cursor: SystemMouseCursors.click,
+                                    child: TextButton.icon(
+                                      onPressed: () => _openHistory(c),
+                                      icon: const Icon(Icons.history, size: 14),
+                                      label: const Text('Lịch sử'),
+                                      style: TextButton.styleFrom(foregroundColor: Colors.blue),
+                                    ),
                                   ),
                                   IconButton(
                                     icon: const Icon(Icons.delete, color: Colors.red, size: 18),
+                                    mouseCursor: SystemMouseCursors.click,
                                     onPressed: () => _deleteCustomer(c.id),
                                     tooltip: 'Xoa',
                                   ),

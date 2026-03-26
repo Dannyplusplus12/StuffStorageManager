@@ -5,7 +5,12 @@ import time
 import os
 import traceback
 from multiprocessing import freeze_support
-from PyQt6.QtWidgets import QApplication, QMessageBox
+try:
+    from PyQt6.QtWidgets import QApplication, QMessageBox
+except Exception:
+    # PyQt6 removed from repo; keep script runnable for backend-only usage
+    QApplication = None
+    QMessageBox = None
 
 if sys.stdout is None:
     sys.stdout = open(os.devnull, "w")
@@ -35,22 +40,19 @@ if __name__ == "__main__":
     freeze_support()
     try:
         from backend.api import app as fastapi_app
-        from frontend.ui import MainWindow
 
+        # Start backend server thread only. Desktop UI is deprecated.
         server_thread = ServerThread(fastapi_app)
         server_thread.daemon = True
         server_thread.start()
-        
-        time.sleep(1.5)
 
-        qt_app = QApplication(sys.argv)
-        window = MainWindow()
-        window.show()
-
-        exit_code = qt_app.exec()
-        
-        server_thread.stop()
-        sys.exit(exit_code)
+        print("Backend server started in background. Desktop UI removed.")
+        try:
+            while True:
+                time.sleep(1)
+        except KeyboardInterrupt:
+            server_thread.stop()
+            sys.exit(0)
 
     except Exception as e:
         error_msg = traceback.format_exc()

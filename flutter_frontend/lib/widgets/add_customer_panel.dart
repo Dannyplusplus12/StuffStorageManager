@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import '../services/api_service.dart';
 
 class AddCustomerPanel extends StatefulWidget {
@@ -62,7 +63,10 @@ class _AddCustomerPanelState extends State<AddCustomerPanel> {
           const SizedBox(height: 20),
           SizedBox(
             height: 45,
-            child: ElevatedButton(onPressed: _save, child: const Text('Lưu Khách Hàng', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 15))),
+            child: MouseRegion(
+              cursor: SystemMouseCursors.click,
+              child: ElevatedButton(onPressed: _save, child: const Text('Lưu Khách Hàng', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 15))),
+            ),
           ),
           const Spacer(),
         ],

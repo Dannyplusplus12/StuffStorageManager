@@ -4,10 +4,30 @@
 > **Cập nhật lần cuối:** Tháng 3/2026
 
 ## CẬP NHẬT NHANH GẦN NHẤT
+- Đã tạo README GitHub mới ở root `README.md` để tổng hợp trạng thái hiện tại của dự án (kiến trúc, role mobile VIEWER/STAFF, luồng đơn pending/accepted/completed, setup local, deploy Railway, cấu trúc thư mục và API chính) thay cho mô tả cũ không còn khớp.
+- Desktop `Duyệt hóa đơn` đã thêm nút `Xem` ở góc dưới bên trái mỗi thẻ đơn chờ duyệt (`flutter_frontend/lib/screens/pending_approval_screen.dart`), mở popup chi tiết đầy đủ tất cả dòng hàng (mẫu/size-sai màu/số lượng) theo kiểu xem chi tiết tương tự popup picker.
+- Mobile orderer UI tiếp tục chỉnh theo phản hồi: phần tóm tắt mẫu đã chọn dưới `Tổng tồn` đổi sang hiển thị **mỗi size/màu một dòng** (không nối bằng dấu phẩy); bỏ nút `Xem` khỏi popup chọn mẫu; thêm nút `Xem` cạnh nút `Gửi đơn` ở thanh dưới để mở popup xem/chỉnh đơn hiện tại (kiểu popup giống picker, có chỉnh số lượng trực tiếp).
+- Đã nâng cấp UI mobile popup cho orderer/picker trong `flutter_frontend/lib/screens/mobile_home_screen.dart`: popup chuyển sang kiểu bottom-sheet hiện đại (picker), giới hạn chiều cao ~90% màn hình, popup orderer có nút `Xem` để rà soát/chỉnh số lượng trước khi xác nhận, nút chính đổi logic text `Xác nhận/Đóng` theo trạng thái thay đổi số lượng; đồng thời danh sách sản phẩm orderer bỏ badge `Còn hàng` và hiển thị tóm tắt mẫu đã chọn ngay dưới `Tổng tồn`.
+- Đã sửa API xóa khách hàng trong `backend/api.py`: khi xóa khách sẽ duyệt toàn bộ đơn liên quan và xóa theo **cùng logic xóa hóa đơn** (đơn `completed` hoàn tác kho + công nợ trước khi xóa; đơn `pending/accepted` xóa dữ liệu đơn), sau đó mới xóa khách hàng để tránh lỗi ràng buộc và đồng bộ nghiệp vụ.
 - Đã fix lỗi trùng lịch sử công nợ khi picker xác nhận đơn: trong `backend/api.py` endpoint `/orders/{id}/confirm` chỉ cộng nợ khách hàng, **không tạo thêm `DebtLog`** để tránh trùng với dòng lịch sử `ORDER` (Xuất đơn hàng).
 - Đã cập nhật flow desktop staff trong `frontend/ui.py`: nút xuất hàng giờ tạo `/checkout/draft` rồi tự động `/orders/{id}/approve` để chuyển cho picker; kho + công nợ chỉ cập nhật khi picker xác nhận `/orders/{id}/confirm`.
 - Đã sửa lỗi cú pháp ở `flutter_frontend/lib/screens/mobile_home_screen.dart` trong `_RoleSelectionScreen`: thay `doubleInfinity` -> `double.infinity` và sửa dấu `)` của `ElevatedButton.styleFrom(...)` cho nút `Người soạn hàng` (fix các lỗi build quanh dòng ~88-96).
 - Đã sửa lỗi build Flutter ở `flutter_frontend/lib/screens/mobile_home_screen.dart`: thiếu dấu đóng `)` trong `_openOrdererProductQuickView()` (khối `SafeArea` trong `showModalBottomSheet`), gây lỗi `Can't find ')' to match '('` tại dòng ~502.
+- Đã cập nhật tính năng picker trên mobile (`flutter_frontend/lib/screens/mobile_home_screen.dart`): danh sách đơn accepted giờ mở popup chi tiết đơn để thao tác tập trung hơn; popup có nút đóng, bấm ra ngoài để tắt, và vẫn cho phép bấm từng món để nhảy sang kho như cũ.
+- Trong popup picker, mỗi món có input số lượng thực tế + nút tăng/giảm (UI tương tự popup chọn món của orderer). Picker có thể xác nhận một phần theo số lượng thực có.
+- Backend `PUT /orders/{id}/confirm` đã hỗ trợ nhận số lượng picker nhập theo từng `order_item_id`/`variant_id`:
+  - Trừ kho theo số thực nhận
+  - Cập nhật lại `order_items` và `total_amount` theo phần giao được
+  - Sau đó mới chuyển `completed`
+- Đơn giao thiếu một phần sẽ lưu `picker_note` (thiếu hàng) trong `orders`; orderer polling trạng thái sẽ nhận và hiển thị thông báo để staff báo lại khách.
+- Đã thêm migration/runtime support cho cột `orders.picker_note` (trong `backend/database.py` + `backend/api.py`).
+- Đã cập nhật model/API Flutter (`order.dart`, `api_service.dart`) để hỗ trợ `order_item_id`, `picker_note` và payload confirm theo số lượng thực tế.
+- Đã tạm thời xóa toàn bộ đơn `status='accepted'` trong DB local `shop.db` theo yêu cầu (queue picker được làm trống).
+- Đã chỉnh giao diện POS desktop (`flutter_frontend/lib/screens/pos_screen.dart`) để không còn báo lỗi tràn khi thu nhỏ cửa sổ: thanh bên co giãn/đưa xuống dưới, cụm tiêu đề + ô tìm kiếm dùng `Wrap`, chấp nhận thu hẹp mà không xuất hiện dải cảnh báo.
+- Đã chuẩn hóa lại các chuỗi tiếng Việt có dấu ở POS desktop (tiêu đề, placeholder tìm kiếm, nhãn giỏ hàng, snackbar...) để tránh hiển thị chữ không dấu.
+- Dải tìm kiếm POS desktop đã chuyển sang bố cục flex: ô tìm kiếm và nút "Làm mới" luôn đi cùng nhau; khi không đủ chỗ cả cụm sẽ xuống hàng, tránh tình trạng chỉ riêng nút bị đẩy xuống dưới.
+- Form thêm sản phẩm mới hiển thị rõ placeholder "Size" và "SL" nhờ giảm padding + căn giữa, không còn hiện "...".
+- Đã áp dụng cùng layout flex cho phần tiêu đề + tìm kiếm ở màn hình `Công nợ khách hàng` và `Hóa đơn`, đảm bảo ô tìm kiếm và nút "Làm mới" luôn nằm chung một cụm và tự xuống hàng khi thiếu chỗ; đồng thời chuẩn hóa lại các nhãn/tooltip tiếng Việt (ví dụ "Hóa đơn", "Không có hóa đơn", "Sửa", "Xóa", "Chỉnh sửa ngày giờ"...).
 
 ---
 
@@ -177,15 +197,17 @@ copy config.json dist\config.json
 | POST | `/customers/{id}/history` | Tạo điều chỉnh công nợ |
 | PUT | `/customers/{id}/history/{log_id}` | Sửa log công nợ |
 | DELETE | `/customers/{id}/history/{log_id}` | Xóa log công nợ |
-| POST | `/checkout` | Xuất hàng (tạo order + trừ kho + cộng nợ) |
-| PUT | `/orders/{id}` | Sửa đơn hàng (hoàn tác cũ → áp dụng mới) |
-| GET | `/orders?page=&limit=` | Danh sách hóa đơn (phân trang) |
+| POST | `/checkout` | Luồng cũ xuất trực tiếp (trừ kho + cộng nợ ngay) |
+| PUT | `/orders/{id}` | Sửa đơn hàng đã hoàn thành |
+| GET | `/orders?page=&limit=` | Danh sách hóa đơn hoàn thành (phân trang) |
 | DELETE | `/orders/{id}` | Xóa hóa đơn (hoàn tác kho + nợ) |
 | PUT | `/orders/{id}/date` | Sửa ngày giờ đơn hàng |
-| POST | `/checkout/draft` | Tạo hóa đơn nháp từ mobile staff |
-| GET | `/orders/pending` | Danh sách hóa đơn chờ desktop duyệt |
-| PUT | `/orders/{id}/approve` | Desktop duyệt nháp (trừ kho, cộng nợ, chốt đơn) |
-| DELETE | `/orders/{id}/reject` | Desktop từ chối nháp (xóa hoàn toàn) |
+| POST | `/checkout/draft` | Tạo hóa đơn nháp (pending), chưa trừ kho/chưa cộng nợ |
+| GET | `/orders/pending` | Danh sách đơn chờ tiếp nhận |
+| PUT | `/orders/{id}/approve` | Chuyển pending → accepted cho picker (chưa trừ kho/chưa cộng nợ) |
+| GET | `/orders/accepted` | Danh sách đơn picker cần xác nhận |
+| PUT | `/orders/{id}/confirm` | Picker xác nhận: trừ kho + cộng nợ, chuyển completed |
+| DELETE | `/orders/{id}/reject` | Từ chối đơn pending (xóa hoàn toàn) |
 
 ### database.py hỗ trợ dual-mode:
 ```python
@@ -197,71 +219,37 @@ is_sqlite = DATABASE_URL.startswith("sqlite")   # Flag cho migration conditional
 
 ---
 
-## 8. SCRIPTS TIỆN ÍCH
-
-| Script | Công dụng | Khi nào dùng |
-|--------|-----------|--------------|
-| `migrate_to_cloud.py` | Upload SQLite → Railway PostgreSQL | Lần đầu deploy hoặc reset data |
-| `download_from_cloud.py` | Download PostgreSQL → `shop_backup.db` | Backup định kỳ |
-| `run_frontend.py` | Chạy frontend trực tiếp (dev) | Khi dev, không cần build exe |
-
----
-
-## 9. TECH STACK
-
-| Layer | Công nghệ | Version |
-|-------|-----------|---------|
-| Mobile app | Flutter | 3.41.x |
-| Dart | Dart SDK | 3.11.x |
-| Frontend | PyQt6 | 6.10.2 |
-| Backend | FastAPI | 0.128.8 |
-| ORM | SQLAlchemy | 2.0.46 |
-| DB (Cloud) | PostgreSQL | Railway Plugin |
-| DB (Local) | SQLite | (fallback) |
-| PG Driver | psycopg2-binary | 2.9.10 |
-| HTTP Client | requests | 2.32.5 |
-| Packaging | PyInstaller | 6.19.0 |
-| Cloud | Railway | nixpacks builder |
-
----
-
-## 10. NHỮNG LƯU Ý QUAN TRỌNG (DỄ QUÊN)
-
-1. **2 Git repo riêng biệt**: Main project ≠ Server deploy. Sửa backend → phải copy + push cả `server-repo/`
-2. **`dist/config.json`**: Sau mỗi lần build exe, PHẢI copy `config.json` vào `dist/`. Thiếu → exe dùng localhost
-3. **`.gitignore` rất strict**: Main repo chỉ track vài file. Nếu thêm file mới, phải sửa `.gitignore`
-4. **Migration database**: `create_all()` không sửa bảng cũ. Thêm cột → viết ALTER TABLE thủ công
-5. **Server crash ≠ mất data**: PostgreSQL là service riêng trên Railway
-6. **Backup**: Nên chạy `download_from_cloud.py` định kỳ (tuần/tháng)
-7. **Railway free tier**: Có giới hạn credit. Nếu hết → server tắt (DB vẫn còn)
-8. **`backend/` vs `server-repo/`**: `backend/` là bản dev, `server-repo/` là bản deploy. Luôn giữ sync
-
-9. **Mobile là app con, không bê UI desktop**: mobile có flow riêng, nhẹ hơn desktop
-10. **Phân quyền mobile bắt buộc**:
-   - VIEWER mặc định: chỉ xem kho (read-only)
-   - STAFF (PIN 1111): xem kho + công nợ + lịch sử hóa đơn + tạo hóa đơn nháp
-11. **Chỉ desktop được duyệt/từ chối hóa đơn**: mobile staff không có quyền duyệt
-12. **Nếu `/orders/pending` lỗi trên môi trường cũ**: mobile vẫn phải hiển thị lịch sử từ `/orders`
-
----
-
 ## 11. MOBILE CHILD APP FLOW (Flutter)
 
 ### Quy tắc nghiệp vụ
 - App mở lên mặc định `VIEWER`
 - Nhấn `Kích hoạt staff` → nhập PIN `1111` để vào `STAFF`
-- `STAFF` tạo hóa đơn mới dưới dạng **draft** (`is_draft=1`)
-- Desktop nhận pending và quyết định:
-  - `Approve` → chốt đơn + trừ kho + cập nhật công nợ
-  - `Reject` → xóa draft hoàn toàn
+- `STAFF` tạo hóa đơn mới dưới dạng **draft** (`status=pending`)
+- Đơn sẽ đi qua các trạng thái:
+  - `pending` → staff/desktop tiếp nhận (`/approve`) thành `accepted`
+  - `accepted` → picker xác nhận (`/confirm`) thành `completed`
+- Chỉ khi picker xác nhận thì mới cập nhật kho + công nợ
 
 ### Khả năng theo role
 - **VIEWER**: chỉ xem sản phẩm + tồn kho
-- **STAFF**: xem tồn kho, xem công nợ, xem lịch sử hóa đơn đã duyệt, tạo draft order
-- **Desktop**: đầy đủ quyền + duyệt/từ chối pending
+- **STAFF (mobile)**: xem tồn kho, xem công nợ, xem lịch sử hóa đơn đã hoàn thành, tạo draft order
+- **Desktop**: điều phối đơn (tiếp nhận/từ chối), quản trị đầy đủ
 
 ### Notification chiều ngược về staff
 - Mobile polling trạng thái draft đã gửi
 - Khi draft chuyển khỏi pending:
-  - còn tồn tại trong orders → thông báo đã duyệt
-  - không tồn tại → thông báo đã bị từ chối
+  - sang `accepted` → thông báo đã được tiếp nhận
+  - sang `completed` → thông báo đã hoàn thành
+  - không còn tồn tại → thông báo đã bị từ chối
+
+---
+
+## 12. DESKTOP STAFF FLOW (HIỆN TẠI)
+
+- Nút `Xuất hàng` ở desktop (`frontend/ui.py`) hiện dùng flow:
+  1. `POST /checkout/draft`
+  2. `PUT /orders/{id}/approve`
+- Vì vậy lúc desktop staff bấm xuất hàng:
+  - **chưa trừ kho ngay**
+  - **chưa cộng công nợ ngay**
+- Kho và công nợ chỉ thay đổi tại bước picker `PUT /orders/{id}/confirm`.

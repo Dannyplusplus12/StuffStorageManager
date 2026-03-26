@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 
 import '../models/order.dart';
 import '../services/api_service.dart';
@@ -17,6 +18,60 @@ class PendingApprovalScreen extends StatefulWidget {
 class _PendingApprovalScreenState extends State<PendingApprovalScreen> {
   bool _loading = true;
   List<Order> _orders = [];
+
+  Future<void> _openDetail(Order order) async {
+    await showDialog<void>(
+      context: context,
+      builder: (_) => AlertDialog(
+        title: Text('Chi tiết đơn #${order.id}'),
+        content: SizedBox(
+          width: 560,
+          child: SingleChildScrollView(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text('Khách: ${order.customerName}'),
+                Text('Ngày: ${formatDate(order.createdAt)}'),
+                Text('Tổng SL: ${order.totalQty} • Tổng tiền: ${formatCurrency(order.totalAmount)} đ'),
+                const SizedBox(height: 10),
+                ...order.items.map((it) {
+                  return Container(
+                    margin: const EdgeInsets.only(bottom: 8),
+                    padding: const EdgeInsets.all(10),
+                    decoration: BoxDecoration(
+                      color: const Color(0xFFF8FAFC),
+                      borderRadius: BorderRadius.circular(8),
+                      border: Border.all(color: kBorder),
+                    ),
+                    child: Row(
+                      children: [
+                        Expanded(
+                          child: Text(
+                            '${it.productName} (${it.variantInfo})',
+                            style: const TextStyle(fontWeight: FontWeight.w600),
+                          ),
+                        ),
+                        Text('x${it.quantity}', style: const TextStyle(fontWeight: FontWeight.bold)),
+                      ],
+                    ),
+                  );
+                }),
+              ],
+            ),
+          ),
+        ),
+        actions: [
+          MouseRegion(
+            cursor: SystemMouseCursors.click,
+            child: TextButton(
+              onPressed: () => Navigator.pop(context),
+              child: const Text('Đóng'),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
 
   @override
   void initState() {
@@ -66,11 +121,17 @@ class _PendingApprovalScreenState extends State<PendingApprovalScreen> {
         title: const Text('Từ chối hóa đơn'),
         content: Text('Xóa hóa đơn nháp #${order.id}?'),
         actions: [
-          TextButton(onPressed: () => Navigator.pop(context, false), child: const Text('Hủy')),
-          ElevatedButton(
-            onPressed: () => Navigator.pop(context, true),
-            style: ElevatedButton.styleFrom(backgroundColor: Colors.red),
-            child: const Text('Từ chối'),
+          MouseRegion(
+            cursor: SystemMouseCursors.click,
+            child: TextButton(onPressed: () => Navigator.pop(context, false), child: const Text('Hủy')),
+          ),
+          MouseRegion(
+            cursor: SystemMouseCursors.click,
+            child: ElevatedButton(
+              onPressed: () => Navigator.pop(context, true),
+              style: ElevatedButton.styleFrom(backgroundColor: Colors.red),
+              child: const Text('Từ chối'),
+            ),
           ),
         ],
       ),
@@ -119,10 +180,13 @@ class _PendingApprovalScreenState extends State<PendingApprovalScreen> {
                 ),
               ),
               const Spacer(),
-              OutlinedButton.icon(
-                onPressed: _load,
-                icon: const Icon(Icons.refresh, size: 16),
-                label: const Text('Làm mới'),
+              MouseRegion(
+                cursor: SystemMouseCursors.click,
+                child: OutlinedButton.icon(
+                  onPressed: _load,
+                  icon: const Icon(Icons.refresh, size: 16),
+                  label: const Text('Làm mới'),
+                ),
               ),
             ],
           ),
@@ -173,18 +237,32 @@ class _PendingApprovalScreenState extends State<PendingApprovalScreen> {
                                 ],
                                 const SizedBox(height: 10),
                                 Row(
-                                  mainAxisAlignment: MainAxisAlignment.end,
                                   children: [
-                                    TextButton.icon(
-                                      onPressed: () => _reject(o),
-                                      icon: const Icon(Icons.close, color: Colors.red, size: 16),
-                                      label: const Text('Từ chối', style: TextStyle(color: Colors.red)),
+                                    MouseRegion(
+                                      cursor: SystemMouseCursors.click,
+                                      child: TextButton.icon(
+                                        onPressed: () => _openDetail(o),
+                                        icon: const Icon(Icons.remove_red_eye_outlined, size: 16),
+                                        label: const Text('Xem'),
+                                      ),
+                                    ),
+                                    const Spacer(),
+                                    MouseRegion(
+                                      cursor: SystemMouseCursors.click,
+                                      child: TextButton.icon(
+                                        onPressed: () => _reject(o),
+                                        icon: const Icon(Icons.close, color: Colors.red, size: 16),
+                                        label: const Text('Từ chối', style: TextStyle(color: Colors.red)),
+                                      ),
                                     ),
                                     const SizedBox(width: 8),
-                                    ElevatedButton.icon(
-                                      onPressed: () => _approve(o),
-                                      icon: const Icon(Icons.check, size: 16),
-                                      label: const Text('Duyệt'),
+                                    MouseRegion(
+                                      cursor: SystemMouseCursors.click,
+                                      child: ElevatedButton.icon(
+                                        onPressed: () => _approve(o),
+                                        icon: const Icon(Icons.check, size: 16),
+                                        label: const Text('Duyệt'),
+                                      ),
                                     ),
                                   ],
                                 ),

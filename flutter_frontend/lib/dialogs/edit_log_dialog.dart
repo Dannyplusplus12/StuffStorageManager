@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import '../services/api_service.dart';
 
 class EditLogDialog extends StatefulWidget {
@@ -74,8 +75,14 @@ class _EditLogDialogState extends State<EditLogDialog> {
         ]),
       ),
       actions: [
-        TextButton(onPressed: () => Navigator.pop(context, false), child: const Text('Hủy')),
-        ElevatedButton(onPressed: _save, child: const Text('Lưu')),
+        MouseRegion(
+          cursor: SystemMouseCursors.click,
+          child: TextButton(onPressed: () => Navigator.pop(context, false), child: const Text('Hủy')),
+        ),
+        MouseRegion(
+          cursor: SystemMouseCursors.click,
+          child: ElevatedButton(onPressed: _save, child: const Text('Lưu')),
+        ),
       ],
     );
   }

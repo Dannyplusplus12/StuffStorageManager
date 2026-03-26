@@ -85,6 +85,7 @@ class Order(Base):
     is_draft = Column(Integer, default=0)  # 1 = PENDING (chờ duyệt), 0 = APPROVED (đã apply)
     # status: 'pending' | 'accepted' | 'completed'
     status = Column(String, default='completed')
+    picker_note = Column(String, default="")
 
     items = relationship("OrderItem", back_populates="order")
     customer_rel = relationship("Customer", back_populates="orders")

@@ -86,14 +86,26 @@ class _AddProductPanelState extends State<AddProductPanel> {
               children: [
                 ..._groups.asMap().entries.map((e) => _buildGroup(e.key, e.value)),
                 const SizedBox(height: 8),
-                OutlinedButton(onPressed: () => setState(() => _groups.add(_ColorGroup(color: '', rows: [_SizeRow()]))), child: const Text('+ Nhóm Màu')),
+                MouseRegion(
+                  cursor: SystemMouseCursors.click,
+                  child: OutlinedButton(
+                    onPressed: () => setState(() => _groups.add(_ColorGroup(color: '', rows: [_SizeRow()]))),
+                    child: const Text('+ Nhóm Màu'),
+                  ),
+                ),
               ],
             ),
           ),
           const SizedBox(height: 8),
           SizedBox(
             height: 45,
-            child: ElevatedButton(onPressed: _save, child: const Text('Lưu', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16))),
+            child: MouseRegion(
+              cursor: SystemMouseCursors.click,
+              child: ElevatedButton(
+                onPressed: _save,
+                child: const Text('Lưu', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
+              ),
+            ),
           ),
         ],
       ),
@@ -117,18 +129,29 @@ class _AddProductPanelState extends State<AddProductPanel> {
                   style: const TextStyle(fontWeight: FontWeight.bold),
                 ),
               ),
-              Tooltip(
+            Tooltip(
                 message: 'Nhân bản màu',
                 child: IconButton(
                   icon: const Icon(Icons.copy_all, size: 18, color: Colors.blue),
+                  mouseCursor: SystemMouseCursors.click,
                   onPressed: () => _duplicateColorGroup(gi),
                 ),
               ),
-              IconButton(icon: const Icon(Icons.delete, color: Colors.red), onPressed: () => setState(() => _groups.removeAt(gi))),
+              IconButton(
+                icon: const Icon(Icons.delete, color: Colors.red),
+                mouseCursor: SystemMouseCursors.click,
+                onPressed: () => setState(() => _groups.removeAt(gi)),
+              ),
             ]),
             const SizedBox(height: 4),
             ...g.rows.asMap().entries.map((e) => _buildRow(g, e.key, e.value)),
-            TextButton(onPressed: () => setState(() => g.rows.add(_SizeRow())), child: const Text('+ Thêm Size')),
+            MouseRegion(
+              cursor: SystemMouseCursors.click,
+              child: TextButton(
+                onPressed: () => setState(() => g.rows.add(_SizeRow())),
+                child: const Text('+ Thêm Size'),
+              ),
+            ),
           ],
         ),
       ),
@@ -143,7 +166,11 @@ class _AddProductPanelState extends State<AddProductPanel> {
           width: 55,
           child: TextFormField(
             initialValue: r.size,
-            decoration: const InputDecoration(hintText: 'Size'),
+            textAlign: TextAlign.center,
+            decoration: const InputDecoration(
+              hintText: 'Size',
+              contentPadding: EdgeInsets.symmetric(horizontal: 6, vertical: 10),
+            ),
             onChanged: (v) => r.size = v,
           ),
         ),
@@ -155,13 +182,22 @@ class _AddProductPanelState extends State<AddProductPanel> {
           step: 1000,
         )),
         const SizedBox(width: 4),
-        SizedBox(width: 55, child: _ScrollableNumberField(
-          value: r.stock,
-          hintText: 'Kho',
-          onChanged: (v) => setState(() => r.stock = v),
-          step: 1,
-        )),
-        IconButton(icon: const Icon(Icons.close, color: Colors.red, size: 16), onPressed: () => setState(() => g.rows.removeAt(ri))),
+        SizedBox(
+          width: 55,
+          child: _ScrollableNumberField(
+            value: r.stock,
+            hintText: 'SL',
+            onChanged: (v) => setState(() => r.stock = v),
+            step: 1,
+            contentPadding: const EdgeInsets.symmetric(horizontal: 6, vertical: 10),
+            textAlign: TextAlign.center,
+          ),
+        ),
+        IconButton(
+          icon: const Icon(Icons.close, color: Colors.red, size: 16),
+          mouseCursor: SystemMouseCursors.click,
+          onPressed: () => setState(() => g.rows.removeAt(ri)),
+        ),
       ]),
     );
   }
@@ -172,12 +208,16 @@ class _ScrollableNumberField extends StatefulWidget {
   final String hintText;
   final ValueChanged<int> onChanged;
   final int step;
+  final EdgeInsetsGeometry? contentPadding;
+  final TextAlign textAlign;
 
   const _ScrollableNumberField({
     required this.value,
     required this.hintText,
     required this.onChanged,
     this.step = 1,
+    this.contentPadding,
+    this.textAlign = TextAlign.start,
   });
 
   @override
@@ -234,7 +274,11 @@ class _ScrollableNumberFieldState extends State<_ScrollableNumberField> {
       child: TextField(
         controller: _controller,
         focusNode: _focusNode,
-        decoration: InputDecoration(hintText: widget.hintText),
+        decoration: InputDecoration(
+          hintText: widget.hintText,
+          contentPadding: widget.contentPadding,
+        ),
+        textAlign: widget.textAlign,
         keyboardType: TextInputType.number,
         inputFormatters: [FilteringTextInputFormatter.digitsOnly],
         onChanged: (v) {

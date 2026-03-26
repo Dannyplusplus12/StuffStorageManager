@@ -212,8 +212,13 @@ class ApiService {
   }
 
   /// Picker confirms delivery — deducts stock + records debt
-  static Future<Map<String, dynamic>> confirmOrder(int orderId) async {
-    final r = await http.put(Uri.parse('$_b/orders/$orderId/confirm'), headers: _headers);
+  static Future<Map<String, dynamic>> confirmOrder(int orderId, {List<Map<String, dynamic>>? items}) async {
+    final body = items == null ? null : jsonEncode({'items': items});
+    final r = await http.put(
+      Uri.parse('$_b/orders/$orderId/confirm'),
+      headers: _headers,
+      body: body,
+    );
     if (r.statusCode == 200) return jsonDecode(utf8.decode(r.bodyBytes));
     throw Exception(jsonDecode(utf8.decode(r.bodyBytes))['detail'] ?? 'Lỗi xác nhận đơn hàng');
   }

@@ -59,7 +59,20 @@ class _EditProductDialogState extends State<EditProductDialog> {
     final ok = await showDialog<bool>(context: context, builder: (_) => AlertDialog(
       title: const Text('Xác nhận xóa'),
       content: const Text('Xóa vĩnh viễn sản phẩm này?'),
-      actions: [TextButton(onPressed: () => Navigator.pop(context, false), child: const Text('Không')), ElevatedButton(style: ElevatedButton.styleFrom(backgroundColor: Colors.red), onPressed: () => Navigator.pop(context, true), child: const Text('Có'))],
+      actions: [
+        MouseRegion(
+          cursor: SystemMouseCursors.click,
+          child: TextButton(onPressed: () => Navigator.pop(context, false), child: const Text('Không')),
+        ),
+        MouseRegion(
+          cursor: SystemMouseCursors.click,
+          child: ElevatedButton(
+            style: ElevatedButton.styleFrom(backgroundColor: Colors.red),
+            onPressed: () => Navigator.pop(context, true),
+            child: const Text('Có'),
+          ),
+        ),
+      ],
     ));
     if (ok == true) {
       await ApiService.deleteProduct(widget.product.id);
@@ -86,17 +99,29 @@ class _EditProductDialogState extends State<EditProductDialog> {
                   children: [
                     ..._groups.asMap().entries.map((entry) => _buildColorGroup(entry.key, entry.value)),
                     const SizedBox(height: 8),
-                    OutlinedButton(onPressed: () => setState(() => _groups.add(_ColorGroup(color: '', rows: [_SizeRow()]))), child: const Text('+ Thêm Nhóm Màu')),
+                    MouseRegion(
+                      cursor: SystemMouseCursors.click,
+                      child: OutlinedButton(
+                        onPressed: () => setState(() => _groups.add(_ColorGroup(color: '', rows: [_SizeRow()]))),
+                        child: const Text('+ Thêm Nhóm Màu'),
+                      ),
+                    ),
                   ],
                 ),
               ),
               const SizedBox(height: 8),
-              ElevatedButton(onPressed: _save, child: const Text('Lưu Thay Đổi', style: TextStyle(fontWeight: FontWeight.bold))),
+              MouseRegion(
+                cursor: SystemMouseCursors.click,
+                child: ElevatedButton(onPressed: _save, child: const Text('Lưu Thay Đổi', style: TextStyle(fontWeight: FontWeight.bold))),
+              ),
               const SizedBox(height: 4),
-              OutlinedButton(
-                style: OutlinedButton.styleFrom(foregroundColor: Colors.red, side: const BorderSide(color: Colors.red)),
-                onPressed: _delete,
-                child: const Text('XÓA SẢN PHẨM', style: TextStyle(fontWeight: FontWeight.bold)),
+              MouseRegion(
+                cursor: SystemMouseCursors.click,
+                child: OutlinedButton(
+                  style: OutlinedButton.styleFrom(foregroundColor: Colors.red, side: const BorderSide(color: Colors.red)),
+                  onPressed: _delete,
+                  child: const Text('XÓA SẢN PHẨM', style: TextStyle(fontWeight: FontWeight.bold)),
+                ),
               ),
             ],
           ),
@@ -140,16 +165,24 @@ class _EditProductDialogState extends State<EditProductDialog> {
               ),
               Tooltip(
                 message: 'Nhân bản màu',
-                child: IconButton(
+                    child: IconButton(
                   icon: const Icon(Icons.copy_all, size: 18, color: Colors.blue),
+                  mouseCursor: SystemMouseCursors.click,
                   onPressed: () => _duplicateColorGroup(gi),
                 ),
               ),
-              IconButton(icon: const Icon(Icons.delete, color: Colors.red), onPressed: () => setState(() => _groups.removeAt(gi))),
+              IconButton(
+                icon: const Icon(Icons.delete, color: Colors.red),
+                mouseCursor: SystemMouseCursors.click,
+                onPressed: () => setState(() => _groups.removeAt(gi)),
+              ),
             ]),
             const SizedBox(height: 4),
             ...g.rows.asMap().entries.map((e) => _buildSizeRow(g, e.key, e.value)),
-            TextButton(onPressed: () => setState(() => g.rows.add(_SizeRow())), child: const Text('+ Thêm Size')),
+            MouseRegion(
+              cursor: SystemMouseCursors.click,
+              child: TextButton(onPressed: () => setState(() => g.rows.add(_SizeRow())), child: const Text('+ Thêm Size')),
+            ),
           ],
         ),
       ),
@@ -182,7 +215,11 @@ class _EditProductDialogState extends State<EditProductDialog> {
           onChanged: (v) => setState(() => r.stock = v),
           step: 1,
         )),
-        IconButton(icon: const Icon(Icons.close, color: Colors.red, size: 16), onPressed: () => setState(() => g.rows.removeAt(ri))),
+        IconButton(
+          icon: const Icon(Icons.close, color: Colors.red, size: 16),
+          mouseCursor: SystemMouseCursors.click,
+          onPressed: () => setState(() => g.rows.removeAt(ri)),
+        ),
       ]),
     );
   }

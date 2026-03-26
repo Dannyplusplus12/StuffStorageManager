@@ -53,7 +53,7 @@ class _HomeScreenState extends State<HomeScreen> {
       case AppPage.pos:
         return PosScreen(key: _posKey, inventoryMode: false);
       case AppPage.inventory:
-        return PosScreen(inventoryMode: true);
+        return const PosScreen(inventoryMode: true);
       case AppPage.debt:
         return DebtScreen(onEditOrder: switchToPosWithOrder);
       case AppPage.orders:
@@ -133,15 +133,16 @@ class _Sidebar extends StatelessWidget {
     return Container(
       margin: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
       child: InkWell(
+        mouseCursor: SystemMouseCursors.click,
         onTap: () => onSelect(page),
         borderRadius: BorderRadius.circular(8),
         child: AnimatedContainer(
           duration: const Duration(milliseconds: 150),
           padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 11),
-          decoration: BoxDecoration(
+            decoration: BoxDecoration(
             color: active ? kSidebarActive : Colors.transparent,
             borderRadius: BorderRadius.circular(8),
-            border: active ? Border(left: BorderSide(color: kPrimary, width: 3)) : null,
+              border: active ? const Border(left: BorderSide(color: kPrimary, width: 3)) : null,
           ),
           child: Row(
             children: [

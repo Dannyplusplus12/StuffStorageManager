@@ -4,9 +4,9 @@ from typing import List, Optional
 from sqlalchemy import desc
 from sqlalchemy.orm import Session
 try:
-    from backend.database import SessionLocal, Product, Variant, Order, OrderItem, Customer, DebtLog, engine, is_sqlite, Base
-except ImportError:
     from database import SessionLocal, Product, Variant, Order, OrderItem, Customer, DebtLog, engine, is_sqlite, Base
+except ImportError:
+    from backend.database import SessionLocal, Product, Variant, Order, OrderItem, Customer, DebtLog, engine, is_sqlite, Base
 from sqlalchemy import text
 from datetime import datetime
 
@@ -107,7 +107,26 @@ def ensure_status_column():
     except Exception as e:
         print("Warning: ensure_status_column failed:", e)
 
+def ensure_picker_note_column():
+    try:
+        with engine.connect() as conn:
+            if is_sqlite:
+                info = conn.execute(text("PRAGMA table_info('orders')")).fetchall()
+                cols = [r[1] for r in info]
+                if 'picker_note' not in cols:
+                    conn.execute(text("ALTER TABLE orders ADD COLUMN picker_note VARCHAR DEFAULT ''"))
+                    conn.commit()
+            else:
+                try:
+                    conn.execute(text("ALTER TABLE orders ADD COLUMN picker_note VARCHAR DEFAULT ''"))
+                    conn.commit()
+                except Exception:
+                    conn.rollback()
+    except Exception as e:
+        print("Warning: ensure_picker_note_column failed:", e)
+
 ensure_status_column()
+ensure_picker_note_column()
 
 # --- DEPENDENCY: KẾT NỐI DB ---
 def get_db():
@@ -153,6 +172,14 @@ class CheckoutRequest(BaseModel):
     customer_name: str
     customer_phone: str = ""
     cart: List[CartItem]
+
+class PickerConfirmItem(BaseModel):
+    order_item_id: Optional[int] = None
+    variant_id: Optional[int] = None
+    picked_qty: int = 0
+
+class PickerConfirmRequest(BaseModel):
+    items: List[PickerConfirmItem] = []
 
 class CustomerUpdate(BaseModel):
     name: str
@@ -286,15 +313,49 @@ def update_customer_excel(cid: int, data: CustomerUpdate, db: Session = Depends(
     db.commit()
     return {"status": "ok"}
 
+def _delete_order_with_business_logic(order: Order, db: Session):
+    """
+    Delete an order with the same business behavior as invoice deletion:
+    - completed: restore stock + revert customer debt
+    - pending/accepted: just remove order items + order (no stock/debt applied yet)
+    """
+    if order.status == 'completed':
+        for item in order.items:
+            if item.variant_id:
+                var = db.query(Variant).filter(Variant.id == item.variant_id).first()
+                if var:
+                    var.stock = (var.stock or 0) + (item.quantity or 0)
+
+        if order.customer_id:
+            cust = db.query(Customer).filter(Customer.id == order.customer_id).first()
+            if cust and order.total_amount:
+                try:
+                    cust.debt = (cust.debt or 0) - int(order.total_amount or 0)
+                except Exception:
+                    cust.debt = (cust.debt or 0) - (order.total_amount or 0)
+
+    db.query(OrderItem).filter(OrderItem.order_id == order.id).delete()
+    db.delete(order)
+
 @app.delete("/customers/{customer_id}")
 def delete_customer(customer_id: int, db: Session = Depends(get_db)):
     customer = db.query(Customer).filter(Customer.id == customer_id).first()
     if not customer:
         raise HTTPException(status_code=404, detail="Khách hàng không tồn tại")
-    db.query(Order).filter(Order.customer_id == customer_id).delete(synchronize_session=False)
-    db.delete(customer)
-    db.commit()
-    return {"detail": "Đã xóa khách hàng và toàn bộ lịch sử đơn hàng liên quan"}
+    try:
+        orders = db.query(Order).filter(Order.customer_id == customer_id).all()
+        for order in orders:
+            _delete_order_with_business_logic(order, db)
+
+        db.delete(customer)
+        db.commit()
+        return {"detail": "Đã xóa khách hàng và toàn bộ lịch sử đơn hàng liên quan"}
+    except HTTPException:
+        db.rollback()
+        raise
+    except Exception as e:
+        db.rollback()
+        raise HTTPException(status_code=500, detail=str(e))
 
 @app.get("/customers/{cid}/history")
 def get_customer_history(cid: int, db: Session = Depends(get_db)):
@@ -570,35 +631,48 @@ def update_order_api(order_id: int, data: CheckoutRequest, db: Session = Depends
 
 @app.get("/orders")
 def get_orders(page: int = 1, limit: int = 20, db: Session = Depends(get_db)):
-    skip = (page - 1) * limit
-    total = db.query(Order).filter(Order.status == 'completed').count()
-    orders = db.query(Order).filter(Order.status == 'completed').order_by(desc(Order.id)).offset(skip).limit(limit).all()
-    
-    result = []
-    for o in orders:
-        items_list = []
-        calc_qty = 0
-        if o.items:
-            for i in o.items:
-                calc_qty += i.quantity
-                items_list.append({
-                    "product_name": i.product_name,
-                    "variant_id": i.variant_id,
-                    "variant_info": i.variant_info,
-                    "quantity": i.quantity,
-                    "price": i.price
-                })
-        
-        amt = getattr(o, "total_amount", getattr(o, "total_money", 0))
-        result.append({
-            "id": o.id,
-            "created_at": o.created_at.strftime("%Y-%m-%d %H:%M"),
-            "customer_name": o.customer_name or "Khách lẻ",
-            "total_amount": amt,
-            "total_qty": calc_qty,
-            "items": items_list
-        })
-    return {"data": result, "total": total, "page": page, "limit": limit}
+    try:
+        skip = (page - 1) * limit
+        total = db.query(Order).filter(Order.status == 'completed').count()
+        orders = db.query(Order).filter(Order.status == 'completed').order_by(desc(Order.id)).offset(skip).limit(limit).all()
+
+        result = []
+        for o in orders:
+            items_list = []
+            calc_qty = 0
+            if o.items:
+                for i in o.items:
+                    q = int(i.quantity or 0)
+                    calc_qty += q
+                    items_list.append({
+                        "order_item_id": i.id,
+                        "product_name": i.product_name,
+                        "variant_id": i.variant_id,
+                        "variant_info": i.variant_info,
+                        "quantity": q,
+                        "price": int(i.price or 0)
+                    })
+
+            amt = getattr(o, "total_amount", getattr(o, "total_money", 0))
+            created_at_str = ""
+            if o.created_at:
+                if hasattr(o.created_at, "strftime"):
+                    created_at_str = o.created_at.strftime("%Y-%m-%d %H:%M")
+                else:
+                    created_at_str = str(o.created_at)
+
+            result.append({
+                "id": o.id,
+                "created_at": created_at_str,
+                "customer_name": o.customer_name or "Khách lẻ",
+                "total_amount": int(amt or 0),
+                "total_qty": calc_qty,
+                "picker_note": (o.picker_note or ""),
+                "items": items_list
+            })
+        return {"data": result, "total": total, "page": page, "limit": limit}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Lỗi tải hóa đơn: {e}")
 
 @app.delete("/orders/{order_id}")
 def delete_order_only(order_id: int, db: Session = Depends(get_db)):
@@ -608,26 +682,7 @@ def delete_order_only(order_id: int, db: Session = Depends(get_db)):
     if order.status != 'completed':
         raise HTTPException(status_code=400, detail="Chỉ có thể xóa/hoàn tác đơn hàng đã hoàn thành")
     try:
-        # 1) Restore variant stock from items
-        for item in order.items:
-            if item.variant_id:
-                var = db.query(Variant).filter(Variant.id == item.variant_id).first()
-                if var:
-                    var.stock = (var.stock or 0) + (item.quantity or 0)
-
-        # 2) Revert customer debt if linked
-        if order.customer_id:
-            cust = db.query(Customer).filter(Customer.id == order.customer_id).first()
-            if cust and order.total_amount:
-                # subtract order amount from customer's debt
-                try:
-                    cust.debt = (cust.debt or 0) - int(order.total_amount or 0)
-                except Exception:
-                    cust.debt = (cust.debt or 0) - (order.total_amount or 0)
-
-        # 3) Delete order items and order itself
-        db.query(OrderItem).filter(OrderItem.order_id == order_id).delete()
-        db.delete(order)
+        _delete_order_with_business_logic(order, db)
         db.commit()
         return {"detail": "Đã xóa hóa đơn và hoàn tác kho + công nợ"}
     except Exception as e:
@@ -715,6 +770,7 @@ def get_pending_orders(db: Session = Depends(get_db)):
                         if not enough_stock:
                             has_stock_conflict = True
                     items_list.append({
+                        "order_item_id": i.id,
                         "product_name": i.product_name,
                         "variant_id": i.variant_id,
                         "variant_info": i.variant_info,
@@ -732,6 +788,7 @@ def get_pending_orders(db: Session = Depends(get_db)):
                 "total_amount": o.total_amount,
                 "total_qty": calc_qty,
                 "status": o.status,
+                "picker_note": (o.picker_note or ""),
                 "has_stock_conflict": has_stock_conflict,
                 "items": items_list
             })
@@ -764,6 +821,7 @@ def get_accepted_orders(db: Session = Depends(get_db)):
                         if not enough_stock:
                             has_stock_conflict = True
                     items_list.append({
+                        "order_item_id": i.id,
                         "product_name": i.product_name,
                         "variant_id": i.variant_id,
                         "variant_info": i.variant_info,
@@ -781,6 +839,7 @@ def get_accepted_orders(db: Session = Depends(get_db)):
                 "total_amount": o.total_amount,
                 "total_qty": calc_qty,
                 "status": o.status,
+                "picker_note": (o.picker_note or ""),
                 "has_stock_conflict": has_stock_conflict,
                 "items": items_list
             })
@@ -796,7 +855,7 @@ def get_order_status(order_id: int, db: Session = Depends(get_db)):
     order = db.query(Order).filter(Order.id == order_id).first()
     if not order:
         raise HTTPException(status_code=404, detail="Đơn hàng không tồn tại hoặc đã bị từ chối")
-    return {"id": order_id, "status": order.status}
+    return {"id": order_id, "status": order.status, "picker_note": (order.picker_note or "")}
 
 
 @app.put("/orders/{order_id}/approve")
@@ -827,12 +886,13 @@ def approve_order(order_id: int, db: Session = Depends(get_db)):
 
 
 @app.put("/orders/{order_id}/confirm")
-def confirm_order(order_id: int, db: Session = Depends(get_db)):
+def confirm_order(order_id: int, data: Optional[PickerConfirmRequest] = None, db: Session = Depends(get_db)):
     """
     Picker confirms delivery → applies to database:
-    - Deduct stock from variants
-    - Add debt to customer + DebtLog
+    - Deduct stock from variants (by picked quantities)
+    - Add debt to customer by delivered amount
     - Mark status='completed'
+    - Save picker_note if there are shortages
     """
     try:
         order = db.query(Order).filter(Order.id == order_id).first()
@@ -842,38 +902,91 @@ def confirm_order(order_id: int, db: Session = Depends(get_db)):
         if order.status != 'accepted':
             raise HTTPException(status_code=400, detail="Chỉ có thể xác nhận đơn hàng đã được tiếp nhận")
 
-        # 1) Check stock availability
+        requested_map = {}
         for item in order.items:
-            if item.variant_id:
-                var = db.query(Variant).filter(Variant.id == item.variant_id).first()
-                if not var or var.stock < item.quantity:
-                    raise HTTPException(
-                        status_code=400,
-                        detail=f"SP {item.product_name} không đủ hàng ({var.stock if var else 0} tồn kho)"
-                    )
+            requested_map[item.id] = item
 
-        # 2) Deduct stock
+        picked_by_item_id = {}
+        if data and data.items:
+            for x in data.items:
+                target_item = None
+                if x.order_item_id and x.order_item_id in requested_map:
+                    target_item = requested_map[x.order_item_id]
+                elif x.variant_id is not None:
+                    target_item = next((it for it in order.items if it.variant_id == x.variant_id), None)
+                if not target_item:
+                    continue
+                q = int(x.picked_qty or 0)
+                if q < 0:
+                    q = 0
+                if q > target_item.quantity:
+                    q = int(target_item.quantity)
+                picked_by_item_id[target_item.id] = q
+
+        # default = full quantity (old behavior) if picker doesn't send custom picked quantities
         for item in order.items:
-            if item.variant_id:
+            if item.id not in picked_by_item_id:
+                picked_by_item_id[item.id] = int(item.quantity or 0)
+
+        # Check real-time stock for picked quantities
+        for item in order.items:
+            picked_qty = int(picked_by_item_id.get(item.id, 0))
+            if picked_qty <= 0 or not item.variant_id:
+                continue
+            var = db.query(Variant).filter(Variant.id == item.variant_id).first()
+            if not var or int(var.stock or 0) < picked_qty:
+                raise HTTPException(
+                    status_code=400,
+                    detail=f"SP {item.product_name} không đủ hàng thực tế ({int(var.stock or 0) if var else 0} tồn kho)"
+                )
+
+        delivered_total = 0
+        shortage_parts = []
+
+        # Apply stock and update order items to delivered qty
+        for item in list(order.items):
+            requested_qty = int(item.quantity or 0)
+            picked_qty = int(picked_by_item_id.get(item.id, 0))
+
+            if item.variant_id and picked_qty > 0:
                 var = db.query(Variant).filter(Variant.id == item.variant_id).first()
                 if var:
-                    var.stock -= item.quantity
+                    var.stock -= picked_qty
 
-        # 3) Add customer debt (do NOT create DebtLog here to avoid duplicate history with ORDER record)
-        if order.customer_id:
+            if picked_qty < requested_qty:
+                shortage_parts.append(f"{item.product_name} ({picked_qty}/{requested_qty})")
+
+            if picked_qty <= 0:
+                db.delete(item)
+            else:
+                item.quantity = picked_qty
+                delivered_total += int(item.price or 0) * picked_qty
+
+        # Add customer debt by delivered amount only
+        if order.customer_id and delivered_total > 0:
             customer = db.query(Customer).filter(Customer.id == order.customer_id).first()
             if customer:
-                customer.debt += order.total_amount
+                customer.debt += delivered_total
 
-        # 4) Mark as completed
+        order.total_amount = delivered_total
+        order.picker_note = ""
+        if shortage_parts:
+            order.picker_note = "Thiếu hàng: " + "; ".join(shortage_parts)
+
         order.status = 'completed'
         order.is_draft = 0
         db.commit()
 
         return {
             "status": "success",
-            "message": f"Đơn #{order_id} đã xác nhận hoàn thành và cập nhật kho + công nợ"
+            "message": f"Đơn #{order_id} đã xác nhận hoàn thành",
+            "partial": len(shortage_parts) > 0,
+            "picker_note": order.picker_note,
+            "delivered_total": delivered_total,
         }
+    except HTTPException:
+        db.rollback()
+        raise
     except Exception as e:
         db.rollback()
         raise HTTPException(status_code=500, detail=str(e))

@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import '../models/order.dart';
 import '../utils.dart';
 import '../theme.dart';
@@ -57,7 +58,13 @@ class OrderDetailDialog extends StatelessWidget {
                 child: Text('Tổng cộng: ${formatCurrency(totalVerify)} VNĐ', style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: kPrimary)),
               ),
               const SizedBox(height: 8),
-              Align(alignment: Alignment.centerRight, child: OutlinedButton(onPressed: () => Navigator.pop(context), child: const Text('Đóng'))),
+              Align(
+                alignment: Alignment.centerRight,
+                child: MouseRegion(
+                  cursor: SystemMouseCursors.click,
+                  child: OutlinedButton(onPressed: () => Navigator.pop(context), child: const Text('Đóng')),
+                ),
+              ),
             ],
           ),
         ),

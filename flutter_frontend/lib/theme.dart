@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 
 const kPrimary = Color(0xFFEE4D2D);
 const kPrimaryDark = Color(0xFFD73211);
@@ -57,6 +58,9 @@ ThemeData buildTheme() {
         elevation: 0,
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(6)),
         padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+      ).copyWith(
+        mouseCursor: WidgetStateProperty.resolveWith((states) =>
+            states.contains(WidgetState.disabled) ? SystemMouseCursors.basic : SystemMouseCursors.click),
       ),
     ),
     outlinedButtonTheme: OutlinedButtonThemeData(
@@ -64,12 +68,24 @@ ThemeData buildTheme() {
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(6)),
         side: const BorderSide(color: kBorder),
         padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+      ).copyWith(
+        mouseCursor: WidgetStateProperty.resolveWith((states) =>
+            states.contains(WidgetState.disabled) ? SystemMouseCursors.basic : SystemMouseCursors.click),
       ),
     ),
     textButtonTheme: TextButtonThemeData(
       style: TextButton.styleFrom(
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(6)),
         padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+      ).copyWith(
+        mouseCursor: WidgetStateProperty.resolveWith((states) =>
+            states.contains(WidgetState.disabled) ? SystemMouseCursors.basic : SystemMouseCursors.click),
+      ),
+    ),
+    iconButtonTheme: IconButtonThemeData(
+      style: ButtonStyle(
+        mouseCursor: WidgetStateProperty.resolveWith((states) =>
+            states.contains(WidgetState.disabled) ? SystemMouseCursors.basic : SystemMouseCursors.click),
       ),
     ),
     dividerTheme: const DividerThemeData(color: kBorder, space: 1),

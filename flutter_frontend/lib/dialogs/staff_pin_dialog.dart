@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import '../utils/app_mode_manager.dart';
 
 class RolePinDialog extends StatefulWidget {
@@ -66,15 +67,21 @@ class _RolePinDialogState extends State<RolePinDialog> {
         ],
       ),
       actions: [
-        TextButton(
-          onPressed: _isLoading ? null : () => Navigator.pop(context, false),
-          child: const Text('Hủy'),
+        MouseRegion(
+          cursor: _isLoading ? SystemMouseCursors.basic : SystemMouseCursors.click,
+          child: TextButton(
+            onPressed: _isLoading ? null : () => Navigator.pop(context, false),
+            child: const Text('Hủy'),
+          ),
         ),
-        ElevatedButton(
-          onPressed: _isLoading ? null : _onConfirm,
-          child: _isLoading
-              ? const SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2))
-              : const Text('Xác nhận'),
+        MouseRegion(
+          cursor: _isLoading ? SystemMouseCursors.basic : SystemMouseCursors.click,
+          child: ElevatedButton(
+            onPressed: _isLoading ? null : _onConfirm,
+            child: _isLoading
+                ? const SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2))
+                : const Text('Xác nhận'),
+          ),
         ),
       ],
     );

@@ -1,4 +1,5 @@
 class OrderItem {
+  final int? orderItemId;
   final String productName;
   final int? variantId;
   final String variantInfo;
@@ -8,6 +9,7 @@ class OrderItem {
   final bool? enoughStock;
 
   OrderItem({
+    this.orderItemId,
     required this.productName,
     this.variantId,
     required this.variantInfo,
@@ -18,6 +20,7 @@ class OrderItem {
   });
 
   factory OrderItem.fromJson(Map<String, dynamic> j) => OrderItem(
+        orderItemId: j['order_item_id'],
         productName: j['product_name'] ?? '',
         variantId: j['variant_id'],
         variantInfo: j['variant_info'] ?? '',
@@ -36,6 +39,7 @@ class Order {
   final int totalAmount;
   final int totalQty;
   final String status;  // 'pending' | 'accepted' | 'completed'
+  final String pickerNote;
   final List<OrderItem> items;
 
   Order({
@@ -46,6 +50,7 @@ class Order {
     required this.totalAmount,
     required this.totalQty,
     required this.status,
+    this.pickerNote = '',
     required this.items,
   });
 
@@ -57,6 +62,7 @@ class Order {
         totalAmount: (j['total_amount'] ?? 0) is int ? j['total_amount'] : (j['total_amount'] as num).toInt(),
         totalQty: (j['total_qty'] ?? 0) as int,
         status: j['status'] ?? (j['is_draft'] == 1 ? 'pending' : 'completed'),
+        pickerNote: (j['picker_note'] ?? '').toString(),
         items: (j['items'] as List? ?? []).map((i) => OrderItem.fromJson(i)).toList(),
       );
 
@@ -68,8 +74,10 @@ class Order {
         'total_amount': totalAmount,
         'total_qty': totalQty,
         'status': status,
+        'picker_note': pickerNote,
         'items': items
             .map((i) => {
+                  'order_item_id': i.orderItemId,
                   'product_name': i.productName,
                   'variant_id': i.variantId,
                   'variant_info': i.variantInfo,

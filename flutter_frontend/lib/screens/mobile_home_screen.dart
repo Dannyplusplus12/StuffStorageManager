@@ -227,7 +227,12 @@ class _OrdererScreenState extends State<_OrdererScreen> with _NotificationMixin 
           } else if (newStatus == 'completed') {
             _trackedOrders.remove(id);
             _statusMissCount.remove(id);
-            addNotice('🎉 Đơn #$id đã hoàn thành thành công');
+            final pickerNote = (result['picker_note'] ?? '').toString().trim();
+            if (pickerNote.isNotEmpty) {
+              addNotice('⚠️ Đơn #$id đã hoàn thành một phần: $pickerNote');
+            } else {
+              addNotice('🎉 Đơn #$id đã hoàn thành thành công');
+            }
           }
         }
       } catch (_) {}
@@ -350,7 +355,13 @@ class _PickerScreenState extends State<_PickerScreen> with _NotificationMixin {
         children: [
           _AcceptedOrdersScreen(
             key: _acceptedKey,
-            onConfirmed: (id) => addNotice('✅ Đã xác nhận hoàn thành đơn #$id'),
+            onConfirmed: (id, note) {
+              if (note != null && note.trim().isNotEmpty) {
+                addNotice('⚠️ Đơn #$id hoàn thành một phần: $note');
+              } else {
+                addNotice('✅ Đã xác nhận hoàn thành đơn #$id');
+              }
+            },
             onOpenItem: _jumpToInventoryItem,
           ),
           _PickerInventoryScreen(key: _inventoryKey),
@@ -435,6 +446,190 @@ class _CreateOrderScreenState extends State<_CreateOrderScreen> {
     if (mounted && !silent) setState(() => _loading = false);
   }
 
+  String _selectedSummaryForProduct(Product p) {
+    final selected = _cart
+        .where((c) => p.variants.any((v) => v.id == c.variantId) && c.quantity > 0)
+        .toList();
+    if (selected.isEmpty) return '';
+    return selected.map((c) => '${c.size}/${c.color} x ${c.quantity}').join('\n');
+  }
+
+  Future<void> _openCartReviewPopup() async {
+    await showModalBottomSheet<void>(
+      context: context,
+      isScrollControlled: true,
+      showDragHandle: true,
+      builder: (sheetContext) {
+        return StatefulBuilder(
+          builder: (sheetContext, setSheetState) {
+            Future<void> openManualInput(CartItem item) async {
+              final ctrl = TextEditingController(text: '${item.quantity}');
+              final value = await showDialog<int>(
+                context: sheetContext,
+                builder: (_) => AlertDialog(
+                  title: const Text('Nhập số lượng'),
+                  content: TextField(
+                    controller: ctrl,
+                    autofocus: true,
+                    keyboardType: TextInputType.number,
+                    inputFormatters: [FilteringTextInputFormatter.digitsOnly],
+                    decoration: const InputDecoration(hintText: '>= 0'),
+                    onSubmitted: (_) => Navigator.pop(sheetContext, int.tryParse(ctrl.text.trim()) ?? 0),
+                  ),
+                  actions: [
+                    TextButton(onPressed: () => Navigator.pop(sheetContext), child: const Text('Hủy')),
+                    ElevatedButton(
+                      onPressed: () => Navigator.pop(sheetContext, int.tryParse(ctrl.text.trim()) ?? 0),
+                      child: const Text('OK'),
+                    ),
+                  ],
+                ),
+              );
+              if (value == null) return;
+              setState(() {
+                final normalized = value < 0 ? 0 : value;
+                if (normalized == 0) {
+                  _cart.remove(item);
+                } else {
+                  item.quantity = normalized;
+                }
+              });
+              setSheetState(() {});
+            }
+
+            void changeQty(CartItem item, int nextQty) {
+              setState(() {
+                if (nextQty <= 0) {
+                  _cart.remove(item);
+                } else {
+                  item.quantity = nextQty;
+                }
+              });
+              setSheetState(() {});
+            }
+
+            return FractionallySizedBox(
+              heightFactor: 0.9,
+              child: SafeArea(
+                top: false,
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Padding(
+                      padding: const EdgeInsets.fromLTRB(16, 8, 16, 4),
+                      child: Text(
+                        'Đơn hiện tại',
+                        style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+                      ),
+                    ),
+                    Padding(
+                      padding: const EdgeInsets.fromLTRB(16, 0, 16, 10),
+                      child: Text(
+                        '${_cart.length} mẫu • Tổng ${formatCurrency(_total)} đ',
+                        style: const TextStyle(color: kTextSecondary, fontSize: 12),
+                      ),
+                    ),
+                    Expanded(
+                      child: _cart.isEmpty
+                          ? const Center(child: Text('Chưa có sản phẩm nào trong giỏ'))
+                          : SingleChildScrollView(
+                              padding: const EdgeInsets.fromLTRB(16, 0, 16, 12),
+                              child: Column(
+                                children: _cart.map((item) {
+                                  return Container(
+                                    margin: const EdgeInsets.only(bottom: 8),
+                                    padding: const EdgeInsets.all(10),
+                                    decoration: BoxDecoration(
+                                      color: const Color(0xFFF8FAFC),
+                                      borderRadius: BorderRadius.circular(8),
+                                      border: Border.all(color: kBorder),
+                                    ),
+                                    child: Row(
+                                      crossAxisAlignment: CrossAxisAlignment.start,
+                                      children: [
+                                        Expanded(
+                                          child: Padding(
+                                            padding: const EdgeInsets.symmetric(vertical: 4),
+                                            child: Text(
+                                              '${item.productName} (${item.color}-${item.size}) • ${formatCurrency(item.price)} đ',
+                                              style: const TextStyle(fontSize: 13, color: kTextPrimary),
+                                            ),
+                                          ),
+                                        ),
+                                        const SizedBox(width: 8),
+                                        SizedBox(
+                                          width: 120,
+                                          child: Container(
+                                            height: 40,
+                                            decoration: BoxDecoration(
+                                              border: Border.all(color: kBorder),
+                                              borderRadius: BorderRadius.circular(6),
+                                              color: Colors.white,
+                                            ),
+                                            child: Row(
+                                              children: [
+                                                InkWell(
+                                                  mouseCursor: SystemMouseCursors.click,
+                                                  onTap: () => changeQty(item, item.quantity - 1),
+                                                  child: const Padding(
+                                                    padding: EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+                                                    child: Icon(Icons.remove, size: 16),
+                                                  ),
+                                                ),
+                                                Expanded(
+                                                  child: InkWell(
+                                                    mouseCursor: SystemMouseCursors.click,
+                                                    onTap: () => openManualInput(item),
+                                                    child: Center(
+                                                      child: Text(
+                                                        '${item.quantity}',
+                                                        style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14),
+                                                      ),
+                                                    ),
+                                                  ),
+                                                ),
+                                                InkWell(
+                                                  mouseCursor: SystemMouseCursors.click,
+                                                  onTap: () => changeQty(item, item.quantity + 1),
+                                                  child: const Padding(
+                                                    padding: EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+                                                    child: Icon(Icons.add, size: 16),
+                                                  ),
+                                                ),
+                                              ],
+                                            ),
+                                          ),
+                                        ),
+                                      ],
+                                    ),
+                                  );
+                                }).toList(),
+                              ),
+                            ),
+                    ),
+                    Padding(
+                      padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
+                      child: Row(
+                        children: [
+                          Expanded(
+                            child: OutlinedButton(
+                              onPressed: () => Navigator.pop(sheetContext),
+                              child: const Text('Đóng'),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            );
+          },
+        );
+      },
+    );
+  }
+
   void _openOrdererProductQuickView(Product p) {
     final image = p.image.trim();
     final canLoadNetworkImage = image.startsWith('http://') || image.startsWith('https://');
@@ -499,12 +694,21 @@ class _CreateOrderScreenState extends State<_CreateOrderScreen> {
               });
             }
 
-            return SafeArea(
-              child: SingleChildScrollView(
-                padding: const EdgeInsets.fromLTRB(16, 8, 16, 16),
+            final hasChanges = qtys.isNotEmpty;
+
+            return FractionallySizedBox(
+              heightFactor: 0.9,
+              child: SafeArea(
+                top: false,
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
+                    Expanded(
+                      child: SingleChildScrollView(
+                        padding: const EdgeInsets.fromLTRB(16, 8, 16, 12),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
                     Text(p.name, style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
                     const SizedBox(height: 10),
                     Container(
@@ -582,6 +786,7 @@ class _CreateOrderScreenState extends State<_CreateOrderScreen> {
                                       child: Row(
                                         children: [
                                           InkWell(
+                                            mouseCursor: SystemMouseCursors.click,
                                             onTap: () => changeQty(v, currentQty - 1),
                                             child: const Padding(
                                               padding: EdgeInsets.symmetric(horizontal: 10, vertical: 8),
@@ -590,6 +795,7 @@ class _CreateOrderScreenState extends State<_CreateOrderScreen> {
                                           ),
                                           Expanded(
                                             child: InkWell(
+                                              mouseCursor: SystemMouseCursors.click,
                                               onTap: () => openManualInput(v),
                                               child: Center(
                                                 child: Text(
@@ -600,6 +806,7 @@ class _CreateOrderScreenState extends State<_CreateOrderScreen> {
                                             ),
                                           ),
                                           InkWell(
+                                            mouseCursor: SystemMouseCursors.click,
                                             onTap: () => changeQty(v, currentQty + 1),
                                             child: const Padding(
                                               padding: EdgeInsets.symmetric(horizontal: 10, vertical: 8),
@@ -614,41 +821,45 @@ class _CreateOrderScreenState extends State<_CreateOrderScreen> {
                         ),
                       );
                     }),
-                    const SizedBox(height: 8),
-                    SizedBox(
-                      width: double.infinity,
-                      child: ElevatedButton.icon(
-                        onPressed: () {
-                          if (qtys.isEmpty) {
-                            ScaffoldMessenger.of(context).showSnackBar(
-                              const SnackBar(content: Text('Vui lòng chọn số lượng trước khi thêm vào giỏ')),
-                            );
-                            return;
-                          }
+                          ],
+                        ),
+                      ),
+                    ),
+                    Padding(
+                      padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
+                      child: SizedBox(
+                        width: double.infinity,
+                        child: ElevatedButton.icon(
+                          onPressed: () {
+                            if (!hasChanges) {
+                              Navigator.pop(sheetContext);
+                              return;
+                            }
 
-                          setState(() {
-                            qtys.forEach((vid, qty) {
-                              final v = p.variants.firstWhere((x) => x.id == vid);
-                              final idx = _cart.indexWhere((e) => e.variantId == vid);
-                              if (idx >= 0) {
-                                _cart[idx].quantity += qty;
-                              } else {
-                                _cart.add(CartItem(
-                                  variantId: v.id!,
-                                  productName: p.name,
-                                  color: v.color,
-                                  size: v.size,
-                                  price: v.price,
-                                  quantity: qty,
-                                ));
-                              }
+                            setState(() {
+                              qtys.forEach((vid, qty) {
+                                final v = p.variants.firstWhere((x) => x.id == vid);
+                                final idx = _cart.indexWhere((e) => e.variantId == vid);
+                                if (idx >= 0) {
+                                  _cart[idx].quantity += qty;
+                                } else {
+                                  _cart.add(CartItem(
+                                    variantId: v.id!,
+                                    productName: p.name,
+                                    color: v.color,
+                                    size: v.size,
+                                    price: v.price,
+                                    quantity: qty,
+                                  ));
+                                }
+                              });
                             });
-                          });
 
-                          Navigator.pop(sheetContext);
-                        },
-                        icon: const Icon(Icons.add_shopping_cart_outlined),
-                        label: const Text('Gửi đơn'),
+                            Navigator.pop(sheetContext);
+                          },
+                          icon: Icon(hasChanges ? Icons.check_circle_outline : Icons.close),
+                          label: Text(hasChanges ? 'Xác nhận' : 'Đóng'),
+                        ),
                       ),
                     ),
                   ],
@@ -775,27 +986,24 @@ class _CreateOrderScreenState extends State<_CreateOrderScreen> {
                       ..._products.map(
                         (p) {
                           final totalStock = p.variants.fold<int>(0, (s, v) => s + v.stock);
+                          final selectedSummary = _selectedSummaryForProduct(p);
                           return Card(
                             margin: const EdgeInsets.only(bottom: 8),
                             child: ListTile(
                               onTap: () => _openOrdererProductQuickView(p),
                               title: Text(p.name, style: const TextStyle(fontWeight: FontWeight.w600)),
-                              subtitle: Text('Tổng tồn: $totalStock'),
-                              trailing: Container(
-                                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                                decoration: BoxDecoration(
-                                  color: totalStock > 0 ? const Color(0xFFE8F5E9) : const Color(0xFFFFEBEE),
-                                  borderRadius: BorderRadius.circular(12),
-                                ),
-                                child: Text(
-                                  totalStock > 0 ? 'Còn hàng' : 'Hết hàng',
-                                  style: TextStyle(
-                                    fontSize: 12,
-                                    color: totalStock > 0 ? kSuccess : kDanger,
-                                    fontWeight: FontWeight.bold,
-                                  ),
-                                ),
+                              subtitle: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Text('Tổng tồn: $totalStock'),
+                                  if (selectedSummary.isNotEmpty)
+                                    Text(
+                                      selectedSummary,
+                                      style: const TextStyle(color: kPrimary, fontWeight: FontWeight.w600, fontSize: 12),
+                                    ),
+                                ],
                               ),
+                              trailing: const Icon(Icons.chevron_right_rounded),
                             ),
                           );
                         },
@@ -842,6 +1050,12 @@ class _CreateOrderScreenState extends State<_CreateOrderScreen> {
                     style: const TextStyle(fontWeight: FontWeight.bold),
                   ),
                 ),
+                OutlinedButton.icon(
+                  onPressed: _cart.isEmpty ? null : _openCartReviewPopup,
+                  icon: const Icon(Icons.remove_red_eye_outlined),
+                  label: const Text('Xem'),
+                ),
+                const SizedBox(width: 8),
                 ElevatedButton.icon(
                   onPressed: _submitting || _cart.isEmpty ? null : _submitDraft,
                   icon: _submitting
@@ -863,7 +1077,7 @@ class _CreateOrderScreenState extends State<_CreateOrderScreen> {
 }
 
 class _AcceptedOrdersScreen extends StatefulWidget {
-  final void Function(int orderId) onConfirmed;
+  final void Function(int orderId, String? pickerNote) onConfirmed;
   final void Function(OrderItem item) onOpenItem;
   const _AcceptedOrdersScreen({super.key, required this.onConfirmed, required this.onOpenItem});
 
@@ -909,33 +1123,31 @@ class _AcceptedOrdersScreenState extends State<_AcceptedOrdersScreen> {
     if (mounted && !silent) setState(() => _loading = false);
   }
 
-  Future<bool> _confirmDeliveryDialog(int orderId) async {
-    final ok = await showDialog<bool>(
-      context: context,
-      builder: (_) => AlertDialog(
-        title: const Text('Xác nhận hoàn thành'),
-        content: Text('Bạn chắc chắn đã hoàn thành đơn #$orderId?'),
-        actions: [
-          TextButton(onPressed: () => Navigator.pop(context, false), child: const Text('Hủy')),
-          ElevatedButton(
-            onPressed: () => Navigator.pop(context, true),
-            style: ElevatedButton.styleFrom(backgroundColor: kSuccess, foregroundColor: Colors.white),
-            child: const Text('Xác nhận'),
-          ),
-        ],
-      ),
-    );
-    return ok == true;
+  int _initialPickedQty(OrderItem item) {
+    final stock = item.currentStock;
+    if (stock == null) return item.quantity;
+    if (stock >= item.quantity) return item.quantity;
+    if (stock < 0) return 0;
+    return stock;
   }
 
-  Future<void> _confirm(int orderId) async {
-    final ok = await _confirmDeliveryDialog(orderId);
-    if (!ok) return;
-
-    setState(() => _confirming.add(orderId));
+  Future<void> _confirmWithPicked(Order order, Map<int, int> pickedByKey) async {
+    setState(() => _confirming.add(order.id));
     try {
-      await ApiService.confirmOrder(orderId);
-      widget.onConfirmed(orderId);
+      final payload = <Map<String, dynamic>>[];
+      for (var i = 0; i < order.items.length; i++) {
+        final item = order.items[i];
+        final key = item.orderItemId ?? (item.variantId ?? (100000 + i));
+        payload.add({
+          'order_item_id': item.orderItemId,
+          'variant_id': item.variantId,
+          'picked_qty': pickedByKey[key] ?? _initialPickedQty(item),
+        });
+      }
+
+      final res = await ApiService.confirmOrder(order.id, items: payload);
+      final note = (res['picker_note'] ?? '').toString();
+      widget.onConfirmed(order.id, note.isEmpty ? null : note);
       await _load();
     } catch (e) {
       if (mounted) {
@@ -944,7 +1156,211 @@ class _AcceptedOrdersScreenState extends State<_AcceptedOrdersScreen> {
         );
       }
     }
-    if (mounted) setState(() => _confirming.remove(orderId));
+    if (mounted) setState(() => _confirming.remove(order.id));
+  }
+
+  Future<void> _openOrderPopup(Order order) async {
+    final pickedByKey = <int, int>{};
+    for (var i = 0; i < order.items.length; i++) {
+      final item = order.items[i];
+      final key = item.orderItemId ?? (item.variantId ?? (100000 + i));
+      pickedByKey[key] = _initialPickedQty(item);
+    }
+
+    await showModalBottomSheet<void>(
+      context: context,
+      isScrollControlled: true,
+      showDragHandle: true,
+      builder: (dialogContext) {
+        return StatefulBuilder(
+          builder: (dialogContext, setDialogState) {
+            Future<void> openManualInput(OrderItem item, int key) async {
+              final currentQty = pickedByKey[key] ?? 0;
+              final maxQty = item.quantity;
+              final ctrl = TextEditingController(text: '$currentQty');
+              final value = await showDialog<int>(
+                context: dialogContext,
+                builder: (_) => AlertDialog(
+                  title: const Text('Nhập số lượng thực tế'),
+                  content: TextField(
+                    controller: ctrl,
+                    autofocus: true,
+                    keyboardType: TextInputType.number,
+                    inputFormatters: [FilteringTextInputFormatter.digitsOnly],
+                    decoration: InputDecoration(hintText: '0 - $maxQty'),
+                    onSubmitted: (_) => Navigator.pop(dialogContext, int.tryParse(ctrl.text.trim()) ?? 0),
+                  ),
+                  actions: [
+                    TextButton(onPressed: () => Navigator.pop(dialogContext), child: const Text('Hủy')),
+                    ElevatedButton(
+                      onPressed: () => Navigator.pop(dialogContext, int.tryParse(ctrl.text.trim()) ?? 0),
+                      child: const Text('OK'),
+                    ),
+                  ],
+                ),
+              );
+              if (value == null) return;
+              setDialogState(() => pickedByKey[key] = value.clamp(0, maxQty));
+            }
+
+            void changeQty(OrderItem item, int key, int nextQty) {
+              setDialogState(() => pickedByKey[key] = nextQty.clamp(0, item.quantity));
+            }
+
+            return FractionallySizedBox(
+              heightFactor: 0.9,
+              child: SafeArea(
+                top: false,
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Padding(
+                      padding: const EdgeInsets.fromLTRB(16, 8, 16, 4),
+                      child: Text('Đơn #${order.id} — ${order.customerName}', style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+                    ),
+                    Padding(
+                      padding: const EdgeInsets.fromLTRB(16, 0, 16, 10),
+                      child: Text(
+                        '${formatDate(order.createdAt)} • ${order.totalQty} sản phẩm',
+                        style: const TextStyle(color: kTextSecondary, fontSize: 12),
+                      ),
+                    ),
+                    Expanded(
+                      child: SingleChildScrollView(
+                        padding: const EdgeInsets.fromLTRB(16, 0, 16, 12),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            ...order.items.asMap().entries.map((entry) {
+                              final index = entry.key;
+                              final item = entry.value;
+                              final key = item.orderItemId ?? (item.variantId ?? (100000 + index));
+                              final currentQty = pickedByKey[key] ?? 0;
+                              final stock = item.currentStock;
+                              final stockText = stock == null ? '' : ' • Kho: $stock';
+                              final enough = item.enoughStock ?? true;
+
+                              return Container(
+                                margin: const EdgeInsets.only(bottom: 8),
+                                padding: const EdgeInsets.all(10),
+                                decoration: BoxDecoration(
+                                  color: enough ? const Color(0xFFF8FAFC) : const Color(0xFFFFEBEE),
+                                  borderRadius: BorderRadius.circular(8),
+                                  border: Border.all(color: enough ? kBorder : const Color(0xFFEF9A9A)),
+                                ),
+                                child: Row(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    Expanded(
+                                      child: InkWell(
+                                        mouseCursor: SystemMouseCursors.click,
+                                        borderRadius: BorderRadius.circular(6),
+                                        onTap: () {
+                                          Navigator.pop(dialogContext);
+                                          widget.onOpenItem(item);
+                                        },
+                                        child: Padding(
+                                          padding: const EdgeInsets.symmetric(vertical: 4),
+                                          child: Text(
+                                            '${item.productName} (${item.variantInfo}) × ${item.quantity}$stockText',
+                                            style: TextStyle(fontSize: 13, color: enough ? kTextPrimary : kDanger),
+                                          ),
+                                        ),
+                                      ),
+                                    ),
+                                    const SizedBox(width: 8),
+                                    SizedBox(
+                                      width: 120,
+                                      child: Container(
+                                        height: 40,
+                                        decoration: BoxDecoration(
+                                          border: Border.all(color: kBorder),
+                                          borderRadius: BorderRadius.circular(6),
+                                          color: Colors.white,
+                                        ),
+                                        child: Row(
+                                          children: [
+                                            InkWell(
+                                              mouseCursor: SystemMouseCursors.click,
+                                              onTap: () => changeQty(item, key, currentQty - 1),
+                                              child: const Padding(
+                                                padding: EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+                                                child: Icon(Icons.remove, size: 16),
+                                              ),
+                                            ),
+                                            Expanded(
+                                              child: InkWell(
+                                                mouseCursor: SystemMouseCursors.click,
+                                                onTap: () => openManualInput(item, key),
+                                                child: Center(
+                                                  child: Text(
+                                                    '$currentQty',
+                                                    style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14),
+                                                  ),
+                                                ),
+                                              ),
+                                            ),
+                                            InkWell(
+                                              mouseCursor: SystemMouseCursors.click,
+                                              onTap: () => changeQty(item, key, currentQty + 1),
+                                              child: const Padding(
+                                                padding: EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+                                                child: Icon(Icons.add, size: 16),
+                                              ),
+                                            ),
+                                          ],
+                                        ),
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              );
+                            }),
+                          ],
+                        ),
+                      ),
+                    ),
+                    Padding(
+                      padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
+                      child: Row(
+                        children: [
+                          Expanded(
+                            child: OutlinedButton(
+                              onPressed: () => Navigator.pop(dialogContext),
+                              child: const Text('Đóng'),
+                            ),
+                          ),
+                          const SizedBox(width: 10),
+                          Expanded(
+                            child: ElevatedButton.icon(
+                              style: ElevatedButton.styleFrom(backgroundColor: kSuccess, foregroundColor: Colors.white),
+                              onPressed: _confirming.contains(order.id)
+                                  ? null
+                                  : () async {
+                                      Navigator.pop(dialogContext);
+                                      await _confirmWithPicked(order, pickedByKey);
+                                    },
+                              icon: _confirming.contains(order.id)
+                                  ? const SizedBox(
+                                      width: 14,
+                                      height: 14,
+                                      child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
+                                    )
+                                  : const Icon(Icons.check_circle_outline),
+                              label: const Text('Xác nhận đơn'),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            );
+          },
+        );
+      },
+    );
   }
 
   @override
@@ -977,85 +1393,17 @@ class _AcceptedOrdersScreenState extends State<_AcceptedOrdersScreen> {
                 final o = _orders[i];
                 final isConfirming = _confirming.contains(o.id);
                 return Card(
-                  child: Padding(
-                    padding: const EdgeInsets.all(12),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Row(
-                          children: [
-                            Expanded(
-                              child: Text(
-                                'Đơn #${o.id} — ${o.customerName}',
-                                style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 15),
-                              ),
-                            ),
-                            Text(
-                              '${formatCurrency(o.totalAmount)} đ',
-                              style: const TextStyle(fontWeight: FontWeight.bold, color: kDanger),
-                            ),
-                          ],
-                        ),
-                        const SizedBox(height: 4),
-                        Text('${formatDate(o.createdAt)} • ${o.totalQty} sản phẩm',
-                            style: const TextStyle(color: kTextSecondary, fontSize: 12)),
-                        const SizedBox(height: 8),
-                        ...o.items.map(
-                          (item) {
-                            final enough = item.enoughStock ?? true;
-                            final stock = item.currentStock;
-                            final stockText = stock == null ? '' : ' • Kho: $stock';
-                            return Padding(
-                              padding: const EdgeInsets.only(bottom: 4),
-                              child: InkWell(
-                                borderRadius: BorderRadius.circular(6),
-                                onTap: () => widget.onOpenItem(item),
-                                child: Container(
-                                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
-                                  decoration: BoxDecoration(
-                                    color: enough ? const Color(0xFFF8FAFC) : const Color(0xFFFFEBEE),
-                                    borderRadius: BorderRadius.circular(6),
-                                    border: Border.all(color: enough ? kBorder : const Color(0xFFEF9A9A)),
-                                  ),
-                                  child: Row(
-                                    children: [
-                                      Icon(Icons.open_in_new,
-                                          size: 14, color: enough ? kTextSecondary : kDanger),
-                                      const SizedBox(width: 6),
-                                      Expanded(
-                                        child: Text(
-                                          '${item.productName} (${item.variantInfo}) × ${item.quantity}$stockText',
-                                          style: TextStyle(fontSize: 13, color: enough ? kTextPrimary : kDanger),
-                                        ),
-                                      ),
-                                    ],
-                                  ),
-                                ),
-                              ),
-                            );
-                          },
-                        ),
-                        const SizedBox(height: 10),
-                        SizedBox(
-                          width: double.infinity,
-                          child: ElevatedButton.icon(
-                            style: ElevatedButton.styleFrom(
-                              backgroundColor: kSuccess,
-                              foregroundColor: Colors.white,
-                            ),
-                            onPressed: isConfirming ? null : () => _confirm(o.id),
-                            icon: isConfirming
-                                ? const SizedBox(
-                                    width: 14,
-                                    height: 14,
-                                    child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
-                                  )
-                                : const Icon(Icons.check_circle_outline),
-                            label: const Text('Xác nhận đã hoàn thành'),
-                          ),
-                        ),
-                      ],
-                    ),
+                  child: ListTile(
+                    onTap: isConfirming ? null : () => _openOrderPopup(o),
+                    title: Text('Đơn #${o.id} — ${o.customerName}', style: const TextStyle(fontWeight: FontWeight.bold)),
+                    subtitle: Text('${formatDate(o.createdAt)} • ${o.totalQty} sản phẩm'),
+                    trailing: isConfirming
+                        ? const SizedBox(
+                            width: 18,
+                            height: 18,
+                            child: CircularProgressIndicator(strokeWidth: 2),
+                          )
+                        : const Icon(Icons.open_in_new),
                   ),
                 );
               },
@@ -1304,12 +1652,20 @@ class _PickerInventoryScreenState extends State<_PickerInventoryScreen> {
                       );
                     },
                   ),
-                ), 
+                ),
         ),
       ],
     );
   }
 }
+
+
+
+
+
+
+
+
 
 
 

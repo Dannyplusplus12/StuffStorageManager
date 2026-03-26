@@ -1,77 +1,27 @@
-import sys
-import shutil
 import os
-import json
-import requests
-import re
-import time
-import subprocess
-from PyQt6.QtWidgets import *
-from PyQt6.QtCore import Qt, QThread, pyqtSignal, QSize, QTimer, QStringListModel, QDateTime
-from PyQt6.QtGui import QPixmap, QIntValidator, QColor, QCursor, QStandardItemModel, QStandardItem, QKeySequence
+from pathlib import Path
+
+# This file was legacy PyQt6 UI. The desktop frontend has been removed from the repository.
+# Keep a tiny shim for compatibility with scripts that might import frontend.ui.
 
 def _load_api_url():
-    """Load API_URL from config.json (next to exe or project root)."""
     default = "http://127.0.0.1:8000"
-    try:
-        if getattr(sys, 'frozen', False):
-            base = os.path.dirname(sys.executable)
-        else:
-            base = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-        cfg_path = os.path.join(base, "config.json")
-        if os.path.exists(cfg_path):
-            with open(cfg_path, "r", encoding="utf-8") as f:
-                return json.load(f).get("api_url", default).rstrip("/")
-    except Exception:
-        pass
+    cfg = Path(__file__).parent.parent / "config.json"
+    if cfg.exists():
+        try:
+            import json
+            return json.loads(cfg.read_text(encoding='utf-8')).get('api_url', default).rstrip('/')
+        except Exception:
+            return default
     return default
 
 API_URL = _load_api_url()
 
-# --- 1. CSS GIAO DIỆN CHUẨN ---
-SHOPEE_THEME = """
-    * { font-family: 'Segoe UI', sans-serif; color: #333; }
-    QMainWindow, QDialog { background-color: #ffffff; }
-    QToolTip { color: #000; background-color: #fff; border: 1px solid #ee4d2d; padding: 5px; font-weight: normal; }
-    QScrollBar:vertical { border: none; background: #f0f0f0; width: 10px; margin: 0px; }
-    QScrollBar::handle:vertical { background: #bbb; min-height: 20px; border-radius: 5px; margin: 2px; }
-    QScrollBar::handle:vertical:hover { background: #999; }
-    QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical { height: 0px; }
-    QScrollBar:horizontal { border: none; background: #f0f0f0; height: 10px; }
-    QScrollBar::handle:horizontal { background: #bbb; min-width: 20px; border-radius: 5px; margin: 2px; }
-    QPushButton { border-radius: 4px; font-size: 13px; }
-    QPushButton#NavButton { text-align: left; padding: 15px 20px; border: none; font-size: 14px; color: #555; background: transparent; }
-    QPushButton#NavButton:hover { background-color: #fff5f2; color: #ee4d2d; border-right: 4px solid #ffccbc; }
-    QPushButton#NavButton:checked { background-color: #fff5f2; color: #ee4d2d; border-right: 4px solid #ee4d2d; font-weight: bold; }
-    QPushButton#IconBtn, QPushButton#RemoveRowBtn, QPushButton#DelCustBtn, QPushButton#DeleteBtn { 
-        padding: 0px; margin: 0px; text-align: center; border: 1px solid #ddd;
-    }
-    QPushButton#IconBtn { font-weight: 900; color: #d32f2f; background: #fff; }
-    QPushButton#IconBtn:hover { background-color: #ffebee; }
-    QPushButton#RemoveRowBtn { border: none; background: transparent; color: red; font-weight: bold; font-size: 14px; }
-    QPushButton#RemoveRowBtn:hover { background-color: #ffebee; border-radius: 4px; }
-    QPushButton#DelCustBtn, QPushButton#DeleteBtn { 
-        background-color: #ffffff; color: #d32f2f; border: 1px solid #d32f2f; font-weight: bold; border-radius: 4px;
-    }    
-    QPushButton#DelCustBtn:hover, QPushButton#DeleteBtn:hover { 
-        background-color: #ef9a9a !important; border: 1px solid #b71c1c !important; 
-    }
-    QPushButton#PrimaryBtn { 
-        background-color: #ee4d2d !important; color: #000000 !important; border: none; padding: 8px 16px; font-weight: bold; font-size: 14px;
-    }
-    /* hover: darker background (keep text color unchanged for submit buttons) */
-    QPushButton#PrimaryBtn:hover { background-color: #d73211 !important; }
-    QPushButton#PrimaryBtn:pressed { background-color: #bf2b0e !important; }
-    QPushButton#PrimaryBtn:disabled { background-color: #e0e0e0 !important; color: #999999 !important; }
-    QPushButton#SecondaryBtn { background-color: #ffffff; color: #333333; border: 1px solid #cccccc; padding: 6px 12px; }
-    /* hover: subtle background change, do not change text color */
-    QPushButton#SecondaryBtn:hover { background-color: #fff5f2; border-color: #ee4d2d; }
-    QLineEdit { border: 1px solid #ddd; padding: 6px; border-radius: 2px; background: white; color: #333; font-size: 12px}
-    QLineEdit:focus { border: 1px solid #ee4d2d; background: #fffdfb; }
-    QTableWidget { border: 1px solid #ddd; background: white; gridline-color: #eee; color: #333; selection-background-color: #fff5f2; selection-color: #ee4d2d; font-size: 13px; }
-    QHeaderView::section { background-color: #f8f8f8; padding: 6px; border: none; border-bottom: 1px solid #ddd; font-weight: bold; color: #555; }
-    QScrollArea { border: none; background: transparent; }
-"""
+def main():
+    print("Legacy frontend removed. Use flutter_frontend/ for client or run backend via uvicorn.")
+
+if __name__ == '__main__':
+    main()
 
 # --- HELPERS ---
 def format_currency(value):

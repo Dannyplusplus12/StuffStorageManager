@@ -1,4 +1,6 @@
-﻿import 'package:flutter/material.dart';
+﻿import 'dart:math' as math;
+
+import 'package:flutter/material.dart';
 import '../models/product.dart';
 import '../models/order.dart';
 import '../services/api_service.dart';
@@ -120,14 +122,14 @@ class PosScreenState extends State<PosScreen> {
           customerPhone: _custPhoneCtrl.text,
           cart: _cart,
         );
-        _snack('Da cap nhat don hang!', Colors.green);
+        _snack('Đã cập nhật đơn hàng!', Colors.green);
       } else {
         await ApiService.checkout(
           customerName: _custNameCtrl.text,
           customerPhone: _custPhoneCtrl.text,
           cart: _cart,
         );
-        _snack('Da xuat kho va tao hoa don!', Colors.green);
+        _snack('Đã xuất kho và tạo hóa đơn!', Colors.green);
       }
       cancelEditing();
       _loadProducts(_search);
@@ -139,7 +141,30 @@ class PosScreenState extends State<PosScreen> {
 
   @override
   Widget build(BuildContext context) {
-    return Row(children: [Expanded(child: _productArea()), _rightPanel()]);
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final panelWidth = constraints.maxWidth >= 1200
+            ? 380.0
+            : constraints.maxWidth >= 900
+                ? 340.0
+                : constraints.maxWidth * 0.95;
+        if (constraints.maxWidth < 900) {
+          final panelHeight = math.min(520.0, MediaQuery.of(context).size.height * 0.6);
+          return Column(
+            children: [
+              Expanded(child: _productArea()),
+              const Divider(height: 1, thickness: 1),
+              SizedBox(
+                height: panelHeight.isFinite && panelHeight > 320 ? panelHeight : 360,
+                width: double.infinity,
+                child: _rightPanel(),
+              ),
+            ],
+          );
+        }
+        return Row(children: [Expanded(child: _productArea()), _rightPanel(width: panelWidth)]);
+      },
+    );
   }
 
   Widget _productArea() {
@@ -148,45 +173,92 @@ class PosScreenState extends State<PosScreen> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Row(children: [
-            Expanded(
-              child: Row(children: [
-                Text(
-                  widget.inventoryMode ? 'Kho hang' : 'Xuat hang',
-                  style: const TextStyle(fontSize: 20, fontWeight: FontWeight.bold, color: kTextPrimary),
-                ),
-                const SizedBox(width: 8),
-                if (_products.isNotEmpty)
-                  Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
-                    decoration: BoxDecoration(color: kPrimaryLight, borderRadius: BorderRadius.circular(12)),
-                    child: Text('${_products.length} sản phẩm',
-                        style: const TextStyle(color: kPrimary, fontSize: 11, fontWeight: FontWeight.w600)),
+          LayoutBuilder(
+            builder: (ctx, constraints) {
+              Widget titleSection = Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Flexible(
+                    child: Text(
+                      widget.inventoryMode ? 'Kho hàng' : 'Xuất hàng',
+                      style: const TextStyle(fontSize: 20, fontWeight: FontWeight.bold, color: kTextPrimary),
+                      overflow: TextOverflow.ellipsis,
+                    ),
                   ),
-              ]),
-            ),
-            SizedBox(
-              width: 300, height: 38,
-              child: TextField(
-                decoration: const InputDecoration(hintText: 'Tim san pham...', prefixIcon: Icon(Icons.search, size: 18)),
-                onChanged: (v) {
-                  _search = v;
-                  Future.delayed(const Duration(milliseconds: 400), () {
-                    if (_search == v) _loadProducts(v);
-                  });
-                },
-              ),
-            ),
-            const SizedBox(width: 8),
-            SizedBox(
-              height: 38,
-              child: OutlinedButton.icon(
-                onPressed: () => _loadProducts(_search),
-                icon: const Icon(Icons.refresh, size: 16),
-                label: const Text('Làm mới'),
-              ),
-            ),
-          ]),
+                  const SizedBox(width: 8),
+                  if (_products.isNotEmpty)
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                      decoration: BoxDecoration(color: kPrimaryLight, borderRadius: BorderRadius.circular(12)),
+                      child: Text('${_products.length} sản phẩm',
+                          style: const TextStyle(color: kPrimary, fontSize: 11, fontWeight: FontWeight.w600)),
+                    ),
+                ],
+              );
+
+              Widget searchSection(double width) {
+                final cappedWidth = math.max(220.0, math.min(width, 460.0));
+                return SizedBox(
+                  width: cappedWidth,
+                  child: Row(
+                    mainAxisSize: MainAxisSize.max,
+                    children: [
+                      Expanded(
+                        child: SizedBox(
+                          height: 38,
+                          child: TextField(
+                            decoration: const InputDecoration(
+                              hintText: 'Tìm sản phẩm...',
+                              prefixIcon: Icon(Icons.search, size: 18),
+                              contentPadding: EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                            ),
+                            onChanged: (v) {
+                              _search = v;
+                              Future.delayed(const Duration(milliseconds: 400), () {
+                                if (_search == v) _loadProducts(v);
+                              });
+                            },
+                          ),
+                        ),
+                      ),
+                      const SizedBox(width: 8),
+                      SizedBox(
+                        height: 38,
+                        child: MouseRegion(
+                          cursor: SystemMouseCursors.click,
+                          child: OutlinedButton.icon(
+                            onPressed: () => _loadProducts(_search),
+                            icon: const Icon(Icons.refresh, size: 16),
+                            label: const Text('Làm mới'),
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                );
+              }
+
+              if (constraints.maxWidth < 760) {
+                return Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    titleSection,
+                    const SizedBox(height: 8),
+                    searchSection(constraints.maxWidth),
+                  ],
+                );
+              }
+
+              return Row(
+                crossAxisAlignment: CrossAxisAlignment.center,
+                children: [
+                  Expanded(child: titleSection),
+                  const SizedBox(width: 12),
+                  searchSection(math.min(constraints.maxWidth * 0.45, 480)),
+                ],
+              );
+            },
+          ),
           const SizedBox(height: 12),
           Expanded(child: _grid()),
         ],
@@ -201,7 +273,7 @@ class PosScreenState extends State<PosScreen> {
         child: Column(mainAxisSize: MainAxisSize.min, children: [
           Icon(Icons.inventory_2_outlined, size: 64, color: Colors.grey[300]),
           const SizedBox(height: 12),
-          const Text('Khong co san pham nao', style: TextStyle(color: kTextSecondary)),
+          const Text('Không có sản phẩm nào', style: TextStyle(color: kTextSecondary)),
         ]),
       );
     }
@@ -225,13 +297,13 @@ class PosScreenState extends State<PosScreen> {
     if (totalStock <= 0) {
       borderColor = const Color(0xFFEF9A9A);
       badgeBg = kDanger;
-      badgeLabel = 'Het hang';
+      badgeLabel = 'Hết hàng';
     } else if (hasLow) {
       borderColor = const Color(0xFFFBC02D);
       badgeBg = kWarning;
-      badgeLabel = 'Con it';
+      badgeLabel = 'Còn ít';
     }
-    return MouseRegion(
+        return MouseRegion(
       cursor: SystemMouseCursors.click,
       child: GestureDetector(
         onTap: () => widget.inventoryMode ? _editProduct(p) : _buyProduct(p),
@@ -297,9 +369,9 @@ class PosScreenState extends State<PosScreen> {
     if (changed == true) _loadProducts(_search);
   }
 
-  Widget _rightPanel() {
+  Widget _rightPanel({double? width}) {
     return Container(
-      width: 380,
+      width: width,
       decoration: const BoxDecoration(color: Colors.white, border: Border(left: BorderSide(color: kBorder))),
       child: widget.inventoryMode ? AddProductPanel(onAdded: () => _loadProducts(_search)) : _cartPanel(),
     );
@@ -310,7 +382,7 @@ class PosScreenState extends State<PosScreen> {
       padding: const EdgeInsets.all(16),
       child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
         Row(children: [
-          const Text('Khach hang', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14)),
+          const Text('Khách hàng', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14)),
           if (_editingOrderId != null) ...[
             const Spacer(),
             Container(
@@ -319,7 +391,7 @@ class PosScreenState extends State<PosScreen> {
                 color: const Color(0xFFFFF3CD), borderRadius: BorderRadius.circular(4),
                 border: Border.all(color: const Color(0xFFFFD700)),
               ),
-              child: Text('Sua don #$_editingOrderId',
+              child: Text('Sửa đơn #$_editingOrderId',
                   style: const TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: Color(0xFF856404))),
             ),
           ],
@@ -336,7 +408,7 @@ class PosScreenState extends State<PosScreen> {
             return TextField(
               controller: ctrl, focusNode: fn,
               decoration: const InputDecoration(
-                  hintText: 'Ten khach hang', prefixIcon: Icon(Icons.person_outline, size: 18)),
+                  hintText: 'Tên khách hàng', prefixIcon: Icon(Icons.person_outline, size: 18)),
               onChanged: (v) => _custNameCtrl.text = v,
             );
           },
@@ -345,11 +417,11 @@ class PosScreenState extends State<PosScreen> {
         TextField(
           controller: _custPhoneCtrl,
           decoration: const InputDecoration(
-              hintText: 'So dien thoai', prefixIcon: Icon(Icons.phone_outlined, size: 18)),
+              hintText: 'Số điện thoại', prefixIcon: Icon(Icons.phone_outlined, size: 18)),
         ),
         const SizedBox(height: 16),
         Row(children: [
-          const Text('Gio hang', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14)),
+          const Text('Giỏ hàng', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14)),
           const SizedBox(width: 6),
           if (_cart.isNotEmpty)
             Container(
@@ -360,11 +432,14 @@ class PosScreenState extends State<PosScreen> {
             ),
           const Spacer(),
           if (_cart.isNotEmpty)
-            TextButton.icon(
-              onPressed: () => setState(() => _cart.clear()),
-              icon: const Icon(Icons.delete_outline, size: 14, color: Colors.red),
-              label: const Text('Xoa tat', style: TextStyle(color: Colors.red, fontSize: 12)),
-              style: TextButton.styleFrom(padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4)),
+            MouseRegion(
+              cursor: SystemMouseCursors.click,
+              child: TextButton.icon(
+                onPressed: () => setState(() => _cart.clear()),
+                icon: const Icon(Icons.delete_outline, size: 14, color: Colors.red),
+                label: const Text('Xóa hết', style: TextStyle(color: Colors.red, fontSize: 12)),
+                style: TextButton.styleFrom(padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4)),
+              ),
             ),
         ]),
         const SizedBox(height: 8),
@@ -373,32 +448,39 @@ class PosScreenState extends State<PosScreen> {
         Row(
           mainAxisAlignment: MainAxisAlignment.spaceBetween,
           children: [
-            const Text('Tong tien:', style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600)),
-            Text('${formatCurrency(_total)} d',
+            const Text('Tổng tiền:', style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600)),
+            Text('${formatCurrency(_total)} đ',
                 style: const TextStyle(fontSize: 18, color: kPrimary, fontWeight: FontWeight.bold)),
           ],
         ),
         const SizedBox(height: 10),
         SizedBox(
           height: 48,
-          child: ElevatedButton.icon(
-            onPressed: _cart.isNotEmpty ? _checkout : null,
-            icon: Icon(_editingOrderId != null ? Icons.update : Icons.shopping_cart_checkout, size: 18),
-            label: Text(
-              _editingOrderId != null ? 'Cap nhat Don #$_editingOrderId' : 'Xuat hang',
-              style: const TextStyle(fontSize: 15, fontWeight: FontWeight.bold),
+            child: ElevatedButton.icon(
+              style: ButtonStyle(
+                mouseCursor: MaterialStateProperty.resolveWith((states) =>
+                    states.contains(MaterialState.disabled) ? SystemMouseCursors.basic : SystemMouseCursors.click),
+              ),
+              onPressed: _cart.isNotEmpty ? _checkout : null,
+              icon: Icon(_editingOrderId != null ? Icons.update : Icons.shopping_cart_checkout, size: 18),
+              label: Text(
+                _editingOrderId != null ? 'Cập nhật đơn #$_editingOrderId' : 'Xuất hàng',
+                style: const TextStyle(fontSize: 15, fontWeight: FontWeight.bold),
+              ),
             ),
-          ),
         ),
         if (_editingOrderId != null) ...[
           const SizedBox(height: 6),
           SizedBox(
             height: 36,
-            child: OutlinedButton(
-              onPressed: cancelEditing,
-              style: OutlinedButton.styleFrom(foregroundColor: Colors.grey),
-              child: const Text('Huy chinh sua', style: TextStyle(fontSize: 12)),
-            ),
+              child: OutlinedButton(
+                style: ButtonStyle(
+                  mouseCursor: MaterialStateProperty.all(SystemMouseCursors.click),
+                  foregroundColor: MaterialStateProperty.all(Colors.grey),
+                ),
+                onPressed: cancelEditing,
+                child: const Text('Hủy chỉnh sửa', style: TextStyle(fontSize: 12)),
+              ),
           ),
         ],
       ]),
@@ -411,7 +493,7 @@ class PosScreenState extends State<PosScreen> {
         child: Column(mainAxisSize: MainAxisSize.min, children: [
           Icon(Icons.shopping_cart_outlined, size: 48, color: Colors.grey[300]),
           const SizedBox(height: 8),
-          const Text('Chua co san pham', style: TextStyle(color: kTextSecondary)),
+          const Text('Chưa có sản phẩm', style: TextStyle(color: kTextSecondary)),
         ]),
       );
     }
@@ -452,6 +534,7 @@ class PosScreenState extends State<PosScreen> {
               icon: const Icon(Icons.close, size: 16, color: Colors.red),
               padding: EdgeInsets.zero,
               constraints: const BoxConstraints(minWidth: 24, minHeight: 24),
+              mouseCursor: SystemMouseCursors.click,
               onPressed: () => setState(() => _cart.removeAt(i)),
             ),
           ]),
@@ -516,6 +599,7 @@ class _QtyEditorState extends State<_QtyEditor> {
         mainAxisSize: MainAxisSize.min,
         children: [
           InkWell(
+            mouseCursor: SystemMouseCursors.click,
             onTap: widget.onDecrement,
             child: const Padding(
               padding: EdgeInsets.symmetric(horizontal: 6, vertical: 5),
@@ -523,13 +607,18 @@ class _QtyEditorState extends State<_QtyEditor> {
             ),
           ),
           SizedBox(
-            width: 38,
+            width: 60,
             child: TextField(
               controller: _controller,
               focusNode: _focusNode,
               textAlign: TextAlign.center,
               keyboardType: TextInputType.number,
-              decoration: const InputDecoration(border: InputBorder.none, isCollapsed: true),
+              style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w600),
+              decoration: const InputDecoration(
+                border: InputBorder.none,
+                isCollapsed: true,
+                contentPadding: EdgeInsets.symmetric(vertical: 4),
+              ),
               onChanged: (v) {
                 final q = int.tryParse(v);
                 if (q != null && q > 0) widget.onChanged(q);
@@ -544,6 +633,7 @@ class _QtyEditorState extends State<_QtyEditor> {
             ),
           ),
           InkWell(
+            mouseCursor: SystemMouseCursors.click,
             onTap: widget.onIncrement,
             child: const Padding(
               padding: EdgeInsets.symmetric(horizontal: 6, vertical: 5),

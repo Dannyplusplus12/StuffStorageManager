@@ -141,35 +141,41 @@ class _ProductBuyDialogState extends State<ProductBuyDialog> {
                 child: Row(
                   children: [
                     Expanded(
-                      child: OutlinedButton(
-                        onPressed: () => Navigator.pop(context),
-                        child: const Text('Hủy bỏ'),
+                      child: MouseRegion(
+                        cursor: SystemMouseCursors.click,
+                        child: OutlinedButton(
+                          onPressed: () => Navigator.pop(context),
+                          child: const Text('Hủy bỏ'),
+                        ),
                       ),
                     ),
                     const SizedBox(width: 10),
                     Expanded(
                       flex: 2,
-                      child: ElevatedButton(
-                        onPressed: () {
-                          final items = <CartItem>[];
-                          _qtys.forEach((vid, qty) {
-                            if (qty > 0) {
-                              final v = p.variants.firstWhere((x) => x.id == vid);
-                              items.add(
-                                CartItem(
-                                  variantId: v.id!,
-                                  productName: p.name,
-                                  color: v.color,
-                                  size: v.size,
-                                  price: v.price,
-                                  quantity: qty,
-                                ),
-                              );
-                            }
-                          });
-                          Navigator.pop(context, items);
-                        },
-                        child: const Text('Thêm vào đơn'),
+                      child: MouseRegion(
+                        cursor: SystemMouseCursors.click,
+                        child: ElevatedButton(
+                          onPressed: () {
+                            final items = <CartItem>[];
+                            _qtys.forEach((vid, qty) {
+                              if (qty > 0) {
+                                final v = p.variants.firstWhere((x) => x.id == vid);
+                                items.add(
+                                  CartItem(
+                                    variantId: v.id!,
+                                    productName: p.name,
+                                    color: v.color,
+                                    size: v.size,
+                                    price: v.price,
+                                    quantity: qty,
+                                  ),
+                                );
+                              }
+                            });
+                            Navigator.pop(context, items);
+                          },
+                          child: const Text('Thêm vào đơn'),
+                        ),
                       ),
                     ),
                   ],
@@ -214,13 +220,19 @@ class _QuantityStepper extends StatelessWidget {
           },
         ),
         actions: [
-          TextButton(onPressed: () => Navigator.pop(context), child: const Text('Hủy')),
-          ElevatedButton(
-            onPressed: () {
-              final q = int.tryParse(ctrl.text.trim()) ?? 0;
-              Navigator.pop(context, q);
-            },
-            child: const Text('OK'),
+          MouseRegion(
+            cursor: SystemMouseCursors.click,
+            child: TextButton(onPressed: () => Navigator.pop(context), child: const Text('Hủy')),
+          ),
+          MouseRegion(
+            cursor: SystemMouseCursors.click,
+            child: ElevatedButton(
+              onPressed: () {
+                final q = int.tryParse(ctrl.text.trim()) ?? 0;
+                Navigator.pop(context, q);
+              },
+              child: const Text('OK'),
+            ),
           ),
         ],
       ),
@@ -242,6 +254,7 @@ class _QuantityStepper extends StatelessWidget {
       child: Row(
         children: [
           InkWell(
+            mouseCursor: SystemMouseCursors.click,
             onTap: () => onChanged((currentQty - 1).clamp(0, maxStock)),
             child: const Padding(
               padding: EdgeInsets.symmetric(horizontal: 10, vertical: 8),
@@ -250,6 +263,7 @@ class _QuantityStepper extends StatelessWidget {
           ),
           Expanded(
             child: InkWell(
+              mouseCursor: SystemMouseCursors.click,
               onTap: () => _openManualInput(context),
               child: Center(
                 child: Text(
@@ -260,6 +274,7 @@ class _QuantityStepper extends StatelessWidget {
             ),
           ),
           InkWell(
+            mouseCursor: SystemMouseCursors.click,
             onTap: () => onChanged((currentQty + 1).clamp(0, maxStock)),
             child: const Padding(
               padding: EdgeInsets.symmetric(horizontal: 10, vertical: 8),
