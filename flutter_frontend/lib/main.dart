@@ -4,6 +4,7 @@ import 'theme.dart';
 import 'utils/app_mode_manager.dart';
 import 'utils/device_detector.dart';
 import 'services/notification_service.dart';
+import 'services/mobile_notification_service.dart';
 import 'screens/home_screen.dart';
 import 'screens/mobile_home_screen.dart';
 
@@ -11,6 +12,7 @@ void main() async {
   WidgetsFlutterBinding.ensureInitialized();
   await AppConfig.load();
   await AppModeManager.init();
+  await MobileNotificationService.init();
   runApp(const MyApp());
 }
 

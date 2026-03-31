@@ -1,1 +1,1 @@
-enum AppPage { dashboard, pos, inventory, debt, orders, pendingApproval }
+enum AppPage { pos, inventory, stockIn, debt, orders, pendingApproval }

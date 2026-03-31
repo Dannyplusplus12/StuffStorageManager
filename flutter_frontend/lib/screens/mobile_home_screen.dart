@@ -2,11 +2,13 @@
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 import '../dialogs/staff_pin_dialog.dart';
 import '../models/order.dart';
 import '../models/product.dart';
 import '../services/api_service.dart';
+import '../services/mobile_notification_service.dart';
 import '../theme.dart';
 import '../utils.dart';
 import '../utils/app_mode_manager.dart';
@@ -118,6 +120,7 @@ mixin _NotificationMixin<T extends StatefulWidget> on State<T> {
       notices.insert(0, msg);
       unreadCount += 1;
     });
+    unawaited(MobileNotificationService.show('Thông báo đơn hàng', msg));
     ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(msg)));
   }
 
@@ -280,6 +283,7 @@ class _PickerScreen extends StatefulWidget {
 }
 
 class _PickerScreenState extends State<_PickerScreen> with _NotificationMixin {
+  static const _seenAcceptedKey = 'picker_seen_accepted_order_ids';
   Timer? _pollTimer;
   Set<int> _lastSeenAcceptedIds = {};
   final GlobalKey<_AcceptedOrdersScreenState> _acceptedKey = GlobalKey<_AcceptedOrdersScreenState>();
@@ -289,7 +293,7 @@ class _PickerScreenState extends State<_PickerScreen> with _NotificationMixin {
   @override
   void initState() {
     super.initState();
-    _pollTimer = Timer.periodic(const Duration(seconds: 10), (_) => _pollNewOrders());
+    _initSeenOrdersAndPolling();
   }
 
   @override
@@ -298,8 +302,31 @@ class _PickerScreenState extends State<_PickerScreen> with _NotificationMixin {
     super.dispose();
   }
 
+  Future<void> _initSeenOrdersAndPolling() async {
+    final prefs = await SharedPreferences.getInstance();
+    final hasSeenData = prefs.containsKey(_seenAcceptedKey);
+
+    if (hasSeenData) {
+      final saved = prefs.getStringList(_seenAcceptedKey) ?? const [];
+      _lastSeenAcceptedIds = saved.map((e) => int.tryParse(e)).whereType<int>().toSet();
+    } else {
+      try {
+        final orders = await ApiService.getAcceptedOrders();
+        _lastSeenAcceptedIds = orders.map((o) => o.id).toSet();
+        await prefs.setStringList(
+          _seenAcceptedKey,
+          _lastSeenAcceptedIds.map((e) => e.toString()).toList(),
+        );
+      } catch (_) {}
+    }
+
+    _pollTimer = Timer.periodic(const Duration(seconds: 10), (_) => _pollNewOrders());
+    _pollNewOrders();
+  }
+
   Future<void> _pollNewOrders() async {
     try {
+      final prefs = await SharedPreferences.getInstance();
       final orders = await ApiService.getAcceptedOrders();
       final currentIds = orders.map((o) => o.id).toSet();
       final newIds = currentIds.difference(_lastSeenAcceptedIds);
@@ -307,6 +334,10 @@ class _PickerScreenState extends State<_PickerScreen> with _NotificationMixin {
         addNotice('📦 Đơn mới #$id cần soạn hàng');
       }
       _lastSeenAcceptedIds = currentIds;
+      await prefs.setStringList(
+        _seenAcceptedKey,
+        _lastSeenAcceptedIds.map((e) => e.toString()).toList(),
+      );
     } catch (_) {}
   }
 
@@ -515,11 +546,11 @@ class _CreateOrderScreenState extends State<_CreateOrderScreen> {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Padding(
-                      padding: const EdgeInsets.fromLTRB(16, 8, 16, 4),
+                    const Padding(
+                      padding: EdgeInsets.fromLTRB(16, 8, 16, 4),
                       child: Text(
                         'Đơn hiện tại',
-                        style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+                        style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
                       ),
                     ),
                     Padding(
@@ -827,39 +858,47 @@ class _CreateOrderScreenState extends State<_CreateOrderScreen> {
                     ),
                     Padding(
                       padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
-                      child: SizedBox(
-                        width: double.infinity,
-                        child: ElevatedButton.icon(
-                          onPressed: () {
-                            if (!hasChanges) {
-                              Navigator.pop(sheetContext);
-                              return;
-                            }
+                      child: Row(
+                        children: [
+                          Expanded(
+                            child: OutlinedButton.icon(
+                              onPressed: () => Navigator.pop(sheetContext),
+                              icon: const Icon(Icons.close),
+                              label: const Text('Đóng'),
+                            ),
+                          ),
+                          const SizedBox(width: 10),
+                          Expanded(
+                            child: ElevatedButton.icon(
+                              onPressed: hasChanges
+                                  ? () {
+                                      setState(() {
+                                        qtys.forEach((vid, qty) {
+                                          final v = p.variants.firstWhere((x) => x.id == vid);
+                                          final idx = _cart.indexWhere((e) => e.variantId == vid);
+                                          if (idx >= 0) {
+                                            _cart[idx].quantity += qty;
+                                          } else {
+                                            _cart.add(CartItem(
+                                              variantId: v.id!,
+                                              productName: p.name,
+                                              color: v.color,
+                                              size: v.size,
+                                              price: v.price,
+                                              quantity: qty,
+                                            ));
+                                          }
+                                        });
+                                      });
 
-                            setState(() {
-                              qtys.forEach((vid, qty) {
-                                final v = p.variants.firstWhere((x) => x.id == vid);
-                                final idx = _cart.indexWhere((e) => e.variantId == vid);
-                                if (idx >= 0) {
-                                  _cart[idx].quantity += qty;
-                                } else {
-                                  _cart.add(CartItem(
-                                    variantId: v.id!,
-                                    productName: p.name,
-                                    color: v.color,
-                                    size: v.size,
-                                    price: v.price,
-                                    quantity: qty,
-                                  ));
-                                }
-                              });
-                            });
-
-                            Navigator.pop(sheetContext);
-                          },
-                          icon: Icon(hasChanges ? Icons.check_circle_outline : Icons.close),
-                          label: Text(hasChanges ? 'Xác nhận' : 'Đóng'),
-                        ),
+                                      Navigator.pop(sheetContext);
+                                    }
+                                  : null,
+                              icon: const Icon(Icons.check_circle_outline),
+                              label: const Text('Xác nhận'),
+                            ),
+                          ),
+                        ],
                       ),
                     ),
                   ],

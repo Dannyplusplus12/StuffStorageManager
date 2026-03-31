@@ -1,11 +1,9 @@
 ﻿import 'dart:math';
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
 import '../models/order.dart';
 import '../services/api_service.dart';
 import '../theme.dart';
 import '../utils.dart';
-import '../dialogs/order_detail_dialog.dart';
 
 class OrdersScreen extends StatefulWidget {
   final void Function(Map<String, dynamic>) onEditOrder;
@@ -147,207 +145,281 @@ class _OrdersScreenState extends State<OrdersScreen> {
   @override
   Widget build(BuildContext context) {
     final data = _filtered;
-    return Padding(
-      padding: const EdgeInsets.all(16),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          LayoutBuilder(
-            builder: (ctx, constraints) {
-              final titleSection = Row(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  const Flexible(
-                    child: Text('Hóa đơn',
-                        style:
-                            TextStyle(fontSize: 20, fontWeight: FontWeight.bold, color: kTextPrimary)),
-                  ),
-                  const SizedBox(width: 8),
-                  Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
-                    decoration: BoxDecoration(color: kPrimaryLight, borderRadius: BorderRadius.circular(12)),
-                    child: Text('$_total hóa đơn',
-                        style: const TextStyle(color: kPrimary, fontSize: 11, fontWeight: FontWeight.w600)),
-                  ),
-                ],
-              );
-
-              Widget searchControls(double width) {
-                final cappedWidth = max(240.0, min(width, 480.0));
-                return SizedBox(
-                  width: cappedWidth,
-                  child: Row(
+    return Align(
+      alignment: Alignment.topLeft,
+      child: ConstrainedBox(
+        constraints: const BoxConstraints(maxWidth: 980),
+        child: Padding(
+          padding: const EdgeInsets.all(16),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              LayoutBuilder(
+                builder: (ctx, constraints) {
+                  final titleSection = Row(
+                    mainAxisSize: MainAxisSize.min,
                     children: [
-                      Expanded(
-                        child: SizedBox(
-                          height: 38,
-                          child: TextField(
-                            decoration: const InputDecoration(
-                              hintText: 'Tìm theo tên khách...',
-                              prefixIcon: Icon(Icons.search, size: 18),
-                              contentPadding: EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-                            ),
-                            onChanged: (v) => setState(() => _search = v),
-                          ),
-                        ),
+                      const Flexible(
+                        child: Text('Hóa đơn',
+                            style:
+                                TextStyle(fontSize: 20, fontWeight: FontWeight.bold, color: kTextPrimary)),
                       ),
                       const SizedBox(width: 8),
-                      SizedBox(
-                        height: 38,
-                        child: MouseRegion(
-                          cursor: SystemMouseCursors.click,
-                          child: OutlinedButton.icon(
-                            onPressed: () => _load(1),
-                            icon: const Icon(Icons.refresh, size: 16),
-                            label: const Text('Làm mới'),
-                          ),
-                        ),
+                      Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                    decoration: BoxDecoration(
+                      color: const Color(0xFFF1F5F9),
+                      borderRadius: BorderRadius.circular(12),
+                      border: Border.all(color: kBorder),
+                    ),
+                    child: Text('$_total hóa đơn',
+                        style: const TextStyle(color: kTextSecondary, fontSize: 11, fontWeight: FontWeight.w600)),
                       ),
                     ],
-                  ),
-                );
-              }
+                  );
 
-              if (constraints.maxWidth < 780) {
-                return Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    titleSection,
-                    const SizedBox(height: 8),
-                    searchControls(constraints.maxWidth),
-                  ],
-                );
-              }
-
-              return Row(
-                children: [
-                  Expanded(child: titleSection),
-                  const SizedBox(width: 12),
-                  searchControls(min(constraints.maxWidth * 0.45, 500)),
-                ],
-              );
-            },
-          ),
-          const SizedBox(height: 12),
-          Expanded(
-            child: _loading
-                ? const Center(child: CircularProgressIndicator())
-                : data.isEmpty
-                    ? Center(
-                        child: Column(mainAxisSize: MainAxisSize.min, children: [
-                          Icon(Icons.receipt_long_outlined, size: 64, color: Colors.grey[300]),
-                          const SizedBox(height: 12),
-                          const Text('Không có hóa đơn', style: TextStyle(color: kTextSecondary)),
-                        ]),
-                      )
-                    : SingleChildScrollView(
-                        child: Container(
-                          decoration: BoxDecoration(
-                              color: Colors.white,
-                              borderRadius: BorderRadius.circular(8),
-                              border: Border.all(color: kBorder)),
-                          child: DataTable(
-                            headingRowColor: WidgetStateProperty.all(const Color(0xFFF8FAFC)),
-                            columnSpacing: 16,
-                            columns: const [
-                              DataColumn(
-                                  label: Text('Ngày giờ', style: TextStyle(fontWeight: FontWeight.bold))),
-                              DataColumn(
-                                  label: Text('Khách hàng', style: TextStyle(fontWeight: FontWeight.bold))),
-                              DataColumn(
-                                  label: Text('Tổng tiền', style: TextStyle(fontWeight: FontWeight.bold)),
-                                  numeric: true),
-                              DataColumn(
-                                  label: Text('SL', style: TextStyle(fontWeight: FontWeight.bold)),
-                                  numeric: true),
-                              DataColumn(
-                                  label:
-                                      Text('Thao tác', style: TextStyle(fontWeight: FontWeight.bold))),
-                            ],
-                            rows: data.map((o) {
-                              return DataRow(cells: [
-                                DataCell(
-                                  Row(children: [
-                                    const Icon(Icons.schedule, size: 14, color: kTextSecondary),
-                                    const SizedBox(width: 4),
-                                    Text(formatDate(o.createdAt), style: const TextStyle(fontSize: 13)),
-                                  ]),
-                                  onTap: () => _editDate(o),
+                  Widget searchControls(double width) {
+                    final cappedWidth = max(240.0, min(width, 480.0));
+                    return SizedBox(
+                      width: cappedWidth,
+                      child: Row(
+                        children: [
+                          Expanded(
+                            child: SizedBox(
+                              height: 38,
+                              child: TextField(
+                                decoration: const InputDecoration(
+                                  hintText: 'Tìm theo tên khách...',
+                                  prefixIcon: Icon(Icons.search, size: 18),
+                                  contentPadding: EdgeInsets.symmetric(horizontal: 12, vertical: 10),
                                 ),
-                                DataCell(Text(o.customerName,
-                                    style: const TextStyle(fontWeight: FontWeight.w500))),
-                                DataCell(Text('${formatCurrency(o.totalAmount)} đ',
-                                    style: const TextStyle(color: kPrimary, fontWeight: FontWeight.bold))),
-                                DataCell(Container(
-                                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
-                                  decoration: BoxDecoration(
-                                    color: const Color(0xFFF0F9FF),
-                                    borderRadius: BorderRadius.circular(12),
-                                  ),
-                                  child: Text('${o.totalQty}',
-                                      style: const TextStyle(
-                                          fontWeight: FontWeight.bold, color: Color(0xFF0284C7))),
-                                )),
-                                DataCell(Row(mainAxisSize: MainAxisSize.min, children: [
-                                  MouseRegion(
-                                    cursor: SystemMouseCursors.click,
-                                    child: TextButton(
-                                      onPressed: () => showDialog(
-                                          context: context, builder: (_) => OrderDetailDialog(order: o)),
-                                      child: const Text('Xem', style: TextStyle(color: Colors.blue)),
-                                    ),
-                                  ),
-                                  MouseRegion(
-                                    cursor: SystemMouseCursors.click,
-                                    child: TextButton(
-                                      onPressed: () => widget.onEditOrder(o.toJson()),
-                                      child: const Text('Sửa',
-                                          style: TextStyle(
-                                              color: Color(0xFFE65100), fontWeight: FontWeight.bold)),
-                                    ),
-                                  ),
-                                  IconButton(
-                                    icon: const Icon(Icons.delete, color: Colors.red, size: 18),
-                                    mouseCursor: SystemMouseCursors.click,
-                                    onPressed: () => _deleteOrder(o.id),
-                                    tooltip: 'Xóa',
-                                  ),
-                                ])),
-                              ]);
-                            }).toList(),
+                                onChanged: (v) => setState(() => _search = v),
+                              ),
+                            ),
                           ),
-                        ),
+                          const SizedBox(width: 8),
+                          SizedBox(
+                            height: 38,
+                            child: MouseRegion(
+                              cursor: SystemMouseCursors.click,
+                              child: OutlinedButton.icon(
+                                onPressed: () => _load(1),
+                                icon: const Icon(Icons.refresh, size: 16),
+                                label: const Text('Làm mới'),
+                              ),
+                            ),
+                          ),
+                        ],
                       ),
-          ),
-          const SizedBox(height: 8),
-          Row(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              MouseRegion(
-                cursor: _page > 1 ? SystemMouseCursors.click : SystemMouseCursors.basic,
-                child: OutlinedButton.icon(
-                  onPressed: _page > 1 ? () => _load(_page - 1) : null,
-                  icon: const Icon(Icons.chevron_left, size: 16),
-                  label: const Text('Truoc'),
-                ),
+                    );
+                  }
+
+                  if (constraints.maxWidth < 780) {
+                    return Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        titleSection,
+                        const SizedBox(height: 8),
+                        searchControls(constraints.maxWidth),
+                      ],
+                    );
+                  }
+
+                  return Row(
+                    children: [
+                      Expanded(child: titleSection),
+                      const SizedBox(width: 12),
+                      searchControls(min(constraints.maxWidth * 0.45, 500)),
+                    ],
+                  );
+                },
               ),
-              Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 16),
-                child: Text('Trang $_page / $_totalPages',
-                    style: const TextStyle(fontWeight: FontWeight.bold)),
+              const SizedBox(height: 12),
+              Expanded(
+                child: _loading
+                    ? const Center(child: CircularProgressIndicator())
+                    : data.isEmpty
+                        ? Center(
+                            child: Column(mainAxisSize: MainAxisSize.min, children: [
+                              Icon(Icons.receipt_long_outlined, size: 64, color: Colors.grey[300]),
+                              const SizedBox(height: 12),
+                              const Text('Không có hóa đơn', style: TextStyle(color: kTextSecondary)),
+                            ]),
+                          )
+                        : ListView.separated(
+                            itemCount: data.length,
+                            separatorBuilder: (_, __) => const SizedBox(height: 8),
+                            itemBuilder: (_, i) {
+                              final o = data[i];
+                              return Container(
+                                decoration: BoxDecoration(
+                                  color: Colors.white,
+                                  borderRadius: BorderRadius.circular(8),
+                                  border: Border.all(color: kBorder),
+                                ),
+                                child: ExpansionTile(
+                                  tilePadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                                  childrenPadding: const EdgeInsets.fromLTRB(12, 0, 12, 12),
+                                  title: Row(
+                                    children: [
+                                      Container(
+                                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                                        decoration: BoxDecoration(
+                                          color: const Color(0xFFF8FAFC),
+                                          borderRadius: BorderRadius.circular(10),
+                                          border: Border.all(color: kBorder),
+                                        ),
+                                        child: Text('Đơn #${o.id}',
+                                            style: const TextStyle(fontWeight: FontWeight.bold, color: kTextPrimary)),
+                                      ),
+                                      const SizedBox(width: 10),
+                                      Expanded(
+                                        child: Text(
+                                          formatDate(o.createdAt),
+                                          style: const TextStyle(color: kTextSecondary, fontSize: 12),
+                                          overflow: TextOverflow.ellipsis,
+                                        ),
+                                      ),
+                                      Container(
+                                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                                        decoration: BoxDecoration(
+                                          color: const Color(0xFFF8FAFC),
+                                          borderRadius: BorderRadius.circular(10),
+                                          border: Border.all(color: kBorder),
+                                        ),
+                                        child: const Text(
+                                          'Hoàn thành',
+                                          style: TextStyle(fontSize: 11, color: kTextSecondary, fontWeight: FontWeight.w600),
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                  subtitle: Padding(
+                                    padding: const EdgeInsets.only(top: 8),
+                                    child: Column(
+                                      crossAxisAlignment: CrossAxisAlignment.start,
+                                      children: [
+                                        Text('Khách: ${o.customerName}',
+                                            style: const TextStyle(fontWeight: FontWeight.w500, color: kTextPrimary)),
+                                        const SizedBox(height: 6),
+                                        Row(
+                                          children: [
+                                            Container(
+                                              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                                              decoration: BoxDecoration(
+                                                color: const Color(0xFFF8FAFC),
+                                                borderRadius: BorderRadius.circular(8),
+                                                border: Border.all(color: kBorder),
+                                              ),
+                                              child: Text('SL: ${o.totalQty}',
+                                                  style: const TextStyle(color: kTextSecondary)),
+                                            ),
+                                            const SizedBox(width: 8),
+                                            Container(
+                                              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                                              decoration: BoxDecoration(
+                                                color: const Color(0xFFF8FAFC),
+                                                borderRadius: BorderRadius.circular(8),
+                                                border: Border.all(color: kBorder),
+                                              ),
+                                              child: Text('Tổng: ${formatCurrency(o.totalAmount)} đ',
+                                                  style: const TextStyle(color: kTextPrimary, fontWeight: FontWeight.w600)),
+                                            ),
+                                          ],
+                                        ),
+                                      ],
+                                    ),
+                                  ),
+                                  children: [
+                                    Container(
+                                      width: double.infinity,
+                                      padding: const EdgeInsets.all(10),
+                                      decoration: BoxDecoration(
+                                        color: const Color(0xFFF8FAFC),
+                                        borderRadius: BorderRadius.circular(8),
+                                        border: Border.all(color: kBorder),
+                                      ),
+                                      child: Column(
+                                        crossAxisAlignment: CrossAxisAlignment.start,
+                                        children: [
+                                          ...o.items.map(
+                                            (it) => Padding(
+                                              padding: const EdgeInsets.only(bottom: 4),
+                                              child: Text(
+                                                '- ${it.productName} (${it.variantInfo}) x${it.quantity}',
+                                                style: const TextStyle(fontSize: 12, color: kTextSecondary),
+                                              ),
+                                            ),
+                                          ),
+                                        ],
+                                      ),
+                                    ),
+                                    const SizedBox(height: 8),
+                                    Row(
+                                      children: [
+                                        MouseRegion(
+                                          cursor: SystemMouseCursors.click,
+                                          child: OutlinedButton.icon(
+                                            onPressed: () => _editDate(o),
+                                            icon: const Icon(Icons.edit_calendar_outlined, size: 16),
+                                            label: const Text('Sửa ngày'),
+                                          ),
+                                        ),
+                                        const Spacer(),
+                                        MouseRegion(
+                                          cursor: SystemMouseCursors.click,
+                                          child: TextButton(
+                                            onPressed: () => widget.onEditOrder(o.toJson()),
+                                            child: const Text('Sửa',
+                                                style: TextStyle(
+                                                    color: Color(0xFFE65100), fontWeight: FontWeight.bold)),
+                                          ),
+                                        ),
+                                        IconButton(
+                                          icon: const Icon(Icons.delete, color: Colors.red, size: 18),
+                                          mouseCursor: SystemMouseCursors.click,
+                                          onPressed: () => _deleteOrder(o.id),
+                                          tooltip: 'Xóa',
+                                        ),
+                                      ],
+                                    ),
+                                  ],
+                                ),
+                              );
+                            },
+                          ),
               ),
-              MouseRegion(
-                cursor: _page < _totalPages ? SystemMouseCursors.click : SystemMouseCursors.basic,
-                child: OutlinedButton.icon(
-                  onPressed: _page < _totalPages ? () => _load(_page + 1) : null,
-                  icon: const Icon(Icons.chevron_right, size: 16),
-                  label: const Text('Sau'),
-                  iconAlignment: IconAlignment.end,
-                ),
+              const SizedBox(height: 8),
+              Row(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  MouseRegion(
+                    cursor: _page > 1 ? SystemMouseCursors.click : SystemMouseCursors.basic,
+                    child: OutlinedButton.icon(
+                      onPressed: _page > 1 ? () => _load(_page - 1) : null,
+                      icon: const Icon(Icons.chevron_left, size: 16),
+                      label: const Text('Truoc'),
+                    ),
+                  ),
+                  Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 16),
+                    child: Text('Trang $_page / $_totalPages',
+                        style: const TextStyle(fontWeight: FontWeight.bold)),
+                  ),
+                  MouseRegion(
+                    cursor: _page < _totalPages ? SystemMouseCursors.click : SystemMouseCursors.basic,
+                    child: OutlinedButton.icon(
+                      onPressed: _page < _totalPages ? () => _load(_page + 1) : null,
+                      icon: const Icon(Icons.chevron_right, size: 16),
+                      label: const Text('Sau'),
+                      iconAlignment: IconAlignment.end,
+                    ),
+                  ),
+                ],
               ),
             ],
           ),
-        ],
+        ),
       ),
     );
   }

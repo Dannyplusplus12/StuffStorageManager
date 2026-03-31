@@ -1,7 +1,12 @@
+import 'dart:io';
+
+import 'package:file_selector/file_selector.dart';
+import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
-import 'package:flutter/gestures.dart';
+
 import '../services/api_service.dart';
+import '../theme.dart';
 
 class AddProductPanel extends StatefulWidget {
   final VoidCallback onAdded;
@@ -13,6 +18,7 @@ class AddProductPanel extends StatefulWidget {
 class _AddProductPanelState extends State<AddProductPanel> {
   final _nameCtrl = TextEditingController();
   String _imagePath = '';
+  String? _previewImagePath;
   final List<_ColorGroup> _groups = [];
 
   @override
@@ -30,18 +36,82 @@ class _AddProductPanelState extends State<AddProductPanel> {
   void _reset() {
     _nameCtrl.clear();
     _imagePath = '';
+    _previewImagePath = null;
     _groups.clear();
     _groups.add(_ColorGroup(color: '', rows: [_SizeRow()]));
     setState(() {});
   }
 
+  String _fileName(String path) => path.split(RegExp(r'[\\/]')).last;
+
+  Future<void> _pickImageFile() async {
+    try {
+      final file = await openFile(
+        acceptedTypeGroups: const [
+          XTypeGroup(label: 'images', extensions: ['png', 'jpg', 'jpeg', 'webp', 'bmp']),
+        ],
+        confirmButtonText: 'Chọn ảnh',
+      );
+      if (file == null) return;
+
+      final source = File(file.path);
+      if (!await source.exists()) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('Không tìm thấy file ảnh đã chọn'), backgroundColor: Colors.red),
+          );
+        }
+        return;
+      }
+
+      final targetDir = Directory('${Directory.current.path}${Platform.pathSeparator}assets${Platform.pathSeparator}images');
+      if (!await targetDir.exists()) {
+        await targetDir.create(recursive: true);
+      }
+
+      final absSource = source.absolute.path.replaceAll('\\', '/');
+      final absTarget = targetDir.absolute.path.replaceAll('\\', '/');
+
+      String relativePath;
+      String previewPath;
+
+      if (absSource.startsWith(absTarget)) {
+        final fileName = _fileName(source.path);
+        relativePath = 'assets/images/$fileName';
+        previewPath = source.path;
+      } else {
+        final fileName = _fileName(source.path);
+        final dot = fileName.lastIndexOf('.');
+        final name = dot > 0 ? fileName.substring(0, dot) : fileName;
+        final ext = dot > 0 ? fileName.substring(dot) : '';
+        final unique = '${name}_${DateTime.now().millisecondsSinceEpoch}$ext';
+        final dest = File('${targetDir.path}${Platform.pathSeparator}$unique');
+        await source.copy(dest.path);
+        relativePath = 'assets/images/$unique';
+        previewPath = dest.path;
+      }
+
+      setState(() {
+        _imagePath = relativePath;
+        _previewImagePath = previewPath;
+      });
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Lỗi tải ảnh: $e'), backgroundColor: Colors.red),
+        );
+      }
+    }
+  }
+
   void _duplicateColorGroup(int gi) {
     final original = _groups[gi];
-    final newRows = original.rows.map((r) => _SizeRow()
-      ..size = r.size
-      ..price = r.price
-      ..stock = r.stock
-    ).toList();
+    final newRows = original.rows
+        .map((r) => _SizeRow()
+          ..size = r.size
+          ..price = r.price
+          ..stock = r.stock)
+        .toList();
     final newGroup = _ColorGroup(
       color: '${original.color} (copy)',
       rows: newRows,
@@ -52,6 +122,16 @@ class _AddProductPanelState extends State<AddProductPanel> {
   }
 
   Future<void> _save() async {
+    final name = _nameCtrl.text.trim();
+    if (name.isEmpty) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Vui lòng nhập tên sản phẩm'), backgroundColor: Colors.red),
+        );
+      }
+      return;
+    }
+
     final variants = <Map<String, dynamic>>[];
     for (final g in _groups) {
       if (g.color.trim().isEmpty) continue;
@@ -60,54 +140,160 @@ class _AddProductPanelState extends State<AddProductPanel> {
         variants.add({'color': g.color.trim(), 'size': r.size.trim(), 'price': r.price, 'stock': r.stock});
       }
     }
-    if (variants.isEmpty) return;
+
+    if (variants.isEmpty) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Vui lòng thêm ít nhất 1 màu/size hợp lệ'), backgroundColor: Colors.red),
+        );
+      }
+      return;
+    }
+
     try {
-      await ApiService.createProduct(name: _nameCtrl.text.trim(), imagePath: _imagePath, variants: variants);
+      await ApiService.createProduct(name: name, imagePath: _imagePath, variants: variants);
       widget.onAdded();
       _reset();
     } catch (e) {
-      if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('$e'), backgroundColor: Colors.red));
+      if (mounted) {
+        ScaffoldMessenger.of(context)
+            .showSnackBar(SnackBar(content: Text('$e'), backgroundColor: Colors.red));
+      }
     }
   }
 
   @override
   Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.all(12),
+    final panelHeight = (MediaQuery.of(context).size.height - 120).clamp(560.0, 1200.0);
+    final imageColumn = SizedBox(
+      width: 280,
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          const Text('Thêm sản phẩm mới', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
-          const SizedBox(height: 8),
-          TextField(controller: _nameCtrl, decoration: const InputDecoration(hintText: 'Tên giày...')),
-          const SizedBox(height: 8),
-          Expanded(
-            child: ListView(
-              children: [
-                ..._groups.asMap().entries.map((e) => _buildGroup(e.key, e.value)),
-                const SizedBox(height: 8),
-                MouseRegion(
-                  cursor: SystemMouseCursors.click,
-                  child: OutlinedButton(
-                    onPressed: () => setState(() => _groups.add(_ColorGroup(color: '', rows: [_SizeRow()]))),
-                    child: const Text('+ Nhóm Màu'),
-                  ),
-                ),
-              ],
+          Container(
+            height: 180,
+            decoration: BoxDecoration(
+              color: const Color(0xFFF8FAFC),
+              border: Border.all(color: const Color(0xFFE2E8F0)),
+              borderRadius: BorderRadius.circular(8),
             ),
+            child: _previewImagePath == null
+                ? const Center(child: Text('Chưa chọn ảnh', style: TextStyle(color: Colors.grey)))
+                : ClipRRect(
+                    borderRadius: BorderRadius.circular(8),
+                    child: Image.file(
+                      File(_previewImagePath!),
+                      fit: BoxFit.cover,
+                      errorBuilder: (_, __, ___) => const Center(
+                        child: Text('Không tải được ảnh', style: TextStyle(color: Colors.grey)),
+                      ),
+                    ),
+                  ),
           ),
-          const SizedBox(height: 8),
-          SizedBox(
-            height: 45,
-            child: MouseRegion(
-              cursor: SystemMouseCursors.click,
-              child: ElevatedButton(
-                onPressed: _save,
-                child: const Text('Lưu', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
-              ),
+          const SizedBox(height: 10),
+          MouseRegion(
+            cursor: SystemMouseCursors.click,
+            child: ElevatedButton.icon(
+              onPressed: _pickImageFile,
+              icon: const Icon(Icons.upload_file, size: 16),
+              label: const Text('Tải ảnh'),
             ),
           ),
         ],
+      ),
+    );
+
+    return Align(
+      alignment: Alignment.topLeft,
+      child: ConstrainedBox(
+        constraints: const BoxConstraints(maxWidth: 1220),
+        child: Padding(
+          padding: const EdgeInsets.all(12),
+          child: Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              SizedBox(
+                width: 900,
+                height: panelHeight,
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const Text('Thêm sản phẩm mới', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
+                    const SizedBox(height: 10),
+                    Container(
+                      width: double.infinity,
+                      padding: const EdgeInsets.all(10),
+                      decoration: BoxDecoration(
+                        color: Colors.white,
+                        border: Border.all(color: const Color(0xFFE2E8F0)),
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          const Text('Thông tin chung', style: TextStyle(fontWeight: FontWeight.w600)),
+                          const SizedBox(height: 8),
+                          TextField(controller: _nameCtrl, decoration: const InputDecoration(hintText: 'Tên giày...')),
+                        ],
+                      ),
+                    ),
+                    const SizedBox(height: 10),
+                    Expanded(
+                      child: Container(
+                        width: double.infinity,
+                        padding: const EdgeInsets.all(10),
+                        decoration: BoxDecoration(
+                          color: Colors.white,
+                          border: Border.all(color: const Color(0xFFE2E8F0)),
+                          borderRadius: BorderRadius.circular(8),
+                        ),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            const Text('Nhóm màu', style: TextStyle(fontWeight: FontWeight.w600, color: kTextSecondary)),
+                            const SizedBox(height: 8),
+                            Expanded(
+                              child: ListView(
+                                children: [
+                                  ..._groups.asMap().entries.map((e) => _buildGroup(e.key, e.value)),
+                                  const SizedBox(height: 6),
+                                  MouseRegion(
+                                    cursor: SystemMouseCursors.click,
+                                    child: OutlinedButton.icon(
+                                      onPressed: () =>
+                                          setState(() => _groups.add(_ColorGroup(color: '', rows: [_SizeRow()]))),
+                                      icon: const Icon(Icons.add, size: 16),
+                                      label: const Text('Thêm màu'),
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                    const SizedBox(height: 10),
+                    SizedBox(
+                      width: 240,
+                      height: 56,
+                      child: MouseRegion(
+                        cursor: SystemMouseCursors.click,
+                        child: ElevatedButton.icon(
+                          onPressed: _save,
+                          icon: const Icon(Icons.save_outlined, size: 20),
+                          label: const Text('Lưu', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 18)),
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(width: 16),
+              imageColumn,
+            ],
+          ),
+        ),
       ),
     );
   }
@@ -129,7 +315,15 @@ class _AddProductPanelState extends State<AddProductPanel> {
                   style: const TextStyle(fontWeight: FontWeight.bold),
                 ),
               ),
-            Tooltip(
+              MouseRegion(
+                cursor: SystemMouseCursors.click,
+                child: TextButton.icon(
+                  onPressed: () => setState(() => g.rows.add(_SizeRow())),
+                  icon: const Icon(Icons.add, size: 16),
+                  label: const Text('Size'),
+                ),
+              ),
+              Tooltip(
                 message: 'Nhân bản màu',
                 child: IconButton(
                   icon: const Icon(Icons.copy_all, size: 18, color: Colors.blue),
@@ -145,13 +339,6 @@ class _AddProductPanelState extends State<AddProductPanel> {
             ]),
             const SizedBox(height: 4),
             ...g.rows.asMap().entries.map((e) => _buildRow(g, e.key, e.value)),
-            MouseRegion(
-              cursor: SystemMouseCursors.click,
-              child: TextButton(
-                onPressed: () => setState(() => g.rows.add(_SizeRow())),
-                child: const Text('+ Thêm Size'),
-              ),
-            ),
           ],
         ),
       ),
@@ -160,39 +347,41 @@ class _AddProductPanelState extends State<AddProductPanel> {
 
   Widget _buildRow(_ColorGroup g, int ri, _SizeRow r) {
     return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 2),
+      padding: const EdgeInsets.symmetric(vertical: 4),
       child: Row(children: [
         SizedBox(
-          width: 55,
+          width: 72,
           child: TextFormField(
             initialValue: r.size,
             textAlign: TextAlign.center,
+            style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w500),
             decoration: const InputDecoration(
               hintText: 'Size',
-              contentPadding: EdgeInsets.symmetric(horizontal: 6, vertical: 10),
+              contentPadding: EdgeInsets.symmetric(horizontal: 8, vertical: 12),
             ),
             onChanged: (v) => r.size = v,
           ),
         ),
-        const SizedBox(width: 4),
-        Expanded(child: _ScrollableNumberField(
-          value: r.price,
-          hintText: 'Giá',
-          onChanged: (v) => setState(() => r.price = v),
-          step: 1000,
-        )),
-        const SizedBox(width: 4),
+        const SizedBox(width: 6),
         SizedBox(
-          width: 55,
+          width: 78,
           child: _ScrollableNumberField(
             value: r.stock,
             hintText: 'SL',
             onChanged: (v) => setState(() => r.stock = v),
             step: 1,
-            contentPadding: const EdgeInsets.symmetric(horizontal: 6, vertical: 10),
+            contentPadding: const EdgeInsets.symmetric(horizontal: 8, vertical: 12),
             textAlign: TextAlign.center,
           ),
         ),
+        const SizedBox(width: 8),
+        Expanded(
+            child: _ScrollableNumberField(
+          value: r.price,
+          hintText: 'Giá',
+          onChanged: (v) => setState(() => r.price = v),
+          step: 1000,
+        )),
         IconButton(
           icon: const Icon(Icons.close, color: Colors.red, size: 16),
           mouseCursor: SystemMouseCursors.click,

@@ -2,7 +2,6 @@ import 'package:flutter/material.dart';
 import '../app_pages.dart';
 import '../services/notification_service.dart';
 import '../theme.dart';
-import 'dashboard_screen.dart';
 import 'pos_screen.dart';
 import 'debt_screen.dart';
 import 'orders_screen.dart';
@@ -17,7 +16,7 @@ class HomeScreen extends StatefulWidget {
 }
 
 class _HomeScreenState extends State<HomeScreen> {
-  AppPage _page = AppPage.dashboard;
+  AppPage _page = AppPage.inventory;
   final GlobalKey<PosScreenState> _posKey = GlobalKey();
 
   void _select(AppPage p) {
@@ -37,23 +36,19 @@ class _HomeScreenState extends State<HomeScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      body: Row(
-        children: [
-          _Sidebar(selected: _page, onSelect: _select),
-          Expanded(child: _body()),
-        ],
-      ),
+      body: _body(),
+      bottomNavigationBar: _BottomNavBar(selected: _page, onSelect: _select),
     );
   }
 
   Widget _body() {
     switch (_page) {
-      case AppPage.dashboard:
-        return DashboardScreen(onNavigate: _select);
       case AppPage.pos:
         return PosScreen(key: _posKey, inventoryMode: false);
       case AppPage.inventory:
-        return const PosScreen(inventoryMode: true);
+        return const PosScreen(inventoryMode: true, showRightPanel: false);
+      case AppPage.stockIn:
+        return const PosScreen(inventoryMode: true, showProductArea: false);
       case AppPage.debt:
         return DebtScreen(onEditOrder: switchToPosWithOrder);
       case AppPage.orders:
@@ -64,66 +59,38 @@ class _HomeScreenState extends State<HomeScreen> {
   }
 }
 
-class _Sidebar extends StatelessWidget {
+class _BottomNavBar extends StatelessWidget {
   final AppPage selected;
   final ValueChanged<AppPage> onSelect;
-  const _Sidebar({required this.selected, required this.onSelect});
+  const _BottomNavBar({required this.selected, required this.onSelect});
 
   @override
   Widget build(BuildContext context) {
     final pendingCount = NotificationService.pendingOrderCount;
     return Container(
-      width: 200,
-      color: kSidebar,
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          Container(
-            padding: const EdgeInsets.fromLTRB(20, 24, 20, 20),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Container(
-                  width: 40,
-                  height: 40,
-                  decoration: BoxDecoration(
-                    color: kPrimary,
-                    borderRadius: BorderRadius.circular(10),
-                  ),
-                  child: const Icon(Icons.store, color: Colors.white, size: 22),
-                ),
-                const SizedBox(height: 10),
-                const Text(
-                  'Quản lý Kho',
-                  style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 15),
-                ),
-                const Text(
-                  'Store Manager',
-                  style: TextStyle(color: Color(0xFF94A3B8), fontSize: 11),
-                ),
-              ],
+      decoration: const BoxDecoration(
+        color: Colors.white,
+        border: Border(top: BorderSide(color: kBorder)),
+      ),
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+      child: SingleChildScrollView(
+        scrollDirection: Axis.horizontal,
+        child: Row(
+          children: [
+            _item(Icons.point_of_sale_outlined, Icons.point_of_sale, 'Xuất hàng', AppPage.pos),
+            _item(Icons.inventory_2_outlined, Icons.inventory_2, 'Kho hàng', AppPage.inventory),
+            _item(Icons.add_box_outlined, Icons.add_box, 'Nhập hàng', AppPage.stockIn),
+            _item(Icons.people_outline, Icons.people, 'Công nợ', AppPage.debt),
+            _item(Icons.receipt_long_outlined, Icons.receipt_long, 'Hóa đơn', AppPage.orders),
+            _item(
+              Icons.fact_check_outlined,
+              Icons.fact_check,
+              'Duyệt đơn',
+              AppPage.pendingApproval,
+              badgeCount: pendingCount,
             ),
-          ),
-          const Divider(color: Color(0xFF334155), height: 1),
-          const SizedBox(height: 8),
-          _item(Icons.dashboard_outlined, Icons.dashboard, 'Tổng quan', AppPage.dashboard),
-          _item(Icons.point_of_sale_outlined, Icons.point_of_sale, 'Xuất hàng', AppPage.pos),
-          _item(Icons.inventory_2_outlined, Icons.inventory_2, 'Kho hàng', AppPage.inventory),
-          _item(Icons.people_outline, Icons.people, 'Công nợ', AppPage.debt),
-          _item(Icons.receipt_long_outlined, Icons.receipt_long, 'Hóa đơn', AppPage.orders),
-          _item(
-            Icons.fact_check_outlined,
-            Icons.fact_check,
-            'Duyệt đơn',
-            AppPage.pendingApproval,
-            badgeCount: pendingCount,
-          ),
-          const Spacer(),
-          const Padding(
-            padding: EdgeInsets.all(20),
-            child: Text('v1.0.0', style: TextStyle(color: Color(0xFF475569), fontSize: 11)),
-          ),
-        ],
+          ],
+        ),
       ),
     );
   }
@@ -131,36 +98,36 @@ class _Sidebar extends StatelessWidget {
   Widget _item(IconData icon, IconData activeIcon, String label, AppPage page, {int badgeCount = 0}) {
     final active = selected == page;
     return Container(
-      margin: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+      margin: const EdgeInsets.symmetric(horizontal: 4),
       child: InkWell(
         mouseCursor: SystemMouseCursors.click,
         onTap: () => onSelect(page),
         borderRadius: BorderRadius.circular(8),
         child: AnimatedContainer(
           duration: const Duration(milliseconds: 150),
-          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 11),
-            decoration: BoxDecoration(
-            color: active ? kSidebarActive : Colors.transparent,
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+          decoration: BoxDecoration(
+            color: active ? kPrimaryLight : Colors.transparent,
             borderRadius: BorderRadius.circular(8),
-              border: active ? const Border(left: BorderSide(color: kPrimary, width: 3)) : null,
+            border: Border.all(color: active ? kPrimary : Colors.transparent),
           ),
           child: Row(
             children: [
               Icon(
                 active ? activeIcon : icon,
-                color: active ? kPrimary : const Color(0xFF94A3B8),
+                color: active ? kPrimary : kTextSecondary,
                 size: 18,
               ),
-              const SizedBox(width: 10),
+              const SizedBox(width: 8),
               Text(
                 label,
                 style: TextStyle(
-                  color: active ? Colors.white : const Color(0xFF94A3B8),
+                  color: active ? kPrimary : kTextSecondary,
                   fontWeight: active ? FontWeight.w600 : FontWeight.normal,
                   fontSize: 13,
                 ),
               ),
-              const Spacer(),
+              const SizedBox(width: 6),
               if (badgeCount > 0)
                 Container(
                   width: 8,

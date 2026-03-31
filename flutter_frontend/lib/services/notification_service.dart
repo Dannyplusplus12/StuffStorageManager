@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'dart:convert';
+import 'dart:developer' as developer;
 import 'package:http/http.dart' as http;
 import '../config.dart';
 import '../models/order.dart';
@@ -47,7 +48,7 @@ class NotificationService {
         }
       }
     } catch (e) {
-      print('Error checking pending orders: $e');
+      developer.log('Error checking pending orders: $e', name: 'NotificationService');
     }
   }
   
@@ -70,7 +71,7 @@ class NotificationService {
       }
       return [];
     } catch (e) {
-      print('Error fetching pending orders: $e');
+      developer.log('Error fetching pending orders: $e', name: 'NotificationService');
       return [];
     }
   }

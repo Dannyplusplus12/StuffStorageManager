@@ -12,7 +12,16 @@ import '../widgets/add_product_panel.dart';
 
 class PosScreen extends StatefulWidget {
   final bool inventoryMode;
-  const PosScreen({super.key, required this.inventoryMode});
+  final bool showRightPanel;
+  final bool showProductArea;
+  final String? titleOverride;
+  const PosScreen({
+    super.key,
+    required this.inventoryMode,
+    this.showRightPanel = true,
+    this.showProductArea = true,
+    this.titleOverride,
+  });
   @override
   PosScreenState createState() => PosScreenState();
 }
@@ -141,6 +150,17 @@ class PosScreenState extends State<PosScreen> {
 
   @override
   Widget build(BuildContext context) {
+    if (!widget.showProductArea) {
+      return Container(
+        color: Colors.white,
+        child: AddProductPanel(onAdded: () => _loadProducts(_search)),
+      );
+    }
+
+    if (!widget.showRightPanel) {
+      return _productArea();
+    }
+
     return LayoutBuilder(
       builder: (context, constraints) {
         final panelWidth = constraints.maxWidth >= 1200
@@ -180,7 +200,7 @@ class PosScreenState extends State<PosScreen> {
                 children: [
                   Flexible(
                     child: Text(
-                      widget.inventoryMode ? 'Kho hàng' : 'Xuất hàng',
+                      widget.titleOverride ?? (widget.inventoryMode ? 'Kho hàng' : 'Xuất hàng'),
                       style: const TextStyle(fontSize: 20, fontWeight: FontWeight.bold, color: kTextPrimary),
                       overflow: TextOverflow.ellipsis,
                     ),
@@ -458,8 +478,8 @@ class PosScreenState extends State<PosScreen> {
           height: 48,
             child: ElevatedButton.icon(
               style: ButtonStyle(
-                mouseCursor: MaterialStateProperty.resolveWith((states) =>
-                    states.contains(MaterialState.disabled) ? SystemMouseCursors.basic : SystemMouseCursors.click),
+                mouseCursor: WidgetStateProperty.resolveWith((states) =>
+                    states.contains(WidgetState.disabled) ? SystemMouseCursors.basic : SystemMouseCursors.click),
               ),
               onPressed: _cart.isNotEmpty ? _checkout : null,
               icon: Icon(_editingOrderId != null ? Icons.update : Icons.shopping_cart_checkout, size: 18),
@@ -475,8 +495,8 @@ class PosScreenState extends State<PosScreen> {
             height: 36,
               child: OutlinedButton(
                 style: ButtonStyle(
-                  mouseCursor: MaterialStateProperty.all(SystemMouseCursors.click),
-                  foregroundColor: MaterialStateProperty.all(Colors.grey),
+                  mouseCursor: WidgetStateProperty.all(SystemMouseCursors.click),
+                  foregroundColor: WidgetStateProperty.all(Colors.grey),
                 ),
                 onPressed: cancelEditing,
                 child: const Text('Hủy chỉnh sửa', style: TextStyle(fontSize: 12)),
