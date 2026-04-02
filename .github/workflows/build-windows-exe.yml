@@ -12,9 +12,6 @@ on:
 jobs:
   build-flutter-windows-exe:
     runs-on: windows-latest
-    defaults:
-      run:
-        working-directory: frontend
 
     steps:
       - name: Checkout repository
@@ -28,10 +25,12 @@ jobs:
           cache: true
 
       - name: Install dependencies
+        working-directory: frontend
         run: |
           flutter pub get
 
       - name: Build Windows release
+        working-directory: frontend
         run: flutter build windows --release
 
       - name: Upload Windows EXE artifact

@@ -12,9 +12,6 @@ on:
 jobs:
   build-android-apk:
     runs-on: ubuntu-latest
-    defaults:
-      run:
-        working-directory: frontend
 
     steps:
       - name: Checkout repository
@@ -34,9 +31,11 @@ jobs:
           cache: true
 
       - name: Install dependencies
+        working-directory: frontend
         run: flutter pub get
 
       - name: Build release APK
+        working-directory: frontend
         run: flutter build apk --release
 
       - name: Upload APK artifact

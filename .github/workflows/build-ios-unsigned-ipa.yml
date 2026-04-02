@@ -12,9 +12,6 @@ on:
 jobs:
   build-ios-unsigned-ipa:
     runs-on: macos-latest
-    defaults:
-      run:
-        working-directory: frontend
 
     steps:
       - name: Checkout repository
@@ -28,9 +25,11 @@ jobs:
           cache: true
 
       - name: Install dependencies
+        working-directory: frontend
         run: flutter pub get
 
       - name: Verify iOS platform exists
+        working-directory: frontend
         run: |
           if [ ! -d "ios" ]; then
             echo "Missing frontend/ios. Run: flutter create --platforms=ios ."
@@ -38,9 +37,11 @@ jobs:
           fi
 
       - name: Build iOS app without code signing
+        working-directory: frontend
         run: flutter build ios --release --no-codesign
 
       - name: Package unsigned IPA
+        working-directory: frontend
         run: |
           APP_PATH="build/ios/iphoneos/Runner.app"
           if [ ! -d "$APP_PATH" ]; then
