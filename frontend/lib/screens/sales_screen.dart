@@ -1,0 +1,520 @@
+import 'package:flutter/material.dart';
+
+import '../models/customer.dart';
+import '../models/order.dart';
+import '../models/product.dart';
+import '../services/api_service.dart';
+import '../theme.dart';
+import '../utils.dart';
+
+class SalesScreen extends StatefulWidget {
+  const SalesScreen({super.key});
+
+  @override
+  State<SalesScreen> createState() => _SalesScreenState();
+}
+
+class _SalesScreenState extends State<SalesScreen> {
+  final _customerCtrl = TextEditingController();
+  final _customerFocus = FocusNode();
+  final _phoneCtrl = TextEditingController();
+  final _dateCtrl = TextEditingController(text: _todayText());
+
+  List<Customer> _customers = [];
+  List<Product> _products = [];
+  final List<_SaleRow> _rows = [_SaleRow()];
+  bool _loading = false;
+
+  static String _todayText() {
+    final now = DateTime.now();
+    return '${now.day}/${now.month}/${now.year}';
+  }
+
+  @override
+  void initState() {
+    super.initState();
+    _load();
+  }
+
+  @override
+  void dispose() {
+    _customerCtrl.dispose();
+    _customerFocus.dispose();
+    _phoneCtrl.dispose();
+    _dateCtrl.dispose();
+    for (final r in _rows) {
+      r.dispose();
+    }
+    super.dispose();
+  }
+
+  Future<void> _load() async {
+    setState(() => _loading = true);
+    try {
+      final rs = await Future.wait([
+        ApiService.getCustomers(),
+        ApiService.getProducts(),
+      ]);
+      if (mounted) {
+        setState(() {
+          _customers = rs[0] as List<Customer>;
+          _products = rs[1] as List<Product>;
+        });
+      }
+    } catch (e) {
+      _snack('$e', Colors.red);
+    }
+    if (mounted) setState(() => _loading = false);
+  }
+
+  void _snack(String msg, Color bg) {
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(msg), backgroundColor: bg));
+  }
+
+  String _norm(String s) {
+    const withAccents = 'àáảãạăằắẳẵặâầấẩẫậèéẻẽẹêềếểễệìíỉĩịòóỏõọôồốổỗộơờớởỡợùúủũụưừứửữựỳýỷỹỵđ';
+    const withoutAccents = 'aaaaaaaaaaaaaaaaaeeeeeeeeeeeiiiiiooooooooooooooooouuuuuuuuuuuyyyyyyd';
+    final low = s.toLowerCase().trim();
+    final out = StringBuffer();
+    for (int i = 0; i < low.length; i++) {
+      final idx = withAccents.indexOf(low[i]);
+      out.write(idx == -1 ? low[i] : withoutAccents[idx]);
+    }
+    return out.toString();
+  }
+
+  Product? _findProductExact(String input) {
+    final key = _norm(input);
+    for (final p in _products) {
+      if (_norm(p.code) == key || _norm(p.name) == key) return p;
+    }
+    return null;
+  }
+
+  Variant? _findVariantExact(Product? p, String colorInput, String sizeInput) {
+    if (p == null) return null;
+    final cKey = _norm(colorInput);
+    final sKey = _norm(sizeInput);
+    for (final v in p.variants) {
+      if (_norm(v.color) == cKey && _norm(v.size) == sKey) return v;
+    }
+    return null;
+  }
+
+  List<String> _productCodes(String q) {
+    final key = _norm(q);
+    final codes = _products.map((e) => e.code.isEmpty ? e.name : e.code).toSet().toList();
+    codes.sort();
+    if (key.isEmpty) return codes;
+    return codes.where((n) => _norm(n).contains(key)).toList();
+  }
+
+  List<String> _colorsFor(_SaleRow r, String q) {
+    final p = _findProductExact(r.codeCtrl.text);
+    final colors = (p?.variants.map((v) => v.color).toSet().toList() ?? []);
+    colors.sort();
+    final key = _norm(q);
+    if (key.isEmpty) return colors;
+    return colors.where((c) => _norm(c).contains(key)).toList();
+  }
+
+  List<String> _sizesFor(_SaleRow r, String q) {
+    final p = _findProductExact(r.codeCtrl.text);
+    final cKey = _norm(r.colorCtrl.text);
+    final sizes = (p?.variants.where((v) => cKey.isEmpty || _norm(v.color) == cKey).map((v) => v.size).toSet().toList() ?? []);
+    sizes.sort();
+    final key = _norm(q);
+    if (key.isEmpty) return sizes;
+    return sizes.where((s) => _norm(s).contains(key)).toList();
+  }
+
+  void _onCodeChanged(_SaleRow r, String v) {
+    final p = _findProductExact(v);
+    if (p != null) {
+      r.nameCtrl.text = p.name;
+      if (p.variants.length == 1) {
+        final only = p.variants.first;
+        r.colorCtrl.text = only.color;
+        r.sizeCtrl.text = only.size;
+        r.price = only.price;
+      }
+    }
+    _recalcRow(r);
+  }
+
+  void _onColorOrSizeChanged(_SaleRow r) {
+    final p = _findProductExact(r.codeCtrl.text);
+    final exact = _findVariantExact(p, r.colorCtrl.text, r.sizeCtrl.text);
+    if (exact != null) {
+      r.price = exact.price;
+    }
+    _recalcRow(r);
+  }
+
+  void _recalcRow(_SaleRow r) {
+    final q = int.tryParse(r.qtyCtrl.text.trim()) ?? 0;
+    r.amount = q * r.price;
+    setState(() {});
+  }
+
+  int get _total => _rows.fold(0, (s, r) => s + r.amount);
+
+  Future<void> _submit() async {
+    final cart = <CartItem>[];
+    for (final r in _rows) {
+      final p = _findProductExact(r.codeCtrl.text);
+      final v = _findVariantExact(p, r.colorCtrl.text, r.sizeCtrl.text);
+      final qty = int.tryParse(r.qtyCtrl.text.trim()) ?? 0;
+      if (p == null || v == null || v.id == null || qty <= 0) continue;
+      cart.add(CartItem(
+        variantId: v.id!,
+        productName: p.name,
+        color: v.color,
+        size: v.size,
+        price: v.price,
+        quantity: qty,
+      ));
+    }
+    if (cart.isEmpty) {
+      _snack('Chưa có dòng hợp lệ để bán', Colors.red);
+      return;
+    }
+    try {
+      await ApiService.checkout(
+        customerName: _customerCtrl.text.trim(),
+        customerPhone: _phoneCtrl.text.trim(),
+        cart: cart,
+      );
+      _snack('Đã xuất kho & ghi công nợ', Colors.green);
+      setState(() {
+        for (final r in _rows) {
+          r.dispose();
+        }
+        _rows
+          ..clear()
+          ..add(_SaleRow());
+      });
+    } catch (e) {
+      _snack('$e', Colors.red);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.all(12),
+      child: Center(
+        child: ConstrainedBox(
+          constraints: const BoxConstraints(maxWidth: 1240),
+          child: Column(
+            children: [
+              Container(
+                width: double.infinity,
+                padding: const EdgeInsets.all(10),
+                decoration: BoxDecoration(color: Colors.white, border: Border.all(color: kBorder), borderRadius: BorderRadius.circular(8)),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const Text('Bán hàng', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: kTextPrimary)),
+                    const SizedBox(height: 8),
+                    Table(
+                      columnWidths: const {
+                        0: FixedColumnWidth(360),
+                        1: FixedColumnWidth(12),
+                        2: FixedColumnWidth(220),
+                        3: FixedColumnWidth(12),
+                        4: FixedColumnWidth(160),
+                      },
+                      children: [
+                        const TableRow(
+                          children: [
+                            Padding(
+                              padding: EdgeInsets.only(bottom: 4),
+                              child: Text('Khách hàng', style: TextStyle(fontSize: 12, color: kTextSecondary, fontWeight: FontWeight.w600)),
+                            ),
+                            SizedBox.shrink(),
+                            Padding(
+                              padding: EdgeInsets.only(bottom: 4),
+                              child: Text('Số điện thoại', style: TextStyle(fontSize: 12, color: kTextSecondary, fontWeight: FontWeight.w600)),
+                            ),
+                            SizedBox.shrink(),
+                            Padding(
+                              padding: EdgeInsets.only(bottom: 4),
+                              child: Text('Ngày xuất', style: TextStyle(fontSize: 12, color: kTextSecondary, fontWeight: FontWeight.w600)),
+                            ),
+                          ],
+                        ),
+                        TableRow(
+                          children: [
+                            SizedBox(
+                              height: 44,
+                              child: _autoInput(
+                                label: null,
+                                controller: _customerCtrl,
+                                focusNode: _customerFocus,
+                                optionsWidth: 360,
+                                source: (q) {
+                                  final names = _customers.map((e) => e.name).toList();
+                                  final key = _norm(q);
+                                  if (key.isEmpty) return names;
+                                  return names.where((n) => _norm(n).contains(key)).toList();
+                                },
+                                onChanged: (v) {
+                                  final key = _norm(v);
+                                  final hit = _customers.where((c) => _norm(c.name) == key).toList();
+                                  if (hit.isNotEmpty) _phoneCtrl.text = hit.first.phone;
+                                },
+                              ),
+                            ),
+                            const SizedBox.shrink(),
+                            SizedBox(
+                              height: 44,
+                              child: TextField(controller: _phoneCtrl, decoration: const InputDecoration(hintText: 'Số điện thoại')),
+                            ),
+                            const SizedBox.shrink(),
+                            SizedBox(
+                              height: 44,
+                              child: TextField(controller: _dateCtrl, decoration: const InputDecoration(hintText: 'Ngày xuất')),
+                            ),
+                          ],
+                        ),
+                      ],
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(height: 10),
+              Expanded(
+                child: Container(
+                  width: double.infinity,
+                  decoration: BoxDecoration(color: Colors.white, border: Border.all(color: kBorder), borderRadius: BorderRadius.circular(8)),
+                  child: _loading
+                      ? const Center(child: CircularProgressIndicator())
+                      : Column(
+                          children: [
+                            _header(),
+                            Expanded(
+                              child: ListView(
+                                children: _rows.asMap().entries.map((e) => _row(e.key, e.value)).toList(),
+                              ),
+                            ),
+                            Container(
+                              width: double.infinity,
+                              padding: const EdgeInsets.only(left: 8, bottom: 6),
+                              decoration: const BoxDecoration(border: Border(top: BorderSide(color: kBorder))),
+                              child: Align(
+                                alignment: Alignment.centerLeft,
+                                child: TextButton.icon(
+                                  onPressed: () => setState(() => _rows.add(_SaleRow())),
+                                  icon: const Icon(Icons.add, size: 16),
+                                  label: const Text('Thêm dòng'),
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
+                ),
+              ),
+              const SizedBox(height: 10),
+              Container(
+                width: double.infinity,
+                padding: const EdgeInsets.symmetric(horizontal: 4),
+                child: Row(
+                  children: [
+                    Text('TỔNG TIỀN: ${formatCurrency(_total)} đ', style: const TextStyle(fontSize: 34, fontWeight: FontWeight.bold)),
+                    const Spacer(),
+                    SizedBox(
+                      height: 48,
+                      width: 280,
+                      child: ElevatedButton(
+                        onPressed: _submit,
+                        child: const Text('XUẤT KHO & GHI CÔNG NỢ', style: TextStyle(fontWeight: FontWeight.bold)),
+                      ),
+                    )
+                  ],
+                ),
+              )
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _header() {
+    Widget th(String t, {double? w}) => SizedBox(width: w, child: Text(t, style: const TextStyle(fontWeight: FontWeight.bold)));
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 10),
+      decoration: const BoxDecoration(border: Border(bottom: BorderSide(color: kBorder)), color: Color(0xFFF8FAFC)),
+      child: Row(
+        children: [
+          th('Mã hàng', w: 140),
+          const SizedBox(width: 8),
+          th('Tên mặt hàng', w: 220),
+          const SizedBox(width: 8),
+          th('Màu sắc', w: 150),
+          const SizedBox(width: 8),
+          th('SL', w: 70),
+          const SizedBox(width: 8),
+          th('Size', w: 100),
+          const SizedBox(width: 8),
+          th('Đơn giá', w: 120),
+          const SizedBox(width: 8),
+          th('Thành tiền', w: 130),
+          const SizedBox(width: 40),
+        ],
+      ),
+    );
+  }
+
+  Widget _row(int idx, _SaleRow r) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
+      decoration: const BoxDecoration(border: Border(bottom: BorderSide(color: kBorder))),
+      child: Row(
+        children: [
+          SizedBox(
+            width: 140,
+            child: _autoInput(
+              controller: r.codeCtrl,
+              focusNode: r.codeFocus,
+              optionsWidth: 220,
+              source: (q) => _productCodes(q),
+              onChanged: (v) => _onCodeChanged(r, v),
+            ),
+          ),
+          const SizedBox(width: 8),
+          SizedBox(width: 220, child: TextField(controller: r.nameCtrl)),
+          const SizedBox(width: 8),
+          SizedBox(
+            width: 150,
+            child: _autoInput(
+              controller: r.colorCtrl,
+              focusNode: r.colorFocus,
+              optionsWidth: 220,
+              source: (q) => _colorsFor(r, q),
+              onChanged: (_) => _onColorOrSizeChanged(r),
+            ),
+          ),
+          const SizedBox(width: 8),
+          SizedBox(
+            width: 70,
+            child: TextField(
+              controller: r.qtyCtrl,
+              keyboardType: TextInputType.number,
+              onChanged: (_) => _recalcRow(r),
+            ),
+          ),
+          const SizedBox(width: 8),
+          SizedBox(
+            width: 100,
+            child: _autoInput(
+              controller: r.sizeCtrl,
+              focusNode: r.sizeFocus,
+              optionsWidth: 180,
+              source: (q) => _sizesFor(r, q),
+              onChanged: (_) => _onColorOrSizeChanged(r),
+            ),
+          ),
+          const SizedBox(width: 8),
+          SizedBox(width: 120, child: Text(formatCurrency(r.price))),
+          SizedBox(width: 130, child: Text(formatCurrency(r.amount))),
+          IconButton(
+            mouseCursor: SystemMouseCursors.click,
+            onPressed: _rows.length <= 1
+                ? null
+                : () {
+                    setState(() {
+                      final row = _rows.removeAt(idx);
+                      row.dispose();
+                    });
+                  },
+            icon: const Icon(Icons.delete, color: Colors.red, size: 18),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _autoInput({
+    String? label,
+    required TextEditingController controller,
+    required FocusNode focusNode,
+    required double optionsWidth,
+    required List<String> Function(String query) source,
+    required ValueChanged<String> onChanged,
+  }) {
+    return RawAutocomplete<String>(
+      textEditingController: controller,
+      focusNode: focusNode,
+      optionsBuilder: (textEditingValue) => source(textEditingValue.text),
+      displayStringForOption: (o) => o,
+      onSelected: (v) {
+        controller.text = v;
+        onChanged(v);
+      },
+      fieldViewBuilder: (context, ctrl, focusNode, onFieldSubmitted) {
+        return TextField(
+          controller: ctrl,
+          focusNode: focusNode,
+          decoration: InputDecoration(labelText: label),
+          onChanged: onChanged,
+        );
+      },
+      optionsViewBuilder: (context, onSelected, options) {
+        final opts = options.toList();
+        if (opts.isEmpty) return const SizedBox.shrink();
+        return Align(
+          alignment: Alignment.topLeft,
+          child: Material(
+            elevation: 4,
+            child: SizedBox(
+              width: optionsWidth,
+              child: ConstrainedBox(
+                constraints: const BoxConstraints(maxHeight: 220),
+                child: ListView.builder(
+                  padding: EdgeInsets.zero,
+                  shrinkWrap: true,
+                  itemCount: opts.length,
+                  itemBuilder: (_, i) {
+                    final o = opts[i];
+                    return ListTile(
+                      dense: true,
+                      title: Text(o),
+                      onTap: () => onSelected(o),
+                    );
+                  },
+                ),
+              ),
+            ),
+          ),
+        );
+      },
+    );
+  }
+}
+
+class _SaleRow {
+  final codeCtrl = TextEditingController();
+  final codeFocus = FocusNode();
+  final nameCtrl = TextEditingController();
+  final colorCtrl = TextEditingController();
+  final colorFocus = FocusNode();
+  final sizeCtrl = TextEditingController();
+  final sizeFocus = FocusNode();
+  final qtyCtrl = TextEditingController(text: '0');
+  int price = 0;
+  int amount = 0;
+
+  void dispose() {
+    codeCtrl.dispose();
+    codeFocus.dispose();
+    nameCtrl.dispose();
+    colorCtrl.dispose();
+    colorFocus.dispose();
+    sizeCtrl.dispose();
+    sizeFocus.dispose();
+    qtyCtrl.dispose();
+  }
+}

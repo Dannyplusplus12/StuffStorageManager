@@ -29,9 +29,28 @@
 !backend/*.toml
 !backend/Procfile
 
-# Frontend (Python legacy)
+# Frontend (Flutter app source)
 !frontend/
-!frontend/*.py
+!frontend/**
+
+# Keep frontend build artifacts ignored
+frontend/build/
+frontend/.dart_tool/
+frontend/.flutter-plugins
+frontend/.flutter-plugins-dependencies
+frontend/.packages
+frontend/pubspec.lock
+frontend/**/.g.dart
+frontend/**/*.g.dart
+frontend/**/doc/api/
+frontend/**/.dart_tool/
+frontend/**/build/
+frontend/android/.gradle/
+frontend/android/local.properties
+frontend/ios/Pods/
+frontend/macos/Pods/
+frontend/windows/flutter/ephemeral/
+frontend/linux/flutter/ephemeral/
 
 # Flutter frontend - ALL files and folders
 !flutter_frontend/
