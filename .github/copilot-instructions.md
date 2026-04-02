@@ -8,6 +8,21 @@
 - Input fields should behave like normal text editing without automatic text selection/highlighting; keep both quantity controls: +/- buttons and direct typing.
 - Action buttons, such as logout, must be clearly visible; use bright/active colors to avoid faded/disabled-looking styles.
 - Ensure to read and record updates in `PROJECT_CONTEXT.md` for tracking changes and maintaining project integrity.
+- Project organization preference: use `server-repo/` as canonical server backend, remove legacy `frontend/` desktop PyQt artifacts, and consolidate Excel/data scripts into a single folder under `backend/` for cleaner root structure.
+- **Project structure changed**: Flutter source now lives in `frontend/`; `flutter_frontend/` is no longer used except for leftover build artifacts.
+- For current big update planning, do not add/use `products.code`; keep migration and APIs without this column unless explicitly requested again.
+- Big-update decision: keep `order_items.variant_info` for historical integrity; do not remove it because invoice history must still display correctly even if related `variant_id` is later deleted. Drop `variant_info` usage in future changes to avoid regressions.
+- Implement a role/PIN-based employee management system: desktop adds staff-management CRUD (name, phone, role, random PIN), login by PIN loads role-specific UI, and order flow expands to pending->approved->assigned (received by picker)->delivered (with mandatory photo proof), with full desktop tracking/history including who/when/proof image.
+- Mobile app entry must skip role selection and use PIN-only login that auto-detects and shows role UI. The picker must keep the inventory (`Kho hàng`) tab for lookup while processing orders.
+
+## UI/Feature Preferences
+- UI/feature preference for current update: add dedicated `Khu vực` menu/page; debt screen layout should keep new-customer form on the left and customer list in the center; customer name input should open full dropdown on focus and filter while typing; area selection is required when creating/updating customers.
+- Add a separate desktop Flutter page `Bán hàng` (same business intent as `Xuất hàng` but for different users) with table-style entry and immediate real-time dropdown+typing for item code/color/size; matching should be case-insensitive for convenience.
+- Stock-in (`Nhập hàng`) must include explicit product code input and feature a fully refreshed layout. Focus on improving the alignment of `Nhập hàng` (not `Xuất hàng`), ensuring titles/values are straight and potentially adopting a grid-style layout similar to the debt history.
+- Popup edit/delete menus in `Khu vực` and `Xuất hàng/Kho hàng` should follow the same modern custom dialog style.
+- User prefers bold, creative UI over minimal/default for desktop pages; specifically wants `Xuất hàng` and `Nhập hàng` layouts to be fully re-arranged for a compact, modern, inspirational look rather than incremental tweaks.
+- Change mobile orderer app bar title text from 'Người soạn đơn' to 'Order'.
+- In the orderer 'Xem' popup, remove the top grouped summary lines (e.g., 'G97 • Màu Đen • 4 cái') as redundant.
 
 ## Desktop UI Guidelines
 - Interactive buttons in the desktop Flutter UI should show `SystemMouseCursors.click` cursor feedback (not `grab`).

@@ -33,6 +33,7 @@ SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 class Product(Base):
     __tablename__ = "products"
     id = Column(Integer, primary_key=True, index=True)
+    code = Column(String, index=True, default="")
     name = Column(String, index=True)
     description = Column(String, default="")
     image_path = Column(String, default="") 
@@ -48,6 +49,12 @@ class Variant(Base):
     stock = Column(Integer)
     product = relationship("Product", back_populates="variants")
 
+class Area(Base):
+    __tablename__ = "areas"
+    id = Column(Integer, primary_key=True, index=True)
+    name = Column(String, unique=True, index=True)
+    customers = relationship("Customer", back_populates="area_rel")
+
 # 2. Customer & Debt (MỚI)
 class Customer(Base):
     __tablename__ = "customers"
@@ -55,7 +62,9 @@ class Customer(Base):
     name = Column(String, index=True, unique=True) # Tên là định danh duy nhất để gợi ý
     phone = Column(String, default="")
     debt = Column(Integer, default=0) # Tổng nợ hiện tại
+    area_id = Column(Integer, ForeignKey("areas.id"), nullable=True)
     
+    area_rel = relationship("Area", back_populates="customers")
     logs = relationship("DebtLog", back_populates="customer", cascade="all, delete-orphan")
     orders = relationship("Order", back_populates="customer_rel")
 
@@ -86,9 +95,16 @@ class Order(Base):
     # status: 'pending' | 'accepted' | 'completed'
     status = Column(String, default='completed')
     picker_note = Column(String, default="")
+    assigned_picker_id = Column(Integer, ForeignKey("employees.id"), nullable=True)
+    assigned_at = Column(DateTime, nullable=True)
+    delivered_by_id = Column(Integer, ForeignKey("employees.id"), nullable=True)
+    delivered_at = Column(DateTime, nullable=True)
+    delivery_photo_path = Column(String, default="")
 
     items = relationship("OrderItem", back_populates="order")
     customer_rel = relationship("Customer", back_populates="orders")
+    assigned_picker = relationship("Employee", foreign_keys=[assigned_picker_id], back_populates="assigned_orders")
+    delivered_by = relationship("Employee", foreign_keys=[delivered_by_id], back_populates="delivered_orders")
 
 class OrderItem(Base):
     __tablename__ = "order_items"
@@ -100,3 +116,16 @@ class OrderItem(Base):
     quantity = Column(Integer)
     price = Column(Integer)
     order = relationship("Order", back_populates="items")
+
+
+class Employee(Base):
+    __tablename__ = "employees"
+    id = Column(Integer, primary_key=True, index=True)
+    name = Column(String, index=True)
+    phone = Column(String, default="")
+    role = Column(String, index=True)
+    pin = Column(String, unique=True, index=True)
+    created_at = Column(DateTime, default=datetime.now)
+
+    assigned_orders = relationship("Order", foreign_keys=[Order.assigned_picker_id], back_populates="assigned_picker")
+    delivered_orders = relationship("Order", foreign_keys=[Order.delivered_by_id], back_populates="delivered_by")

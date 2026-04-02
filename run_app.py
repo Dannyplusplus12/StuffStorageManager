@@ -4,6 +4,7 @@ import uvicorn
 import time
 import os
 import traceback
+import importlib.util
 from multiprocessing import freeze_support
 try:
     from PyQt6.QtWidgets import QApplication, QMessageBox
@@ -39,14 +40,20 @@ class ServerThread(threading.Thread):
 if __name__ == "__main__":
     freeze_support()
     try:
-        from backend.api import app as fastapi_app
+        api_path = os.path.join(os.path.dirname(__file__), "server-repo", "api.py")
+        spec = importlib.util.spec_from_file_location("server_repo_api", api_path)
+        if spec is None or spec.loader is None:
+            raise RuntimeError(f"Không nạp được API từ {api_path}")
+        module = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(module)
+        fastapi_app = module.app
 
         # Start backend server thread only. Desktop UI is deprecated.
         server_thread = ServerThread(fastapi_app)
         server_thread.daemon = True
         server_thread.start()
 
-        print("Backend server started in background. Desktop UI removed.")
+        print("Server backend (server-repo) started in background.")
         try:
             while True:
                 time.sleep(1)
