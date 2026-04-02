@@ -16,6 +16,20 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
 
+      - name: Detect Flutter app directory
+        id: detect_app
+        run: |
+          if [ -f "frontend/pubspec.yaml" ]; then
+            echo "app_dir=frontend" >> "$GITHUB_OUTPUT"
+          elif [ -f "flutter_frontend/pubspec.yaml" ]; then
+            echo "app_dir=flutter_frontend" >> "$GITHUB_OUTPUT"
+          else
+            echo "No Flutter app found (expected frontend/pubspec.yaml or flutter_frontend/pubspec.yaml)"
+            ls -la
+            exit 1
+          fi
+          echo "Using app dir: $(cat $GITHUB_OUTPUT | sed -n 's/app_dir=//p')"
+
       - name: Set up Flutter
         uses: subosito/flutter-action@v2
         with:
@@ -25,25 +39,27 @@ jobs:
 
       - name: Install dependencies
         run: |
-          cd "$APP_DIR"
+          cd "${{ steps.detect_app.outputs.app_dir }}"
+          pwd
+          ls -la
           flutter pub get
 
       - name: Verify iOS platform exists
         run: |
-          cd "$APP_DIR"
+          cd "${{ steps.detect_app.outputs.app_dir }}"
           if [ ! -d "ios" ]; then
-            echo "Missing iOS platform under $APP_DIR/ios"
+            echo "Missing iOS platform under ${{ steps.detect_app.outputs.app_dir }}/ios"
             exit 1
           fi
 
       - name: Build iOS app without code signing
         run: |
-          cd "$APP_DIR"
+          cd "${{ steps.detect_app.outputs.app_dir }}"
           flutter build ios --release --no-codesign
 
       - name: Package unsigned IPA
         run: |
-          cd "$APP_DIR"
+          cd "${{ steps.detect_app.outputs.app_dir }}"
           APP_PATH="build/ios/iphoneos/Runner.app"
           if [ ! -d "$APP_PATH" ]; then
             echo "Runner.app not found at $APP_PATH"
