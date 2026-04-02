@@ -1,10 +1,10 @@
 # iOS IPA Build Setup
 
-Mục tiêu của setup này là tạo ra file `.ipa` cho `flutter_frontend` bằng GitHub Actions để cài thử lên iPhone, không dùng để phát hành App Store.
+Mục tiêu của setup này là tạo ra file `.ipa` cho `frontend` bằng GitHub Actions để cài thử lên iPhone, không dùng để phát hành App Store.
 
 ## Đã thêm gì
 
-- `flutter_frontend/ios/` — iOS platform cho app Flutter
+- `frontend/ios/` — iOS platform cho app Flutter
 - `.github/workflows/build-ios-unsigned-ipa.yml` — workflow build `.ipa` không ký
 
 ## Cách hoạt động
@@ -41,7 +41,7 @@ Trên GitHub repo `StuffStorageManager`:
 - chọn workflow `Build iOS Unsigned IPA`
 - bấm `Run workflow`
 
-Hoặc workflow cũng tự chạy khi có thay đổi trong `flutter_frontend/**` trên branch `main`.
+Hoặc workflow cũng tự chạy khi có thay đổi trong `frontend/**` trên branch `main`.
 
 ### 3. Tải file `.ipa`
 
@@ -74,4 +74,4 @@ Thông thường quy trình là:
 ## Ghi chú
 
 - Workflow phải nằm ở **repo root**: `.github/workflows/...`
-- File workflow cũ trong `flutter_frontend/.github/workflows/` không phải vị trí chuẩn của GitHub Actions cho repo chính
+- File workflow cũ trong `frontend/.github/workflows/` không phải vị trí chuẩn của GitHub Actions cho repo chính

@@ -6,7 +6,7 @@ on:
     branches:
       - main
     paths:
-      - 'flutter_frontend/**'
+      - 'frontend/**'
       - '.github/workflows/build-ios-unsigned-ipa.yml'
 
 jobs:
@@ -14,7 +14,7 @@ jobs:
     runs-on: macos-latest
     defaults:
       run:
-        working-directory: flutter_frontend
+        working-directory: frontend
 
     steps:
       - name: Checkout repository
@@ -33,7 +33,7 @@ jobs:
       - name: Verify iOS platform exists
         run: |
           if [ ! -d "ios" ]; then
-            echo "Missing flutter_frontend/ios. Run: flutter create --platforms=ios ."
+            echo "Missing frontend/ios. Run: flutter create --platforms=ios ."
             exit 1
           fi
 
@@ -57,5 +57,5 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: StuffStorageManager-ios-unsigned-ipa
-          path: flutter_frontend/build/ios/StuffStorageManager-ios-unsigned.ipa
+          path: frontend/build/ios/StuffStorageManager-ios-unsigned.ipa
           if-no-files-found: error
