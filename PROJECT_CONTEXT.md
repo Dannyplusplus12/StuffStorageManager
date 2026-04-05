@@ -5,6 +5,7 @@
 
 ## CẬP NHẬT NHANH GẦN NHẤT
 - Đã áp logo mới từ `frontend/logo.png` cho app Flutter bằng `flutter_launcher_icons`: cập nhật icon launcher Android (`mipmap-*`), iOS (`Runner/Assets.xcassets/AppIcon.appiconset`) và Windows (`windows/runner/resources/app_icon.ico`).
+- Đã đổi tên app sang `fisd` cho launcher/desktop: Android label (`AndroidManifest.xml`), iOS display/bundle name (`Info.plist`), Windows executable + metadata + title (`fisd.exe`, `Runner.rc`, `main.cpp`, `windows/CMakeLists.txt`).
 - Đã đổi flow trang `Bán hàng` desktop sang giống `Xuất hàng`: dùng `checkoutDesktopDispatch` để gửi đơn cho picker (không trừ kho/cộng nợ ngay), đơn vẫn vào lịch sử quản lý và đi đủ trạng thái receive/deliver/confirm.
 - Đã tinh chỉnh typography/màu của popup `Kho hàng` picker theo hướng gọn/hiện đại (giảm tình trạng chữ quá đậm, giảm độ gắt màu nhấn), đồng thời giới hạn chiều cao bottom-sheet `Kho hàng` còn `95%` màn hình.
 - Đã tinh chỉnh thêm popup `Kho hàng` picker theo đúng phong cách `Nhận đơn`: bố cục compact hơn (header + badge tổng kho, ảnh thu gọn), nhóm `màu` rõ ràng và hiển thị `size:tồn` dạng chip/wrap để nhìn nhanh như thẻ nhóm trong nhận đơn.
