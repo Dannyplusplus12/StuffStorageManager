@@ -18,6 +18,8 @@ class AddProductPanel extends StatefulWidget {
 class _AddProductPanelState extends State<AddProductPanel> {
   final _codeCtrl = TextEditingController();
   final _nameCtrl = TextEditingController();
+  final _codeFocus = FocusNode();
+  final _nameFocus = FocusNode();
   String _imagePath = '';
   String? _previewImagePath;
   final List<_ColorGroup> _groups = [];
@@ -32,6 +34,11 @@ class _AddProductPanelState extends State<AddProductPanel> {
   void dispose() {
     _codeCtrl.dispose();
     _nameCtrl.dispose();
+    _codeFocus.dispose();
+    _nameFocus.dispose();
+    for (final g in _groups) {
+      g.dispose();
+    }
     super.dispose();
   }
 
@@ -40,8 +47,120 @@ class _AddProductPanelState extends State<AddProductPanel> {
     _nameCtrl.clear();
     _imagePath = '';
     _previewImagePath = null;
+    for (final g in _groups) {
+      g.dispose();
+    }
     _groups.clear();
     _groups.add(_ColorGroup(color: '', rows: [_SizeRow()]));
+    setState(() {});
+  }
+
+  KeyEventResult _handleNavKey(
+    KeyEvent event, {
+    required VoidCallback onForward,
+    required VoidCallback onBackward,
+    VoidCallback? onShiftEnter,
+    VoidCallback? onCtrlForward,
+    VoidCallback? onCtrlBackward,
+  }) {
+    if (event is! KeyDownEvent) return KeyEventResult.ignored;
+    final isCtrl = HardwareKeyboard.instance.isControlPressed;
+    final isShift = HardwareKeyboard.instance.isShiftPressed;
+    final key = event.logicalKey;
+
+    final isEnter = key == LogicalKeyboardKey.enter || key == LogicalKeyboardKey.numpadEnter;
+    if (isEnter) {
+      if (isShift) {
+        (onShiftEnter ?? onForward)();
+      } else {
+        onForward();
+      }
+      return KeyEventResult.handled;
+    }
+
+    if (isCtrl && key == LogicalKeyboardKey.arrowRight) {
+      (onCtrlForward ?? onForward)();
+      return KeyEventResult.handled;
+    }
+    if (isCtrl && key == LogicalKeyboardKey.arrowLeft) {
+      (onCtrlBackward ?? onBackward)();
+      return KeyEventResult.handled;
+    }
+    return KeyEventResult.ignored;
+  }
+
+  void _focusColorExisting(int gi) {
+    if (gi < 0) {
+      _nameFocus.requestFocus();
+      return;
+    }
+    if (gi >= _groups.length) return;
+    _groups[gi].colorFocus.requestFocus();
+  }
+
+  void _focusSizeExisting(int gi, int ri) {
+    if (gi < 0 || gi >= _groups.length) {
+      _focusColorExisting(gi);
+      return;
+    }
+    if (ri >= 0 && ri < _groups[gi].rows.length) {
+      _groups[gi].rows[ri].sizeFocus.requestFocus();
+      return;
+    }
+    _focusColorExisting(gi + 1);
+  }
+
+  void _focusColor(int gi) {
+    if (gi < 0) {
+      _nameFocus.requestFocus();
+      return;
+    }
+    if (gi >= _groups.length) {
+      setState(() => _groups.add(_ColorGroup(color: '', rows: [_SizeRow()])));
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (!mounted) return;
+        _groups.last.colorFocus.requestFocus();
+      });
+      return;
+    }
+    _groups[gi].colorFocus.requestFocus();
+  }
+
+  void _focusSize(int gi, int ri) {
+    if (gi < 0) {
+      _nameFocus.requestFocus();
+      return;
+    }
+    if (gi >= _groups.length) {
+      setState(() => _groups.add(_ColorGroup(color: '', rows: [_SizeRow()])));
+    }
+    while (_groups[gi].rows.length <= ri) {
+      _groups[gi].rows.add(_SizeRow());
+    }
+    setState(() {});
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      _groups[gi].rows[ri].sizeFocus.requestFocus();
+    });
+  }
+
+  void _onColorChanged(int gi, String value) {
+    final g = _groups[gi];
+    g.color = value;
+    if (value.trim().isNotEmpty && !g.autoAddedNextColor) {
+      g.autoAddedNextColor = true;
+      _groups.add(_ColorGroup(color: '', rows: [_SizeRow()]));
+    }
+    setState(() {});
+  }
+
+  void _onSizeChanged(_ColorGroup g, int ri, String value) {
+    final row = g.rows[ri];
+    row.size = value;
+    if (value.trim().isNotEmpty && !row.autoAddedNextSize) {
+      row.autoAddedNextSize = true;
+      g.rows.add(_SizeRow());
+    }
     setState(() {});
   }
 
@@ -124,6 +243,55 @@ class _AddProductPanelState extends State<AddProductPanel> {
     });
   }
 
+  void _removeColorGroup(int gi) {
+    if (gi < 0 || gi >= _groups.length) return;
+    final removed = _groups.removeAt(gi);
+    final removedWasFocused = removed.colorFocus.hasFocus ||
+        removed.rows.any((r) => r.sizeFocus.hasFocus || r.stockFocus.hasFocus || r.priceFocus.hasFocus);
+
+    if (_groups.isEmpty) {
+      _groups.add(_ColorGroup(color: '', rows: [_SizeRow()]));
+    }
+
+    setState(() {});
+
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      removed.dispose();
+    });
+
+    if (removedWasFocused) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (!mounted || _groups.isEmpty) return;
+        final nextIndex = gi >= _groups.length ? _groups.length - 1 : gi;
+        _groups[nextIndex].colorFocus.requestFocus();
+      });
+    }
+  }
+
+  void _removeSizeRow(_ColorGroup g, int ri) {
+    if (ri < 0 || ri >= g.rows.length) return;
+    final removed = g.rows.removeAt(ri);
+    final removedWasFocused = removed.sizeFocus.hasFocus || removed.stockFocus.hasFocus || removed.priceFocus.hasFocus;
+
+    if (g.rows.isEmpty) {
+      g.rows.add(_SizeRow());
+    }
+
+    setState(() {});
+
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      removed.dispose();
+    });
+
+    if (removedWasFocused) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (!mounted || g.rows.isEmpty) return;
+        final nextIndex = ri >= g.rows.length ? g.rows.length - 1 : ri;
+        g.rows[nextIndex].sizeFocus.requestFocus();
+      });
+    }
+  }
+
   Future<void> _save() async {
     final code = _codeCtrl.text.trim();
     final name = _nameCtrl.text.trim();
@@ -166,6 +334,11 @@ class _AddProductPanelState extends State<AddProductPanel> {
       await ApiService.createProduct(code: code, name: name, imagePath: _imagePath, variants: variants);
       widget.onAdded();
       _reset();
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Đã thêm sản phẩm mới'), backgroundColor: Colors.green),
+        );
+      }
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context)
@@ -278,11 +451,41 @@ class _AddProductPanelState extends State<AddProductPanel> {
                               children: [
                                 SizedBox(
                                   width: 240,
-                                  child: TextField(controller: _codeCtrl, decoration: const InputDecoration(labelText: 'Mã hàng (*)', hintText: 'VD: CHUCAO')),
+                                  child: Focus(
+                                    canRequestFocus: false,
+                                    onKeyEvent: (node, event) => _handleNavKey(
+                                      event,
+                                      onForward: () => _nameFocus.requestFocus(),
+                                      onBackward: () => _codeFocus.requestFocus(),
+                                      onCtrlForward: () => _nameFocus.requestFocus(),
+                                      onCtrlBackward: () => _codeFocus.requestFocus(),
+                                    ),
+                                    child: TextField(
+                                      controller: _codeCtrl,
+                                      focusNode: _codeFocus,
+                                      decoration: const InputDecoration(labelText: 'Mã hàng (*)', hintText: 'VD: CHUCAO'),
+                                      onSubmitted: (_) => _nameFocus.requestFocus(),
+                                    ),
+                                  ),
                                 ),
                                 const SizedBox(width: 10),
                                 Expanded(
-                                  child: TextField(controller: _nameCtrl, decoration: const InputDecoration(labelText: 'Tên giày (*)', hintText: 'Tên sản phẩm...')),
+                                  child: Focus(
+                                    canRequestFocus: false,
+                                    onKeyEvent: (node, event) => _handleNavKey(
+                                      event,
+                                      onForward: () => _focusColor(0),
+                                      onBackward: () => _codeFocus.requestFocus(),
+                                      onCtrlForward: () => _focusColorExisting(0),
+                                      onCtrlBackward: () => _codeFocus.requestFocus(),
+                                    ),
+                                    child: TextField(
+                                      controller: _nameCtrl,
+                                      focusNode: _nameFocus,
+                                      decoration: const InputDecoration(labelText: 'Tên giày (*)', hintText: 'Tên sản phẩm...'),
+                                      onSubmitted: (_) => _focusColor(0),
+                                    ),
+                                  ),
                                 ),
                               ],
                             ),
@@ -308,7 +511,7 @@ class _AddProductPanelState extends State<AddProductPanel> {
                                     MouseRegion(
                                       cursor: SystemMouseCursors.click,
                                       child: OutlinedButton.icon(
-                                        onPressed: () => setState(() => _groups.add(_ColorGroup(color: '', rows: [_SizeRow()]))),
+                        onPressed: () => setState(() => _groups.add(_ColorGroup(color: '', rows: [_SizeRow()]))),
                                         icon: const Icon(Icons.add, size: 16),
                                         label: const Text('Thêm màu'),
                                       ),
@@ -333,6 +536,7 @@ class _AddProductPanelState extends State<AddProductPanel> {
 
   Widget _buildGroup(int gi, _ColorGroup g) {
     return Card(
+      key: ValueKey('group_${g.id}'),
       margin: const EdgeInsets.symmetric(vertical: 4),
       child: Padding(
         padding: const EdgeInsets.all(8),
@@ -341,11 +545,24 @@ class _AddProductPanelState extends State<AddProductPanel> {
             Row(children: [
               const Text('Màu: '),
               Expanded(
-                child: TextFormField(
-                  initialValue: g.color,
-                  decoration: const InputDecoration(hintText: 'Tên màu'),
-                  onChanged: (v) => g.color = v,
-                  style: const TextStyle(fontWeight: FontWeight.bold),
+                child: Focus(
+                  canRequestFocus: false,
+                  onKeyEvent: (node, event) => _handleNavKey(
+                    event,
+                    onForward: () => _focusSize(gi, 0),
+                    onBackward: () => _focusColor(gi - 1),
+                    onShiftEnter: () => _focusColor(gi + 1),
+                    onCtrlForward: () => _focusSizeExisting(gi, 0),
+                    onCtrlBackward: () => _focusColorExisting(gi - 1),
+                  ),
+                  child: TextFormField(
+                    focusNode: g.colorFocus,
+                    initialValue: g.color,
+                    decoration: const InputDecoration(hintText: 'Tên màu'),
+                    onChanged: (v) => _onColorChanged(gi, v),
+                    onFieldSubmitted: (_) => _focusSize(gi, 0),
+                    style: const TextStyle(fontWeight: FontWeight.bold),
+                  ),
                 ),
               ),
               MouseRegion(
@@ -367,42 +584,62 @@ class _AddProductPanelState extends State<AddProductPanel> {
               IconButton(
                 icon: const Icon(Icons.delete, color: Colors.red),
                 mouseCursor: SystemMouseCursors.click,
-                onPressed: () => setState(() => _groups.removeAt(gi)),
+                onPressed: () => _removeColorGroup(gi),
               ),
             ]),
             const SizedBox(height: 4),
-            ...g.rows.asMap().entries.map((e) => _buildRow(g, e.key, e.value)),
+            ...g.rows.asMap().entries.map((e) => _buildRow(gi, g, e.key, e.value)),
           ],
         ),
       ),
     );
   }
 
-  Widget _buildRow(_ColorGroup g, int ri, _SizeRow r) {
+  Widget _buildRow(int gi, _ColorGroup g, int ri, _SizeRow r) {
     return Padding(
+      key: ValueKey('row_${r.id}'),
       padding: const EdgeInsets.symmetric(vertical: 4),
       child: Row(children: [
         SizedBox(
-          width: 72,
-          child: TextFormField(
-            initialValue: r.size,
-            textAlign: TextAlign.center,
-            style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w500),
-            decoration: const InputDecoration(
-              hintText: 'Size',
-              contentPadding: EdgeInsets.symmetric(horizontal: 8, vertical: 12),
+          width: 108,
+          child: Focus(
+            canRequestFocus: false,
+            onKeyEvent: (node, event) => _handleNavKey(
+              event,
+              onForward: () => r.stockFocus.requestFocus(),
+              onBackward: () => (ri == 0 ? g.colorFocus : g.rows[ri - 1].priceFocus).requestFocus(),
+              onShiftEnter: () => _focusColor(gi + 1),
+              onCtrlForward: () => r.stockFocus.requestFocus(),
+              onCtrlBackward: () => (ri == 0 ? g.colorFocus : g.rows[ri - 1].priceFocus).requestFocus(),
             ),
-            onChanged: (v) => r.size = v,
+            child: TextFormField(
+              focusNode: r.sizeFocus,
+              initialValue: r.size,
+              textAlign: TextAlign.center,
+              style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w500),
+              decoration: const InputDecoration(
+                hintText: 'Size',
+                contentPadding: EdgeInsets.symmetric(horizontal: 8, vertical: 12),
+              ),
+              onChanged: (v) => _onSizeChanged(g, ri, v),
+              onFieldSubmitted: (_) => r.stockFocus.requestFocus(),
+            ),
           ),
         ),
         const SizedBox(width: 6),
         SizedBox(
-          width: 78,
+          width: 117,
           child: _ScrollableNumberField(
             value: r.stock,
             hintText: 'SL',
             onChanged: (v) => setState(() => r.stock = v),
             step: 1,
+            focusNode: r.stockFocus,
+            onForward: () => r.priceFocus.requestFocus(),
+            onBackward: () => r.sizeFocus.requestFocus(),
+            onShiftEnter: () => _focusColor(gi + 1),
+            onCtrlForward: () => r.priceFocus.requestFocus(),
+            onCtrlBackward: () => r.sizeFocus.requestFocus(),
             contentPadding: const EdgeInsets.symmetric(horizontal: 8, vertical: 12),
             textAlign: TextAlign.center,
           ),
@@ -414,11 +651,18 @@ class _AddProductPanelState extends State<AddProductPanel> {
           hintText: 'Giá',
           onChanged: (v) => setState(() => r.price = v),
           step: 1000,
+          enableWheelAdjust: false,
+          focusNode: r.priceFocus,
+          onForward: () => _focusSize(gi, ri + 1),
+          onBackward: () => r.stockFocus.requestFocus(),
+          onShiftEnter: () => _focusColor(gi + 1),
+          onCtrlForward: () => _focusSizeExisting(gi, ri + 1),
+          onCtrlBackward: () => r.stockFocus.requestFocus(),
         )),
         IconButton(
           icon: const Icon(Icons.close, color: Colors.red, size: 16),
           mouseCursor: SystemMouseCursors.click,
-          onPressed: () => setState(() => g.rows.removeAt(ri)),
+          onPressed: () => _removeSizeRow(g, ri),
         ),
       ]),
     );
@@ -430,6 +674,13 @@ class _ScrollableNumberField extends StatefulWidget {
   final String hintText;
   final ValueChanged<int> onChanged;
   final int step;
+  final bool enableWheelAdjust;
+  final FocusNode? focusNode;
+  final VoidCallback? onForward;
+  final VoidCallback? onBackward;
+  final VoidCallback? onShiftEnter;
+  final VoidCallback? onCtrlForward;
+  final VoidCallback? onCtrlBackward;
   final EdgeInsetsGeometry? contentPadding;
   final TextAlign textAlign;
 
@@ -438,6 +689,13 @@ class _ScrollableNumberField extends StatefulWidget {
     required this.hintText,
     required this.onChanged,
     this.step = 1,
+    this.enableWheelAdjust = true,
+    this.focusNode,
+    this.onForward,
+    this.onBackward,
+    this.onShiftEnter,
+    this.onCtrlForward,
+    this.onCtrlBackward,
     this.contentPadding,
     this.textAlign = TextAlign.start,
   });
@@ -448,27 +706,62 @@ class _ScrollableNumberField extends StatefulWidget {
 
 class _ScrollableNumberFieldState extends State<_ScrollableNumberField> {
   late TextEditingController _controller;
-  final FocusNode _focusNode = FocusNode();
+  late FocusNode _focusNode;
+  late final bool _ownFocusNode;
 
   @override
   void initState() {
     super.initState();
     _controller = TextEditingController(text: widget.value > 0 ? '${widget.value}' : '');
+    _ownFocusNode = widget.focusNode == null;
+    _focusNode = widget.focusNode ?? FocusNode();
   }
 
   @override
   void didUpdateWidget(_ScrollableNumberField oldWidget) {
     super.didUpdateWidget(oldWidget);
-    if (oldWidget.value != widget.value && !_focusNode.hasFocus) {
-      _controller.text = widget.value > 0 ? '${widget.value}' : '';
+    if (oldWidget.value != widget.value) {
+      final current = int.tryParse(_controller.text.replaceAll('.', '')) ?? 0;
+      if (current != widget.value) {
+        final nextText = widget.value > 0 ? '${widget.value}' : '';
+        _controller.value = TextEditingValue(
+          text: nextText,
+          selection: TextSelection.collapsed(offset: nextText.length),
+        );
+      }
     }
   }
 
   @override
   void dispose() {
-    _focusNode.dispose();
+    if (_ownFocusNode) _focusNode.dispose();
     _controller.dispose();
     super.dispose();
+  }
+
+  KeyEventResult _onKeyEvent(KeyEvent event) {
+    if (event is! KeyDownEvent) return KeyEventResult.ignored;
+    final isCtrl = HardwareKeyboard.instance.isControlPressed;
+    final isShift = HardwareKeyboard.instance.isShiftPressed;
+    final key = event.logicalKey;
+    final isEnter = key == LogicalKeyboardKey.enter || key == LogicalKeyboardKey.numpadEnter;
+    if (isEnter) {
+      if (isShift) {
+        (widget.onShiftEnter ?? widget.onForward)?.call();
+      } else {
+        widget.onForward?.call();
+      }
+      return KeyEventResult.handled;
+    }
+    if (isCtrl && key == LogicalKeyboardKey.arrowRight) {
+      (widget.onCtrlForward ?? widget.onForward)?.call();
+      return KeyEventResult.handled;
+    }
+    if (isCtrl && key == LogicalKeyboardKey.arrowLeft) {
+      (widget.onCtrlBackward ?? widget.onBackward)?.call();
+      return KeyEventResult.handled;
+    }
+    return KeyEventResult.ignored;
   }
 
   void _increment() {
@@ -484,7 +777,9 @@ class _ScrollableNumberFieldState extends State<_ScrollableNumberField> {
   @override
   Widget build(BuildContext context) {
     return Listener(
+      behavior: HitTestBehavior.translucent,
       onPointerSignal: (event) {
+        if (!widget.enableWheelAdjust) return;
         if (event is PointerScrollEvent) {
           if (event.scrollDelta.dy < 0) {
             _increment();
@@ -493,33 +788,63 @@ class _ScrollableNumberFieldState extends State<_ScrollableNumberField> {
           }
         }
       },
-      child: TextField(
-        controller: _controller,
-        focusNode: _focusNode,
-        decoration: InputDecoration(
-          hintText: widget.hintText,
-          contentPadding: widget.contentPadding,
+      child: Focus(
+        canRequestFocus: false,
+        onKeyEvent: (node, event) => _onKeyEvent(event),
+        child: TextField(
+          controller: _controller,
+          focusNode: _focusNode,
+          decoration: InputDecoration(
+            hintText: widget.hintText,
+            contentPadding: widget.contentPadding,
+          ),
+          textAlign: widget.textAlign,
+          keyboardType: TextInputType.number,
+          inputFormatters: [FilteringTextInputFormatter.digitsOnly],
+          onChanged: (v) {
+            final parsed = int.tryParse(v.replaceAll('.', '')) ?? 0;
+            widget.onChanged(parsed);
+          },
         ),
-        textAlign: widget.textAlign,
-        keyboardType: TextInputType.number,
-        inputFormatters: [FilteringTextInputFormatter.digitsOnly],
-        onChanged: (v) {
-          final parsed = int.tryParse(v.replaceAll('.', '')) ?? 0;
-          widget.onChanged(parsed);
-        },
       ),
     );
   }
 }
 
 class _ColorGroup {
+  static int _idSeed = 0;
+  final int id = _idSeed++;
   String color;
   List<_SizeRow> rows;
-  _ColorGroup({required this.color, required this.rows});
+  final FocusNode colorFocus = FocusNode();
+  bool autoAddedNextColor = false;
+  _ColorGroup({
+    required this.color,
+    required this.rows,
+  });
+
+  void dispose() {
+    colorFocus.dispose();
+    for (final r in rows) {
+      r.dispose();
+    }
+  }
 }
 
 class _SizeRow {
+  static int _idSeed = 0;
+  final int id = _idSeed++;
   String size = '';
   int price = 0;
   int stock = 0;
+  final FocusNode sizeFocus = FocusNode();
+  final FocusNode stockFocus = FocusNode();
+  final FocusNode priceFocus = FocusNode();
+  bool autoAddedNextSize = false;
+
+  void dispose() {
+    sizeFocus.dispose();
+    stockFocus.dispose();
+    priceFocus.dispose();
+  }
 }

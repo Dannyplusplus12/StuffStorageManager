@@ -41,16 +41,87 @@ class _PendingApprovalScreenState extends State<PendingApprovalScreen> {
     return candidates.first.millisecondsSinceEpoch;
   }
 
-  String _groupedItemsText(Order o) {
-    final grouped = <String, int>{};
-    for (final it in o.items) {
-      final raw = it.variantInfo;
-      final color = raw.contains('-') ? raw.split('-').first.trim() : raw.trim();
-      final k = '${it.productName} • $color';
-      grouped[k] = (grouped[k] ?? 0) + it.quantity;
+  ({String color, String size}) _splitVariantInfo(String raw) {
+    if (raw.contains('-')) {
+      final p = raw.split('-');
+      return (color: p.first.trim(), size: p.sublist(1).join('-').trim());
     }
-    if (grouped.isEmpty) return '- (không có chi tiết)';
-    return grouped.entries.map((e) => '- ${e.key}: ${e.value}').join('\n');
+    if (raw.contains('/')) {
+      final p = raw.split('/');
+      return (color: p.first.trim(), size: p.sublist(1).join('/').trim());
+    }
+    return (color: raw.trim(), size: '');
+  }
+
+  Widget _buildOrderItemsExcelTable(Order o) {
+    if (o.items.isEmpty) {
+      return const Padding(
+        padding: EdgeInsets.fromLTRB(12, 0, 12, 10),
+        child: Text('- Không có chi tiết mặt hàng', style: TextStyle(color: kTextSecondary)),
+      );
+    }
+
+    final grouped = <String, Map<String, dynamic>>{};
+    for (final item in o.items) {
+      final product = item.productName.trim();
+      final parsed = _splitVariantInfo(item.variantInfo);
+      final color = parsed.color.isEmpty ? 'Khác' : parsed.color;
+      grouped.putIfAbsent(product, () => {'colors': <String, Map<String, int>>{}});
+      final colors = grouped[product]!['colors'] as Map<String, Map<String, int>>;
+      colors.putIfAbsent(color, () => {'qty': 0, 'money': 0});
+      colors[color]!['qty'] = (colors[color]!['qty'] ?? 0) + item.quantity;
+      colors[color]!['money'] = (colors[color]!['money'] ?? 0) + (item.quantity * item.price);
+    }
+
+    final rows = <Map<String, dynamic>>[];
+    grouped.forEach((product, val) {
+      final colors = val['colors'] as Map<String, Map<String, int>>;
+      colors.forEach((color, cm) {
+        rows.add({
+          'product': product,
+          'color': color,
+          'qty': cm['qty'] ?? 0,
+          'money': cm['money'] ?? 0,
+        });
+      });
+    });
+
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(10, 0, 10, 10),
+      child: Container(
+        decoration: BoxDecoration(
+          border: Border.all(color: kBorder),
+          borderRadius: BorderRadius.circular(6),
+          color: const Color(0xFFF8FAFC),
+        ),
+        child: Table(
+          columnWidths: const {
+            0: FlexColumnWidth(2.5),
+            1: FlexColumnWidth(1.5),
+            2: FlexColumnWidth(1),
+            3: FlexColumnWidth(1.5),
+          },
+          border: const TableBorder.symmetric(inside: BorderSide(color: kBorder)),
+          children: [
+            const TableRow(
+              decoration: BoxDecoration(color: Color(0xFFEFF3F8)),
+              children: [
+                Padding(padding: EdgeInsets.all(6), child: Text('Mẫu', style: TextStyle(fontWeight: FontWeight.bold))),
+                Padding(padding: EdgeInsets.all(6), child: Text('Màu', style: TextStyle(fontWeight: FontWeight.bold))),
+                Padding(padding: EdgeInsets.all(6), child: Text('SL', style: TextStyle(fontWeight: FontWeight.bold))),
+                Padding(padding: EdgeInsets.all(6), child: Text('Tiền', style: TextStyle(fontWeight: FontWeight.bold))),
+              ],
+            ),
+            ...rows.map((r) => TableRow(children: [
+                  Padding(padding: const EdgeInsets.all(6), child: Text(r['product'].toString())),
+                  Padding(padding: const EdgeInsets.all(6), child: Text(r['color'].toString())),
+                  Padding(padding: const EdgeInsets.all(6), child: Text('${r['qty']}')),
+                  Padding(padding: const EdgeInsets.all(6), child: Text('${formatCurrency(r['money'] as int)} đ')),
+                ])),
+          ],
+        ),
+      ),
+    );
   }
 
   @override
@@ -266,7 +337,7 @@ class _PendingApprovalScreenState extends State<PendingApprovalScreen> {
       child: Row(
         children: [
           Expanded(
-            flex: 6,
+            flex: 5,
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
@@ -306,8 +377,8 @@ class _PendingApprovalScreenState extends State<PendingApprovalScreen> {
                                       Text('Đơn #${o.id} • ${o.customerName}', style: const TextStyle(fontWeight: FontWeight.bold)),
                                       const SizedBox(height: 4),
                                       Text('${formatDate(o.createdAt)} • SL ${o.totalQty} • ${formatCurrency(o.totalAmount)} đ'),
-                                      const SizedBox(height: 8),
-                                      Text(_groupedItemsText(o), style: const TextStyle(fontSize: 12, color: kTextSecondary)),
+                                       const SizedBox(height: 6),
+                                       _buildOrderItemsExcelTable(o),
                                       const SizedBox(height: 8),
                                       Row(
                                         mainAxisAlignment: MainAxisAlignment.end,
@@ -328,7 +399,7 @@ class _PendingApprovalScreenState extends State<PendingApprovalScreen> {
           ),
           const SizedBox(width: 12),
           Expanded(
-            flex: 4,
+            flex: 6,
             child: Container(
               decoration: BoxDecoration(color: Colors.white, border: Border.all(color: kBorder), borderRadius: BorderRadius.circular(8)),
               child: Column(
@@ -359,20 +430,24 @@ class _PendingApprovalScreenState extends State<PendingApprovalScreen> {
                               final o = _historyOrders[i];
                               return Container(
                                 margin: const EdgeInsets.only(bottom: 8),
-                                padding: const EdgeInsets.all(10),
                                 decoration: BoxDecoration(border: Border.all(color: kBorder), borderRadius: BorderRadius.circular(8)),
-                                child: Column(
-                                  crossAxisAlignment: CrossAxisAlignment.start,
-                                  children: [
-                                    Text('Đơn #${o.id} • ${o.status.toUpperCase()}', style: const TextStyle(fontWeight: FontWeight.w700)),
-                                    Text('${o.customerName} • ${formatDate(o.createdAt)}', style: const TextStyle(color: kTextSecondary, fontSize: 12)),
-                                    if (o.assignedPickerName.isNotEmpty)
-                                      Text('Nhận: ${o.assignedPickerName} ${o.assignedAt.isNotEmpty ? '• ${o.assignedAt}' : ''}', style: const TextStyle(fontSize: 12)),
-                                    if (o.deliveredByName.isNotEmpty)
-                                      Text('Giao: ${o.deliveredByName} ${o.deliveredAt.isNotEmpty ? '• ${o.deliveredAt}' : ''}', style: const TextStyle(fontSize: 12)),
-                                    if (o.deliveryPhotoPath.isNotEmpty)
-                                      Text('Ảnh: ${o.deliveryPhotoPath}', style: const TextStyle(fontSize: 12, color: kPrimary)),
-                                  ],
+                                child: ExpansionTile(
+                                  tilePadding: const EdgeInsets.symmetric(horizontal: 10, vertical: 2),
+                                  childrenPadding: EdgeInsets.zero,
+                                  title: Text('Đơn #${o.id} • ${o.status.toUpperCase()}', style: const TextStyle(fontWeight: FontWeight.w700)),
+                                  subtitle: Column(
+                                    crossAxisAlignment: CrossAxisAlignment.start,
+                                    children: [
+                                      Text('${o.customerName} • ${formatDate(o.createdAt)}', style: const TextStyle(color: kTextSecondary, fontSize: 12)),
+                                      if (o.assignedPickerName.isNotEmpty)
+                                        Text('Nhận: ${o.assignedPickerName} ${o.assignedAt.isNotEmpty ? '• ${o.assignedAt}' : ''}', style: const TextStyle(fontSize: 12)),
+                                      if (o.deliveredByName.isNotEmpty)
+                                        Text('Giao: ${o.deliveredByName} ${o.deliveredAt.isNotEmpty ? '• ${o.deliveredAt}' : ''}', style: const TextStyle(fontSize: 12)),
+                                      if (o.deliveryPhotoPath.isNotEmpty)
+                                        Text('Ảnh: ${o.deliveryPhotoPath}', style: const TextStyle(fontSize: 12, color: kPrimary)),
+                                    ],
+                                  ),
+                                  children: [_buildOrderItemsExcelTable(o)],
                                 ),
                               );
                             },

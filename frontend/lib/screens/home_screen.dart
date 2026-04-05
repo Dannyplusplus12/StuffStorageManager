@@ -19,6 +19,7 @@ class HomeScreen extends StatefulWidget {
 class _HomeScreenState extends State<HomeScreen> {
   AppPage _page = AppPage.inventory;
   final GlobalKey<PosScreenState> _posKey = GlobalKey();
+  int? _debtPrefilterAreaId;
 
   void _select(AppPage p) {
     if (_page == AppPage.pos && p != AppPage.pos) {
@@ -31,6 +32,13 @@ class _HomeScreenState extends State<HomeScreen> {
     setState(() => _page = AppPage.pos);
     WidgetsBinding.instance.addPostFrameCallback((_) {
       _posKey.currentState?.loadOrderToEdit(orderData);
+    });
+  }
+
+  void _openDebtByArea(int areaId) {
+    setState(() {
+      _debtPrefilterAreaId = areaId;
+      _page = AppPage.debt;
     });
   }
 
@@ -51,9 +59,12 @@ class _HomeScreenState extends State<HomeScreen> {
       case AppPage.stockIn:
         return const PosScreen(inventoryMode: true, showProductArea: false);
       case AppPage.debt:
-        return DebtScreen(onEditOrder: switchToPosWithOrder);
+        return DebtScreen(
+          onEditOrder: switchToPosWithOrder,
+          initialListAreaFilterId: _debtPrefilterAreaId,
+        );
       case AppPage.areas:
-        return const AreasScreen();
+        return AreasScreen(onOpenDebtByArea: _openDebtByArea);
       case AppPage.sales:
         return const SalesScreen();
       case AppPage.pendingApproval:

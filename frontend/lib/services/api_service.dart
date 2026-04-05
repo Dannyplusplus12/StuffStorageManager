@@ -188,6 +188,28 @@ class ApiService {
     throw Exception(jsonDecode(utf8.decode(r.bodyBytes))['detail'] ?? 'Lỗi tạo hóa đơn nháp');
   }
 
+  /// Desktop dispatch: create order directly for picker (skip approve step)
+  static Future<Map<String, dynamic>> checkoutDesktopDispatch({
+    required String customerName,
+    String customerPhone = '',
+    required List<CartItem> cart,
+  }) async {
+    final r = await http.post(
+      Uri.parse('$_b/checkout/desktop-dispatch'),
+      headers: _headers,
+      body: jsonEncode({
+        'customer_name': customerName,
+        'customer_phone': customerPhone,
+        'cart': cart.map((e) => e.toJson()).toList(),
+      }),
+    );
+    if (r.statusCode == 200) {
+      return jsonDecode(utf8.decode(r.bodyBytes));
+    }
+    final body = r.bodyBytes.isNotEmpty ? jsonDecode(utf8.decode(r.bodyBytes)) : null;
+    throw Exception(body is Map<String, dynamic> ? (body['detail'] ?? 'Lỗi gửi đơn cho picker') : 'Lỗi gửi đơn cho picker');
+  }
+
   /// Get all pending orders
   static Future<List<Order>> getPendingOrders() async {
     final r = await http.get(Uri.parse('$_b/orders/pending')).timeout(_timeout);

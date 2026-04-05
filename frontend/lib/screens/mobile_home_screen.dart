@@ -49,88 +49,65 @@ class _MobileHomeScreenState extends State<MobileHomeScreen> {
   }
 }
 
-class _RoleSelectionScreen extends StatelessWidget {
+class _RoleSelectionScreen extends StatefulWidget {
   final VoidCallback onRoleSelected;
   const _RoleSelectionScreen({required this.onRoleSelected});
 
-  Future<void> _loginByPin(BuildContext context) async {
-    final pinCtrl = TextEditingController();
-    bool loading = false;
-    String? error;
+  @override
+  State<_RoleSelectionScreen> createState() => _RoleSelectionScreenState();
+}
 
-    final ok = await showDialog<bool>(
-      context: context,
-      builder: (dialogContext) {
-        return StatefulBuilder(
-          builder: (dialogContext, setLocal) {
-            Future<void> submit() async {
-              if (pinCtrl.text.trim().isEmpty) {
-                setLocal(() => error = 'Nhập mã PIN');
-                return;
-              }
-              setLocal(() {
-                loading = true;
-                error = null;
-              });
+class _RoleSelectionScreenState extends State<_RoleSelectionScreen> {
+  final TextEditingController _pinCtrl = TextEditingController();
+  bool _loading = false;
+  String? _error;
 
-              final pin = pinCtrl.text.trim();
-              final roles = ['orderer', 'picker', 'manager'];
-              String? lastErr;
-              for (final role in roles) {
-                try {
-                  final login = await ApiService.loginByPin(pin: pin, requestedRole: role);
-                  final mode = role == 'picker' ? AppMode.picker : AppMode.orderer;
-                  await AppModeManager.setSession(
-                    mode,
-                    employeeId: (login['id'] ?? 0) as int,
-                    employeeName: (login['name'] ?? '').toString(),
-                  );
-                  if (dialogContext.mounted) {
-                    Navigator.pop(dialogContext, true);
-                  }
-                  return;
-                } catch (e) {
-                  lastErr = e.toString();
-                }
-              }
+  @override
+  void dispose() {
+    _pinCtrl.dispose();
+    super.dispose();
+  }
 
-              setLocal(() {
-                loading = false;
-                final msg = (lastErr ?? '').toLowerCase();
-                if (msg.contains('failed host lookup') || msg.contains('connection') || msg.contains('timed out') || msg.contains('socket')) {
-                  error = 'Không kết nối được server';
-                } else {
-                  error = 'PIN không hợp lệ';
-                }
-              });
-            }
+  Future<void> _loginByPin() async {
+    if (_pinCtrl.text.trim().isEmpty) {
+      setState(() => _error = 'Nhập mã PIN');
+      return;
+    }
+    setState(() {
+      _loading = true;
+      _error = null;
+    });
 
-            return AlertDialog(
-              title: const Text('Đăng nhập bằng PIN'),
-              content: TextField(
-                controller: pinCtrl,
-                obscureText: true,
-                keyboardType: TextInputType.number,
-                maxLength: 6,
-                decoration: InputDecoration(hintText: 'Nhập mã PIN', errorText: error, counterText: ''),
-                onSubmitted: (_) => loading ? null : submit(),
-              ),
-              actions: [
-                TextButton(onPressed: loading ? null : () => Navigator.pop(dialogContext, false), child: const Text('Hủy')),
-                ElevatedButton(
-                  onPressed: loading ? null : submit,
-                  child: loading
-                      ? const SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2))
-                      : const Text('Vào app'),
-                ),
-              ],
-            );
-          },
+    final pin = _pinCtrl.text.trim();
+    final roles = ['orderer', 'picker', 'manager'];
+    String? lastErr;
+    for (final role in roles) {
+      try {
+        final login = await ApiService.loginByPin(pin: pin, requestedRole: role);
+        final mode = role == 'picker' ? AppMode.picker : AppMode.orderer;
+        await AppModeManager.setSession(
+          mode,
+          employeeId: (login['id'] ?? 0) as int,
+          employeeName: (login['name'] ?? '').toString(),
         );
-      },
-    );
+        if (!mounted) return;
+        widget.onRoleSelected();
+        return;
+      } catch (e) {
+        lastErr = e.toString();
+      }
+    }
 
-    if (ok == true && context.mounted) onRoleSelected();
+    if (!mounted) return;
+    setState(() {
+      _loading = false;
+      final msg = (lastErr ?? '').toLowerCase();
+      if (msg.contains('failed host lookup') || msg.contains('connection') || msg.contains('timed out') || msg.contains('socket')) {
+        _error = 'Không kết nối được server';
+      } else {
+        _error = 'PIN không hợp lệ';
+      }
+    });
   }
 
   @override
@@ -152,7 +129,21 @@ class _RoleSelectionScreen extends StatelessWidget {
                 ),
                 const SizedBox(height: 8),
                 const Text('Nhập PIN để vào đúng giao diện theo vai trò', style: TextStyle(color: kTextSecondary)),
-                const SizedBox(height: 40),
+                const SizedBox(height: 24),
+                TextField(
+                  controller: _pinCtrl,
+                  obscureText: true,
+                  keyboardType: TextInputType.number,
+                  maxLength: 6,
+                  decoration: InputDecoration(
+                    hintText: 'Nhập mã PIN',
+                    errorText: _error,
+                    counterText: '',
+                    prefixIcon: const Icon(Icons.lock_outline),
+                  ),
+                  onSubmitted: (_) => _loading ? null : _loginByPin(),
+                ),
+                const SizedBox(height: 12),
                 SizedBox(
                   width: double.infinity,
                   child: ElevatedButton.icon(
@@ -163,8 +154,8 @@ class _RoleSelectionScreen extends StatelessWidget {
                       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
                     ),
                     icon: const Icon(Icons.pin_outlined),
-                    label: const Text('Nhập mã PIN', style: TextStyle(fontSize: 16)),
-                    onPressed: () => _loginByPin(context),
+                    label: const Text('Vào app', style: TextStyle(fontSize: 16)),
+                    onPressed: _loading ? null : _loginByPin,
                   ),
                 ),
               ],
@@ -948,11 +939,16 @@ class _CreateOrderScreenState extends State<_CreateOrderScreen> {
                                   }
 
                                   final widgets = <Widget>[];
-                                  for (final modelEntry in byModel.entries) {
+                                  final modelNames = byModel.keys.toList()
+                                    ..sort((a, b) => a.toLowerCase().compareTo(b.toLowerCase()));
+                                  for (final modelName in modelNames) {
+                                    final modelItems = byModel[modelName] ?? const <CartItem>[];
                                     final byColor = <String, List<CartItem>>{};
-                                    for (final item in modelEntry.value) {
+                                    for (final item in modelItems) {
                                       byColor.putIfAbsent(item.color, () => []).add(item);
                                     }
+                                    final modelQty = modelItems.fold<int>(0, (s, x) => s + x.quantity);
+                                    final modelMoney = modelItems.fold<int>(0, (s, x) => s + (x.quantity * x.price));
 
                                     widgets.add(
                                       Container(
@@ -966,10 +962,27 @@ class _CreateOrderScreenState extends State<_CreateOrderScreen> {
                                         child: Column(
                                           crossAxisAlignment: CrossAxisAlignment.start,
                                           children: [
-                                            Text(modelEntry.key, style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w700, color: kTextPrimary)),
+                                            Row(
+                                              children: [
+                                                Expanded(
+                                                  child: Text(modelName, style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w700, color: kTextPrimary)),
+                                                ),
+                                                Text(
+                                                  '$modelQty cái • ${formatCurrency(modelMoney)} đ',
+                                                  style: const TextStyle(fontSize: 12, color: kTextSecondary, fontWeight: FontWeight.w600),
+                                                ),
+                                              ],
+                                            ),
                                             const SizedBox(height: 8),
-                                            ...byColor.entries.map((colorEntry) {
-                                              final totalQty = colorEntry.value.fold<int>(0, (s, x) => s + x.quantity);
+                                            ...((() {
+                                              final colors = byColor.keys.toList()..sort((a, b) => a.toLowerCase().compareTo(b.toLowerCase()));
+                                              return colors;
+                                            })()).map((colorName) {
+                                              final colorItems = byColor[colorName] ?? const <CartItem>[];
+                                              final totalQty = colorItems.fold<int>(0, (s, x) => s + x.quantity);
+                                              final colorMoney = colorItems.fold<int>(0, (s, x) => s + (x.quantity * x.price));
+                                              final sortedItems = [...colorItems]
+                                                ..sort((a, b) => a.size.toLowerCase().compareTo(b.size.toLowerCase()));
                                               return Container(
                                                 margin: const EdgeInsets.only(bottom: 8),
                                                 padding: const EdgeInsets.all(8),
@@ -981,9 +994,12 @@ class _CreateOrderScreenState extends State<_CreateOrderScreen> {
                                                 child: Column(
                                                   crossAxisAlignment: CrossAxisAlignment.start,
                                                   children: [
-                                                    Text('Màu ${colorEntry.key} • $totalQty cái', style: const TextStyle(fontWeight: FontWeight.w600, color: kPrimary)),
+                                                    Text(
+                                                      'Màu $colorName • $totalQty cái • ${formatCurrency(colorMoney)} đ',
+                                                      style: const TextStyle(fontWeight: FontWeight.w600, color: kPrimary),
+                                                    ),
                                                     const SizedBox(height: 6),
-                                                    ...colorEntry.value.map((item) {
+                                                    ...sortedItems.map((item) {
                                                       return Padding(
                                                         padding: const EdgeInsets.only(bottom: 6),
                                                         child: Row(
@@ -1162,11 +1178,29 @@ class _CreateOrderScreenState extends State<_CreateOrderScreen> {
                         child: Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
-                    Text(p.name, style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
-                    const SizedBox(height: 10),
+                Row(
+                  children: [
+                    Expanded(
+                      child: Text(p.name, style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+                    ),
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                      decoration: BoxDecoration(
+                        color: const Color(0xFFEFFCF3),
+                        borderRadius: BorderRadius.circular(999),
+                        border: Border.all(color: const Color(0xFFB7E4C7)),
+                      ),
+                      child: Text(
+                        'Tổng kho: ${p.variants.fold<int>(0, (s, v) => s + v.stock)}',
+                        style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w700, color: kSuccess),
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 10),
                     Container(
                       width: double.infinity,
-                      height: 180,
+                  height: 120,
                       decoration: BoxDecoration(
                         color: const Color(0xFFF1F5F9),
                         border: Border.all(color: kBorder),
@@ -1193,87 +1227,118 @@ class _CreateOrderScreenState extends State<_CreateOrderScreen> {
                         child: Text('Ảnh cục bộ: $image', style: const TextStyle(fontSize: 11, color: kTextSecondary)),
                       ),
                     const SizedBox(height: 12),
-                    const Text('Màu & số lượng', style: TextStyle(fontWeight: FontWeight.w700)),
+                    const Text('Mẫu • Màu • Size', style: TextStyle(fontWeight: FontWeight.w700)),
                     const SizedBox(height: 8),
-                    ...p.variants.map((v) {
-                      final outOfStock = v.stock <= 0;
-                      final currentQty = qtys[v.id] ?? 0;
-                      return Container(
-                        margin: const EdgeInsets.only(bottom: 8),
-                        padding: const EdgeInsets.all(10),
-                        decoration: BoxDecoration(
-                          color: outOfStock ? const Color(0xFFFFF1F2) : Colors.white,
-                          borderRadius: BorderRadius.circular(8),
-                          border: Border.all(color: kBorder),
-                        ),
-                        child: Row(
-                          children: [
-                            Expanded(
-                              child: Column(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                children: [
-                                  Text('${v.color} - ${v.size}', style: const TextStyle(fontWeight: FontWeight.w600)),
-                                  const SizedBox(height: 2),
-                                  Text('${formatCurrency(v.price)} đ', style: const TextStyle(color: kTextSecondary)),
-                                  Text(
-                                    'Kho: ${v.stock}${outOfStock ? ' (HẾT)' : ''}',
-                                    style: TextStyle(color: outOfStock ? kDanger : kTextSecondary, fontSize: 12),
+                    ...() {
+                      final byColor = <String, List<Variant>>{};
+                      for (final v in p.variants) {
+                        byColor.putIfAbsent(v.color, () => []).add(v);
+                      }
+                      final colors = byColor.keys.toList()
+                        ..sort((a, b) => a.toLowerCase().compareTo(b.toLowerCase()));
+
+                      return colors.map((colorName) {
+                        final colorVariants = [...(byColor[colorName] ?? const <Variant>[])];
+                        colorVariants.sort((a, b) => a.size.toLowerCase().compareTo(b.size.toLowerCase()));
+                        final colorStock = colorVariants.fold<int>(0, (s, x) => s + x.stock);
+
+                        return Container(
+                          margin: const EdgeInsets.only(bottom: 10),
+                          padding: const EdgeInsets.all(10),
+                          decoration: BoxDecoration(
+                            color: Colors.white,
+                            borderRadius: BorderRadius.circular(10),
+                            border: Border.all(color: kBorder),
+                          ),
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text('Màu $colorName • Tổng kho: $colorStock', style: const TextStyle(fontWeight: FontWeight.w700, color: kPrimary)),
+                              const SizedBox(height: 8),
+                              ...colorVariants.map((v) {
+                                final outOfStock = v.stock <= 0;
+                                final currentQty = qtys[v.id] ?? 0;
+                                return Container(
+                                  margin: const EdgeInsets.only(bottom: 8),
+                                  padding: const EdgeInsets.all(10),
+                                  decoration: BoxDecoration(
+                                    color: outOfStock ? const Color(0xFFFFF1F2) : const Color(0xFFF8FAFC),
+                                    borderRadius: BorderRadius.circular(8),
+                                    border: Border.all(color: kBorder),
                                   ),
-                                ],
-                              ),
-                            ),
-                            const SizedBox(width: 8),
-                            SizedBox(
-                              width: 120,
-                              child: outOfStock
-                                  ? const Center(
-                                      child: Text('Hết hàng', style: TextStyle(color: kDanger, fontWeight: FontWeight.w600)),
-                                    )
-                                  : Container(
-                                      height: 40,
-                                      decoration: BoxDecoration(
-                                        border: Border.all(color: kBorder),
-                                        borderRadius: BorderRadius.circular(6),
-                                        color: Colors.white,
-                                      ),
-                                      child: Row(
-                                        children: [
-                                          InkWell(
-                                            mouseCursor: SystemMouseCursors.click,
-                                            onTap: () => changeQty(v, currentQty - 1),
-                                            child: const Padding(
-                                              padding: EdgeInsets.symmetric(horizontal: 10, vertical: 8),
-                                              child: Icon(Icons.remove, size: 16),
+                                  child: Row(
+                                    children: [
+                                      Expanded(
+                                        child: Column(
+                                          crossAxisAlignment: CrossAxisAlignment.start,
+                                          children: [
+                                            Text('Size ${v.size}', style: const TextStyle(fontWeight: FontWeight.w600)),
+                                            const SizedBox(height: 2),
+                                            Text('${formatCurrency(v.price)} đ', style: const TextStyle(color: kTextSecondary)),
+                                            Text(
+                                              'Kho: ${v.stock}${outOfStock ? ' (HẾT)' : ''}',
+                                              style: TextStyle(color: outOfStock ? kDanger : kTextSecondary, fontSize: 12),
                                             ),
-                                          ),
-                                          Expanded(
-                                            child: InkWell(
-                                              mouseCursor: SystemMouseCursors.click,
-                                              onTap: () => openManualInput(v),
-                                              child: Center(
-                                                child: Text(
-                                                  '$currentQty',
-                                                  style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14),
+                                          ],
+                                        ),
+                                      ),
+                                      const SizedBox(width: 8),
+                                      SizedBox(
+                                        width: 120,
+                                        child: outOfStock
+                                            ? const Center(
+                                                child: Text('Hết hàng', style: TextStyle(color: kDanger, fontWeight: FontWeight.w600)),
+                                              )
+                                            : Container(
+                                                height: 40,
+                                                decoration: BoxDecoration(
+                                                  border: Border.all(color: kBorder),
+                                                  borderRadius: BorderRadius.circular(6),
+                                                  color: Colors.white,
+                                                ),
+                                                child: Row(
+                                                  children: [
+                                                    InkWell(
+                                                      mouseCursor: SystemMouseCursors.click,
+                                                      onTap: () => changeQty(v, currentQty - 1),
+                                                      child: const Padding(
+                                                        padding: EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+                                                        child: Icon(Icons.remove, size: 16),
+                                                      ),
+                                                    ),
+                                                    Expanded(
+                                                      child: InkWell(
+                                                        mouseCursor: SystemMouseCursors.click,
+                                                        onTap: () => openManualInput(v),
+                                                        child: Center(
+                                                          child: Text(
+                                                            '$currentQty',
+                                                            style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14),
+                                                          ),
+                                                        ),
+                                                      ),
+                                                    ),
+                                                    InkWell(
+                                                      mouseCursor: SystemMouseCursors.click,
+                                                      onTap: () => changeQty(v, currentQty + 1),
+                                                      child: const Padding(
+                                                        padding: EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+                                                        child: Icon(Icons.add, size: 16),
+                                                      ),
+                                                    ),
+                                                  ],
                                                 ),
                                               ),
-                                            ),
-                                          ),
-                                          InkWell(
-                                            mouseCursor: SystemMouseCursors.click,
-                                            onTap: () => changeQty(v, currentQty + 1),
-                                            child: const Padding(
-                                              padding: EdgeInsets.symmetric(horizontal: 10, vertical: 8),
-                                              child: Icon(Icons.add, size: 16),
-                                            ),
-                                          ),
-                                        ],
                                       ),
-                                    ),
-                            ),
-                          ],
-                        ),
-                      );
-                    }),
+                                    ],
+                                  ),
+                                );
+                              }),
+                            ],
+                          ),
+                        );
+                      });
+                    }(),
                           ],
                         ),
                       ),
@@ -1596,15 +1661,54 @@ class _ApprovedOrdersScreenState extends State<_ApprovedOrdersScreen> {
 
     final widgets = <Widget>[];
     grouped.forEach((model, byColor) {
-      widgets.add(Text(model, style: const TextStyle(fontWeight: FontWeight.w700, color: kTextPrimary)));
-      byColor.forEach((color, bySize) {
-        final sizeLine = bySize.entries.map((e) => 'Size ${e.key}: ${e.value}').join(' • ');
-        widgets.add(Padding(
-          padding: const EdgeInsets.only(left: 10, top: 2, bottom: 2),
-          child: Text('Màu $color → $sizeLine', style: const TextStyle(fontSize: 12, color: kTextSecondary)),
-        ));
-      });
-      widgets.add(const SizedBox(height: 4));
+      widgets.add(
+        Container(
+          width: double.infinity,
+          margin: const EdgeInsets.only(bottom: 8),
+          padding: const EdgeInsets.all(10),
+          decoration: BoxDecoration(
+            color: const Color(0xFFF8FAFC),
+            borderRadius: BorderRadius.circular(10),
+            border: Border.all(color: kBorder),
+          ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(model, style: const TextStyle(fontWeight: FontWeight.w700, color: kTextPrimary, fontSize: 15)),
+              const SizedBox(height: 8),
+              ...byColor.entries.map((entry) {
+                final color = entry.key;
+                final bySize = entry.value;
+                return Padding(
+                  padding: const EdgeInsets.only(bottom: 8),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text('Màu $color', style: const TextStyle(fontWeight: FontWeight.w600, color: kTextPrimary)),
+                      const SizedBox(height: 4),
+                      Wrap(
+                        spacing: 6,
+                        runSpacing: 6,
+                        children: bySize.entries
+                            .map((e) => Container(
+                                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                                  decoration: BoxDecoration(
+                                    color: Colors.white,
+                                    borderRadius: BorderRadius.circular(999),
+                                    border: Border.all(color: kBorder),
+                                  ),
+                                  child: Text('Size ${e.key}: ${e.value}', style: const TextStyle(fontSize: 12, color: kTextSecondary)),
+                                ))
+                            .toList(),
+                      ),
+                    ],
+                  ),
+                );
+              }),
+            ],
+          ),
+        ),
+      );
     });
     return widgets;
   }
@@ -2199,12 +2303,15 @@ class _PickerInventoryScreenState extends State<_PickerInventoryScreen> {
         final image = p.image.trim();
         final canLoadNetworkImage = image.startsWith('http://') || image.startsWith('https://');
 
-        return SafeArea(
-          child: SingleChildScrollView(
-            padding: const EdgeInsets.fromLTRB(16, 8, 16, 16),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
+        return FractionallySizedBox(
+          heightFactor: 0.95,
+          child: SafeArea(
+            top: false,
+            child: SingleChildScrollView(
+              padding: const EdgeInsets.fromLTRB(16, 8, 16, 16),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
                 Text(p.name, style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
                 const SizedBox(height: 10),
                 Container(
@@ -2236,27 +2343,80 @@ class _PickerInventoryScreenState extends State<_PickerInventoryScreen> {
                     child: Text('Ảnh cục bộ: $image', style: const TextStyle(fontSize: 11, color: kTextSecondary)),
                   ),
                 const SizedBox(height: 12),
-                const Text('Màu & tồn kho', style: TextStyle(fontWeight: FontWeight.w700)),
+                const Text('Màu & size tồn kho', style: TextStyle(fontWeight: FontWeight.w600, color: kTextPrimary)),
                 const SizedBox(height: 8),
-                ...p.variants.map((v) {
-                  final isFocus = focusVariant != null && v.id == focusVariant.id;
-                  return Container(
-                    margin: const EdgeInsets.only(bottom: 6),
-                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
-                    decoration: BoxDecoration(
-                      color: isFocus ? const Color(0xFFE8F5E9) : Colors.white,
-                      borderRadius: BorderRadius.circular(8),
-                      border: Border.all(color: isFocus ? const Color(0xFF66BB6A) : kBorder),
-                    ),
-                    child: Row(
-                      children: [
-                        Expanded(child: Text('${v.color} - ${v.size}')),
-                        Text('Kho: ${v.stock}', style: TextStyle(color: v.stock > 0 ? kTextPrimary : kDanger, fontWeight: FontWeight.w600)),
-                      ],
-                    ),
-                  );
-                }),
-              ],
+                ...() {
+                  final byColor = <String, List<Variant>>{};
+                  for (final v in p.variants) {
+                    byColor.putIfAbsent(v.color, () => []).add(v);
+                  }
+                  final colors = byColor.keys.toList()..sort((a, b) => a.toLowerCase().compareTo(b.toLowerCase()));
+
+                  return colors.map((colorName) {
+                    final variants = [...(byColor[colorName] ?? const <Variant>[])];
+                    variants.sort((a, b) => a.size.toLowerCase().compareTo(b.size.toLowerCase()));
+                    final colorStock = variants.fold<int>(0, (s, x) => s + x.stock);
+                    final colorHasFocus = focusVariant != null && variants.any((x) => x.id == focusVariant?.id);
+
+                    return Container(
+                      margin: const EdgeInsets.only(bottom: 10),
+                      padding: const EdgeInsets.all(10),
+                      decoration: BoxDecoration(
+                        color: colorHasFocus ? const Color(0xFFF6FBF7) : Colors.white,
+                        borderRadius: BorderRadius.circular(10),
+                        border: Border.all(color: colorHasFocus ? const Color(0xFFBBDDC7) : kBorder),
+                      ),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Row(
+                            children: [
+                              Expanded(
+                                child: Text(
+                                  'Màu $colorName',
+                                  style: const TextStyle(fontWeight: FontWeight.w600, color: kTextPrimary),
+                                ),
+                              ),
+                              Text(
+                                'Tổng kho: $colorStock',
+                                style: TextStyle(
+                                  color: colorStock > 0 ? kTextSecondary : kDanger,
+                                  fontWeight: FontWeight.w500,
+                                  fontSize: 12,
+                                ),
+                              ),
+                            ],
+                          ),
+                          const SizedBox(height: 8),
+                          Wrap(
+                            spacing: 8,
+                            runSpacing: 8,
+                            children: variants.map((v) {
+                              final isFocus = focusVariant != null && v.id == focusVariant.id;
+                              return Container(
+                                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 7),
+                                decoration: BoxDecoration(
+                                  color: isFocus ? const Color(0xFFE8F5E9) : const Color(0xFFF8FAFC),
+                                  borderRadius: BorderRadius.circular(999),
+                                  border: Border.all(color: isFocus ? const Color(0xFF66BB6A) : kBorder),
+                                ),
+                                child: Text(
+                                  'Size ${v.size}: ${v.stock}',
+                                  style: TextStyle(
+                                    fontWeight: FontWeight.w600,
+                                    color: v.stock > 0 ? kTextPrimary : kDanger,
+                                  ),
+                                ),
+                              );
+                            }).toList(),
+                          ),
+                        ],
+                      ),
+                    );
+                  });
+                }(),
+                ],
+              ),
             ),
           ),
         );

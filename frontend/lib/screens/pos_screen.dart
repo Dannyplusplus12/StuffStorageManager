@@ -161,12 +161,12 @@ class PosScreenState extends State<PosScreen> {
         );
         _snack('Đã cập nhật đơn hàng!', Colors.green);
       } else {
-        await ApiService.checkout(
+        await ApiService.checkoutDesktopDispatch(
           customerName: _custNameCtrl.text,
           customerPhone: _custPhoneCtrl.text,
           cart: _cart,
         );
-        _snack('Đã xuất kho và tạo hóa đơn!', Colors.green);
+        _snack('Đã gửi đơn cho picker, chờ nhận xử lý!', Colors.green);
       }
       cancelEditing();
       _loadProducts(_search);
@@ -662,49 +662,98 @@ class PosScreenState extends State<PosScreen> {
         ]),
       );
     }
-    return ListView.builder(
-      itemCount: _cart.length,
-      itemBuilder: (_, i) {
-        final it = _cart[i];
+    final groupedIndexes = <String, List<int>>{};
+    for (int i = 0; i < _cart.length; i++) {
+      final it = _cart[i];
+      final key = '${it.productName}__${it.color}';
+      groupedIndexes.putIfAbsent(key, () => <int>[]).add(i);
+    }
+
+    return ListView(
+      children: groupedIndexes.entries.map((entry) {
+        final indexes = entry.value;
+        final first = _cart[indexes.first];
+        final totalQty = indexes.fold<int>(0, (sum, idx) => sum + _cart[idx].quantity);
+        final totalMoney = indexes.fold<int>(0, (sum, idx) => sum + (_cart[idx].quantity * _cart[idx].price));
+
         return Container(
-          margin: const EdgeInsets.symmetric(vertical: 3),
-          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+          margin: const EdgeInsets.symmetric(vertical: 4),
+          padding: const EdgeInsets.all(8),
           decoration: BoxDecoration(
-              color: const Color(0xFFF8FAFC), borderRadius: BorderRadius.circular(6), border: Border.all(color: kBorder)),
-          child: Row(children: [
-            Expanded(
-              child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                Text(it.productName,
-                    style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600),
-                    overflow: TextOverflow.ellipsis),
-                Text('${it.color} / ${it.size} - ${formatCurrency(it.price)} k',
-                    style: const TextStyle(fontSize: 11, color: kTextSecondary)),
-              ]),
-            ),
-            const SizedBox(width: 6),
-            _QtyEditor(
-              quantity: it.quantity,
-              onChanged: (q) {
-                if (q <= 0) return;
-                setState(() => it.quantity = q);
-              },
-              onIncrement: () => setState(() => it.quantity += 1),
-              onDecrement: () {
-                if (it.quantity <= 1) return;
-                setState(() => it.quantity -= 1);
-              },
-            ),
-            const SizedBox(width: 4),
-            IconButton(
-              icon: const Icon(Icons.close, size: 16, color: Colors.red),
-              padding: EdgeInsets.zero,
-              constraints: const BoxConstraints(minWidth: 24, minHeight: 24),
-              mouseCursor: SystemMouseCursors.click,
-              onPressed: () => setState(() => _cart.removeAt(i)),
-            ),
-          ]),
+            color: const Color(0xFFF8FAFC),
+            borderRadius: BorderRadius.circular(8),
+            border: Border.all(color: kBorder),
+          ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                children: [
+                  Expanded(
+                    child: Text(
+                      first.productName,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w700),
+                    ),
+                  ),
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                    decoration: BoxDecoration(
+                      color: const Color(0xFFEFF3F8),
+                      borderRadius: BorderRadius.circular(12),
+                      border: Border.all(color: kBorder),
+                    ),
+                    child: Text(first.color, style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w600)),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 4),
+              Text(
+                'SL $totalQty • ${formatCurrency(totalMoney)} đ',
+                style: const TextStyle(fontSize: 11, color: kTextSecondary, fontWeight: FontWeight.w600),
+              ),
+              const SizedBox(height: 6),
+              ...indexes.map((idx) {
+                final it = _cart[idx];
+                return Padding(
+                  padding: const EdgeInsets.only(bottom: 6),
+                  child: Row(
+                    children: [
+                      Expanded(
+                        child: Text(
+                          'Size ${it.size} • ${formatCurrency(it.price)} k',
+                          style: const TextStyle(fontSize: 12, color: kTextSecondary),
+                        ),
+                      ),
+                      _QtyEditor(
+                        quantity: it.quantity,
+                        onChanged: (q) {
+                          if (q <= 0) return;
+                          setState(() => it.quantity = q);
+                        },
+                        onIncrement: () => setState(() => it.quantity += 1),
+                        onDecrement: () {
+                          if (it.quantity <= 1) return;
+                          setState(() => it.quantity -= 1);
+                        },
+                      ),
+                      const SizedBox(width: 4),
+                      IconButton(
+                        icon: const Icon(Icons.close, size: 16, color: Colors.red),
+                        padding: EdgeInsets.zero,
+                        constraints: const BoxConstraints(minWidth: 24, minHeight: 24),
+                        mouseCursor: SystemMouseCursors.click,
+                        onPressed: () => setState(() => _cart.removeAt(idx)),
+                      ),
+                    ],
+                  ),
+                );
+              }),
+            ],
+          ),
         );
-      },
+      }).toList(),
     );
   }
 }

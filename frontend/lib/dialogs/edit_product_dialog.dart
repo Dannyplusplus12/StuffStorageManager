@@ -3,6 +3,7 @@ import 'package:flutter/services.dart';
 import 'package:flutter/gestures.dart';
 import '../models/product.dart' show Product, Variant;
 import '../services/api_service.dart';
+import '../theme.dart';
 
 class EditProductDialog extends StatefulWidget {
   final Product product;
@@ -112,14 +113,36 @@ class _EditProductDialogState extends State<EditProductDialog> {
   @override
   Widget build(BuildContext context) {
     return Dialog(
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+      clipBehavior: Clip.antiAlias,
       child: ConstrainedBox(
-        constraints: const BoxConstraints(maxWidth: 550, maxHeight: 650),
-        child: Padding(
-          padding: const EdgeInsets.all(16),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              Text('Chỉnh sửa: ${widget.product.name}', style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+        constraints: const BoxConstraints(maxWidth: 620, maxHeight: 720),
+        child: Container(
+          decoration: BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.circular(16),
+            border: Border.all(color: kBorder),
+          ),
+          child: Padding(
+            padding: const EdgeInsets.fromLTRB(16, 14, 16, 14),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+              Row(
+                children: [
+                  Expanded(
+                    child: Text('Chỉnh sửa: ${widget.product.name}', style: const TextStyle(fontSize: 30, fontWeight: FontWeight.bold, color: kTextPrimary)),
+                  ),
+                  IconButton(
+                    onPressed: () => Navigator.pop(context),
+                    icon: const Icon(Icons.close),
+                    color: kTextSecondary,
+                    mouseCursor: SystemMouseCursors.click,
+                  ),
+                ],
+              ),
+              const SizedBox(height: 2),
+              const Text('Cập nhật mã, màu, size, giá và tồn kho', style: TextStyle(color: kTextSecondary)),
               const SizedBox(height: 8),
               Row(
                 children: [
@@ -158,7 +181,8 @@ class _EditProductDialogState extends State<EditProductDialog> {
                   child: const Text('XÓA SẢN PHẨM', style: TextStyle(fontWeight: FontWeight.bold)),
                 ),
               ),
-            ],
+              ],
+            ),
           ),
         ),
       ),
@@ -182,8 +206,13 @@ class _EditProductDialogState extends State<EditProductDialog> {
   }
 
   Widget _buildColorGroup(int gi, _ColorGroup g) {
-    return Card(
+    return Container(
       margin: const EdgeInsets.symmetric(vertical: 4),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(10),
+        border: Border.all(color: kBorder),
+      ),
       child: Padding(
         padding: const EdgeInsets.all(8),
         child: Column(
@@ -207,7 +236,7 @@ class _EditProductDialogState extends State<EditProductDialog> {
                 ),
               ),
               IconButton(
-                icon: const Icon(Icons.delete, color: Colors.red),
+                icon: const Icon(Icons.delete, color: kDanger),
                 mouseCursor: SystemMouseCursors.click,
                 onPressed: () => setState(() => _groups.removeAt(gi)),
               ),
@@ -229,7 +258,7 @@ class _EditProductDialogState extends State<EditProductDialog> {
       padding: const EdgeInsets.symmetric(vertical: 2),
       child: Row(children: [
         SizedBox(
-          width: 60,
+          width: 90,
           child: TextFormField(
             initialValue: r.size,
             decoration: const InputDecoration(hintText: 'Size'),
@@ -242,9 +271,10 @@ class _EditProductDialogState extends State<EditProductDialog> {
           hintText: 'Giá',
           onChanged: (v) => setState(() => r.price = v),
           step: 1000,
+          enableWheelAdjust: false,
         )),
         const SizedBox(width: 4),
-        SizedBox(width: 60, child: _ScrollableNumberField(
+        SizedBox(width: 90, child: _ScrollableNumberField(
           value: r.stock,
           hintText: 'Kho',
           onChanged: (v) => setState(() => r.stock = v),
@@ -265,12 +295,14 @@ class _ScrollableNumberField extends StatefulWidget {
   final String hintText;
   final ValueChanged<int> onChanged;
   final int step;
+  final bool enableWheelAdjust;
 
   const _ScrollableNumberField({
     required this.value,
     required this.hintText,
     required this.onChanged,
     this.step = 1,
+    this.enableWheelAdjust = true,
   });
 
   @override
@@ -290,8 +322,15 @@ class _ScrollableNumberFieldState extends State<_ScrollableNumberField> {
   @override
   void didUpdateWidget(_ScrollableNumberField oldWidget) {
     super.didUpdateWidget(oldWidget);
-    if (oldWidget.value != widget.value && !_focusNode.hasFocus) {
-      _controller.text = '${widget.value}';
+    if (oldWidget.value != widget.value) {
+      final current = int.tryParse(_controller.text.replaceAll('.', '')) ?? 0;
+      if (current != widget.value) {
+        final nextText = '${widget.value}';
+        _controller.value = TextEditingValue(
+          text: nextText,
+          selection: TextSelection.collapsed(offset: nextText.length),
+        );
+      }
     }
   }
 
@@ -315,7 +354,9 @@ class _ScrollableNumberFieldState extends State<_ScrollableNumberField> {
   @override
   Widget build(BuildContext context) {
     return Listener(
+      behavior: HitTestBehavior.translucent,
       onPointerSignal: (event) {
+        if (!widget.enableWheelAdjust) return;
         if (event is PointerScrollEvent) {
           if (event.scrollDelta.dy < 0) {
             _increment();

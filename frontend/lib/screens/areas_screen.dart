@@ -6,7 +6,8 @@ import '../theme.dart';
 import '../utils.dart';
 
 class AreasScreen extends StatefulWidget {
-  const AreasScreen({super.key});
+  final ValueChanged<int>? onOpenDebtByArea;
+  const AreasScreen({super.key, this.onOpenDebtByArea});
 
   @override
   State<AreasScreen> createState() => _AreasScreenState();
@@ -201,9 +202,12 @@ class _AreasScreenState extends State<AreasScreen> {
                         ],
                         rows: _areas.map((a) {
                           return DataRow(cells: [
-                            DataCell(Text(a.name)),
-                            DataCell(Text('${a.customerCount}')),
-                            DataCell(Text('${formatCurrency(a.totalDebt)} đ')),
+                            DataCell(
+                              Text(a.name),
+                              onTap: () => widget.onOpenDebtByArea?.call(a.id),
+                            ),
+                            DataCell(Text('${a.customerCount}'), onTap: () => widget.onOpenDebtByArea?.call(a.id)),
+                            DataCell(Text('${formatCurrency(a.totalDebt)} đ'), onTap: () => widget.onOpenDebtByArea?.call(a.id)),
                             DataCell(PopupMenuButton<String>(
                               onSelected: (v) {
                                 if (v == 'edit') {

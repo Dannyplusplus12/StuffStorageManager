@@ -7,7 +7,12 @@ import '../dialogs/edit_log_dialog.dart';
 
 class DebtScreen extends StatefulWidget {
   final void Function(Map<String, dynamic>) onEditOrder;
-  const DebtScreen({super.key, required this.onEditOrder});
+  final int? initialListAreaFilterId;
+  const DebtScreen({
+    super.key,
+    required this.onEditOrder,
+    this.initialListAreaFilterId,
+  });
   @override
   State<DebtScreen> createState() => _DebtScreenState();
 }
@@ -75,6 +80,7 @@ class _DebtScreenState extends State<DebtScreen> {
   @override
   void initState() {
     super.initState();
+    _listAreaFilterId = widget.initialListAreaFilterId;
     _load();
   }
 
@@ -99,6 +105,9 @@ class _DebtScreenState extends State<DebtScreen> {
         setState(() {
           _customers = c;
           _areas = areas;
+          if (_listAreaFilterId != null && !_areas.any((a) => a.id == _listAreaFilterId)) {
+            _listAreaFilterId = null;
+          }
           _selectedAreaId ??= (areas.isNotEmpty ? areas.first.id : null);
           final selectedId = _selectedCustomer?.id;
           if (selectedId != null) {
@@ -293,7 +302,7 @@ class _DebtScreenState extends State<DebtScreen> {
           ),
           const SizedBox(height: 8),
           DropdownButtonFormField<int>(
-            initialValue: _selectedAreaId,
+            initialValue: _areas.any((a) => a.id == _selectedAreaId) ? _selectedAreaId : null,
             decoration: const InputDecoration(hintText: 'Chọn khu vực (*)'),
             items: _areas.map((a) => DropdownMenuItem<int>(value: a.id, child: Text(a.name))).toList(),
             onChanged: (v) => setState(() => _selectedAreaId = v),
@@ -415,7 +424,7 @@ class _DebtScreenState extends State<DebtScreen> {
           ),
           const SizedBox(height: 8),
           DropdownButtonFormField<int?>(
-            initialValue: _listAreaFilterId,
+            initialValue: _areas.any((a) => a.id == _listAreaFilterId) ? _listAreaFilterId : null,
             isExpanded: true,
             decoration: const InputDecoration(),
             items: [

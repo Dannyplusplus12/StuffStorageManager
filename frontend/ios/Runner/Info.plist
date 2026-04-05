@@ -26,6 +26,14 @@
 	<string>$(FLUTTER_BUILD_NUMBER)</string>
 	<key>LSRequiresIPhoneOS</key>
 	<true/>
+   <key>NSCameraUsageDescription</key>
+	<string>Ứng dụng cần dùng camera để chụp ảnh xác nhận giao đơn.</string>
+	<key>NSPhotoLibraryUsageDescription</key>
+	<string>Ứng dụng cần truy cập thư viện ảnh để chọn ảnh giao hàng.</string>
+	<key>NSPhotoLibraryAddUsageDescription</key>
+	<string>Ứng dụng có thể lưu ảnh phục vụ xác nhận giao hàng.</string>
+	<key>NSUserNotificationsUsageDescription</key>
+	<string>Ứng dụng cần gửi thông báo đơn hàng cho nhân viên.</string>
 	<key>UIApplicationSceneManifest</key>
 	<dict>
 		<key>UIApplicationSupportsMultipleScenes</key>

@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/gestures.dart';
 import 'package:flutter/services.dart';
 import '../models/product.dart';
 import '../models/order.dart';
@@ -24,30 +25,56 @@ class _ProductBuyDialogState extends State<ProductBuyDialog> {
     }
 
     return Dialog(
-      insetPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 16),
+      insetPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 20),
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+      clipBehavior: Clip.antiAlias,
       child: ConstrainedBox(
-        constraints: const BoxConstraints(maxWidth: 560, maxHeight: 760),
-        child: Padding(
-          padding: const EdgeInsets.all(14),
+        constraints: const BoxConstraints(maxWidth: 620, maxHeight: 720),
+        child: Container(
+          decoration: BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.circular(16),
+            border: Border.all(color: kBorder),
+          ),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Text(
-                p.name,
-                maxLines: 2,
-                overflow: TextOverflow.ellipsis,
-                style: const TextStyle(fontSize: 22, fontWeight: FontWeight.w700),
+              Padding(
+                padding: const EdgeInsets.fromLTRB(16, 14, 8, 10),
+                child: Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            p.name,
+                            maxLines: 2,
+                            overflow: TextOverflow.ellipsis,
+                            style: const TextStyle(fontSize: 24, fontWeight: FontWeight.w700, color: kTextPrimary),
+                          ),
+                          const SizedBox(height: 4),
+                          Text(
+                            'Giá: ${p.priceRange}k',
+                            style: const TextStyle(color: kPrimary, fontWeight: FontWeight.w700, fontSize: 16),
+                          ),
+                        ],
+                      ),
+                    ),
+                    IconButton(
+                      onPressed: () => Navigator.pop(context),
+                      icon: const Icon(Icons.close),
+                      color: kTextSecondary,
+                      mouseCursor: SystemMouseCursors.click,
+                    )
+                  ],
+                ),
               ),
-              const SizedBox(height: 4),
-              Text(
-                'Giá: ${p.priceRange} k',
-                style: const TextStyle(color: kPrimary, fontWeight: FontWeight.w700, fontSize: 16),
-              ),
-              const SizedBox(height: 10),
               const Divider(height: 1),
-              const SizedBox(height: 10),
               Expanded(
                 child: ListView.separated(
+                  padding: const EdgeInsets.fromLTRB(14, 12, 14, 10),
                   itemCount: byColor.length,
                   separatorBuilder: (_, __) => const SizedBox(height: 10),
                   itemBuilder: (_, idx) {
@@ -63,14 +90,15 @@ class _ProductBuyDialogState extends State<ProductBuyDialog> {
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
                           Container(
-                            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
                             decoration: BoxDecoration(
-                              color: const Color(0xFFF1F5F9),
-                              borderRadius: BorderRadius.circular(8),
+                              color: kPrimaryLight,
+                              borderRadius: BorderRadius.circular(999),
+                              border: Border.all(color: const Color(0xFFFFD9D1)),
                             ),
                             child: Text(
                               e.key.toUpperCase(),
-                              style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 12),
+                              style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 12, color: kPrimaryDark),
                             ),
                           ),
                           const SizedBox(height: 8),
@@ -85,6 +113,7 @@ class _ProductBuyDialogState extends State<ProductBuyDialog> {
                                     ? const Color(0xFFFFF1F2)
                                     : (lowStock ? const Color(0xFFFFFBEB) : const Color(0xFFF8FAFC)),
                                 borderRadius: BorderRadius.circular(8),
+                                border: Border.all(color: kBorder),
                               ),
                               child: Row(
                                 children: [
@@ -135,50 +164,56 @@ class _ProductBuyDialogState extends State<ProductBuyDialog> {
                   },
                 ),
               ),
-              const SizedBox(height: 10),
-              SafeArea(
-                top: false,
-                child: Row(
-                  children: [
-                    Expanded(
-                      child: MouseRegion(
-                        cursor: SystemMouseCursors.click,
-                        child: OutlinedButton(
-                          onPressed: () => Navigator.pop(context),
-                          child: const Text('Hủy bỏ'),
+              Container(
+                padding: const EdgeInsets.fromLTRB(14, 10, 14, 14),
+                decoration: const BoxDecoration(
+                  border: Border(top: BorderSide(color: kBorder)),
+                  color: Colors.white,
+                ),
+                child: SafeArea(
+                  top: false,
+                  child: Row(
+                    children: [
+                      Expanded(
+                        child: MouseRegion(
+                          cursor: SystemMouseCursors.click,
+                          child: OutlinedButton(
+                            onPressed: () => Navigator.pop(context),
+                            child: const Text('Hủy bỏ'),
+                          ),
                         ),
                       ),
-                    ),
-                    const SizedBox(width: 10),
-                    Expanded(
-                      flex: 2,
-                      child: MouseRegion(
-                        cursor: SystemMouseCursors.click,
-                        child: ElevatedButton(
-                          onPressed: () {
-                            final items = <CartItem>[];
-                            _qtys.forEach((vid, qty) {
-                              if (qty > 0) {
-                                final v = p.variants.firstWhere((x) => x.id == vid);
-                                items.add(
-                                  CartItem(
-                                    variantId: v.id!,
-                                    productName: p.name,
-                                    color: v.color,
-                                    size: v.size,
-                                    price: v.price,
-                                    quantity: qty,
-                                  ),
-                                );
-                              }
-                            });
-                            Navigator.pop(context, items);
-                          },
-                          child: const Text('Thêm vào đơn'),
+                      const SizedBox(width: 10),
+                      Expanded(
+                        flex: 2,
+                        child: MouseRegion(
+                          cursor: SystemMouseCursors.click,
+                          child: ElevatedButton(
+                            onPressed: () {
+                              final items = <CartItem>[];
+                              _qtys.forEach((vid, qty) {
+                                if (qty > 0) {
+                                  final v = p.variants.firstWhere((x) => x.id == vid);
+                                  items.add(
+                                    CartItem(
+                                      variantId: v.id!,
+                                      productName: p.name,
+                                      color: v.color,
+                                      size: v.size,
+                                      price: v.price,
+                                      quantity: qty,
+                                    ),
+                                  );
+                                }
+                              });
+                              Navigator.pop(context, items);
+                            },
+                            child: const Text('Thêm vào đơn'),
+                          ),
                         ),
                       ),
-                    ),
-                  ],
+                    ],
+                  ),
                 ),
               ),
             ],
@@ -189,7 +224,7 @@ class _ProductBuyDialogState extends State<ProductBuyDialog> {
   }
 }
 
-class _QuantityStepper extends StatelessWidget {
+class _QuantityStepper extends StatefulWidget {
   final int variantId;
   final int maxStock;
   final int currentQty;
@@ -202,103 +237,114 @@ class _QuantityStepper extends StatelessWidget {
     required this.onChanged,
   });
 
-  Future<void> _openManualInput(BuildContext context) async {
-    final ctrl = TextEditingController(text: currentQty > 0 ? '$currentQty' : '');
-    final value = await showDialog<int>(
-      context: context,
-      builder: (_) => Dialog(
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
-        child: Container(
-          width: 340,
-          padding: const EdgeInsets.all(14),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              const Text('Nhập số lượng', style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold)),
-              const SizedBox(height: 8),
-              TextField(
-                controller: ctrl,
-                autofocus: true,
-                keyboardType: TextInputType.number,
-                inputFormatters: [FilteringTextInputFormatter.digitsOnly],
-                decoration: InputDecoration(hintText: '0 - $maxStock'),
-                onSubmitted: (_) {
-                  final q = int.tryParse(ctrl.text.trim()) ?? 0;
-                  Navigator.pop(context, q);
-                },
-              ),
-              const SizedBox(height: 12),
-              Row(
-                mainAxisAlignment: MainAxisAlignment.end,
-                children: [
-                  MouseRegion(
-                    cursor: SystemMouseCursors.click,
-                    child: TextButton(onPressed: () => Navigator.pop(context), child: const Text('Hủy')),
-                  ),
-                  const SizedBox(width: 8),
-                  MouseRegion(
-                    cursor: SystemMouseCursors.click,
-                    child: ElevatedButton(
-                      onPressed: () {
-                        final q = int.tryParse(ctrl.text.trim()) ?? 0;
-                        Navigator.pop(context, q);
-                      },
-                      child: const Text('OK'),
-                    ),
-                  ),
-                ],
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
+  @override
+  State<_QuantityStepper> createState() => _QuantityStepperState();
+}
 
-    if (value == null) return;
-    onChanged(value.clamp(0, maxStock));
+class _QuantityStepperState extends State<_QuantityStepper> {
+  late final TextEditingController _controller;
+  final FocusNode _focusNode = FocusNode();
+
+  @override
+  void initState() {
+    super.initState();
+    _controller = TextEditingController(text: '${widget.currentQty}');
+  }
+
+  @override
+  void didUpdateWidget(covariant _QuantityStepper oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.currentQty != widget.currentQty) {
+      final currentTextValue = int.tryParse(_controller.text.trim()) ?? 0;
+      if (currentTextValue != widget.currentQty) {
+        final nextText = '${widget.currentQty}';
+        _controller.value = TextEditingValue(
+          text: nextText,
+          selection: TextSelection.collapsed(offset: nextText.length),
+        );
+      }
+    }
+  }
+
+  @override
+  void dispose() {
+    _focusNode.dispose();
+    _controller.dispose();
+    super.dispose();
+  }
+
+  void _increase() => widget.onChanged((widget.currentQty + 1).clamp(0, widget.maxStock));
+
+  void _decrease() => widget.onChanged((widget.currentQty - 1).clamp(0, widget.maxStock));
+
+  void _applyInput(String raw) {
+    final parsed = int.tryParse(raw.trim()) ?? 0;
+    widget.onChanged(parsed.clamp(0, widget.maxStock));
   }
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      height: 40,
-      decoration: BoxDecoration(
-        border: Border.all(color: kBorder),
-        borderRadius: BorderRadius.circular(6),
-        color: Colors.white,
-      ),
-      child: Row(
-        children: [
-          InkWell(
-            mouseCursor: SystemMouseCursors.click,
-            onTap: () => onChanged((currentQty - 1).clamp(0, maxStock)),
-            child: const Padding(
-              padding: EdgeInsets.symmetric(horizontal: 10, vertical: 8),
-              child: Icon(Icons.remove, size: 16),
-            ),
-          ),
-          Expanded(
-            child: InkWell(
+    return Listener(
+      behavior: HitTestBehavior.translucent,
+      onPointerSignal: (event) {
+        if (event is PointerScrollEvent) {
+          GestureBinding.instance.pointerSignalResolver.register(event, (resolvedEvent) {
+            final signal = resolvedEvent as PointerScrollEvent;
+            if (signal.scrollDelta.dy < 0) {
+              _increase();
+            } else if (signal.scrollDelta.dy > 0) {
+              _decrease();
+            }
+          });
+        }
+      },
+      child: Container(
+        height: 40,
+        decoration: BoxDecoration(
+          border: Border.all(color: kBorder),
+          borderRadius: BorderRadius.circular(6),
+          color: Colors.white,
+        ),
+        child: Row(
+          children: [
+            InkWell(
               mouseCursor: SystemMouseCursors.click,
-              onTap: () => _openManualInput(context),
-              child: Center(
-                child: Text(
-                  '$currentQty',
-                  style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14),
-                ),
+              onTap: _decrease,
+              child: const Padding(
+                padding: EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+                child: Icon(Icons.remove, size: 16),
               ),
             ),
-          ),
-          InkWell(
-            mouseCursor: SystemMouseCursors.click,
-            onTap: () => onChanged((currentQty + 1).clamp(0, maxStock)),
-            child: const Padding(
-              padding: EdgeInsets.symmetric(horizontal: 10, vertical: 8),
-              child: Icon(Icons.add, size: 16),
+            Expanded(
+              child: TextField(
+                controller: _controller,
+                focusNode: _focusNode,
+                textAlign: TextAlign.center,
+                keyboardType: TextInputType.number,
+                inputFormatters: [FilteringTextInputFormatter.digitsOnly],
+                decoration: const InputDecoration(
+                  border: InputBorder.none,
+                  isCollapsed: true,
+                  contentPadding: EdgeInsets.symmetric(vertical: 8),
+                ),
+                style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14),
+                onChanged: _applyInput,
+                onEditingComplete: () {
+                  _applyInput(_controller.text);
+                  _focusNode.unfocus();
+                },
+              ),
             ),
-          ),
-        ],
+            InkWell(
+              mouseCursor: SystemMouseCursors.click,
+              onTap: _increase,
+              child: const Padding(
+                padding: EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+                child: Icon(Icons.add, size: 16),
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }

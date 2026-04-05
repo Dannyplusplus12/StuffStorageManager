@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/gestures.dart';
 
 import '../models/customer.dart';
 import '../models/order.dart';
@@ -130,6 +131,11 @@ class _SalesScreenState extends State<SalesScreen> {
   }
 
   void _onCodeChanged(_SaleRow r, String v) {
+    final hasCode = v.trim().isNotEmpty;
+    if (!hasCode) {
+      r.autoAddedNextRow = false;
+    }
+
     final p = _findProductExact(v);
     if (p != null) {
       r.nameCtrl.text = p.name;
@@ -141,6 +147,11 @@ class _SalesScreenState extends State<SalesScreen> {
       }
     }
     _recalcRow(r);
+
+    if (hasCode && !r.autoAddedNextRow) {
+      r.autoAddedNextRow = true;
+      setState(() => _rows.add(_SaleRow()));
+    }
   }
 
   void _onColorOrSizeChanged(_SaleRow r) {
@@ -181,12 +192,12 @@ class _SalesScreenState extends State<SalesScreen> {
       return;
     }
     try {
-      await ApiService.checkout(
+      await ApiService.checkoutDesktopDispatch(
         customerName: _customerCtrl.text.trim(),
         customerPhone: _phoneCtrl.text.trim(),
         cart: cart,
       );
-      _snack('Đã xuất kho & ghi công nợ', Colors.green);
+      _snack('Đã gửi đơn cho picker, chờ nhận xử lý', Colors.green);
       setState(() {
         for (final r in _rows) {
           r.dispose();
@@ -299,19 +310,6 @@ class _SalesScreenState extends State<SalesScreen> {
                                 children: _rows.asMap().entries.map((e) => _row(e.key, e.value)).toList(),
                               ),
                             ),
-                            Container(
-                              width: double.infinity,
-                              padding: const EdgeInsets.only(left: 8, bottom: 6),
-                              decoration: const BoxDecoration(border: Border(top: BorderSide(color: kBorder))),
-                              child: Align(
-                                alignment: Alignment.centerLeft,
-                                child: TextButton.icon(
-                                  onPressed: () => setState(() => _rows.add(_SaleRow())),
-                                  icon: const Icon(Icons.add, size: 16),
-                                  label: const Text('Thêm dòng'),
-                                ),
-                              ),
-                            ),
                           ],
                         ),
                 ),
@@ -329,7 +327,7 @@ class _SalesScreenState extends State<SalesScreen> {
                       width: 280,
                       child: ElevatedButton(
                         onPressed: _submit,
-                        child: const Text('XUẤT KHO & GHI CÔNG NỢ', style: TextStyle(fontWeight: FontWeight.bold)),
+                        child: const Text('XUẤT HÀNG', style: TextStyle(fontWeight: FontWeight.bold)),
                       ),
                     )
                   ],
@@ -400,10 +398,9 @@ class _SalesScreenState extends State<SalesScreen> {
           const SizedBox(width: 8),
           SizedBox(
             width: 70,
-            child: TextField(
+            child: _QtyInputField(
               controller: r.qtyCtrl,
-              keyboardType: TextInputType.number,
-              onChanged: (_) => _recalcRow(r),
+              onValueChanged: (_) => _recalcRow(r),
             ),
           ),
           const SizedBox(width: 8),
@@ -503,9 +500,10 @@ class _SaleRow {
   final colorFocus = FocusNode();
   final sizeCtrl = TextEditingController();
   final sizeFocus = FocusNode();
-  final qtyCtrl = TextEditingController(text: '0');
+  final qtyCtrl = TextEditingController();
   int price = 0;
   int amount = 0;
+  bool autoAddedNextRow = false;
 
   void dispose() {
     codeCtrl.dispose();
@@ -516,5 +514,61 @@ class _SaleRow {
     sizeCtrl.dispose();
     sizeFocus.dispose();
     qtyCtrl.dispose();
+  }
+}
+
+class _QtyInputField extends StatefulWidget {
+  final TextEditingController controller;
+  final ValueChanged<int> onValueChanged;
+
+  const _QtyInputField({
+    required this.controller,
+    required this.onValueChanged,
+  });
+
+  @override
+  State<_QtyInputField> createState() => _QtyInputFieldState();
+}
+
+class _QtyInputFieldState extends State<_QtyInputField> {
+  final FocusNode _focusNode = FocusNode();
+
+  @override
+  void dispose() {
+    _focusNode.dispose();
+    super.dispose();
+  }
+
+  void _apply(int value) {
+    final next = value.clamp(0, 999999999);
+    final text = next == 0 ? '' : '$next';
+    widget.controller.value = TextEditingValue(
+      text: text,
+      selection: TextSelection.collapsed(offset: text.length),
+    );
+    widget.onValueChanged(next);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Listener(
+      behavior: HitTestBehavior.translucent,
+      onPointerSignal: (event) {
+        if (_focusNode.hasFocus && event is PointerScrollEvent) {
+          final current = int.tryParse(widget.controller.text.trim()) ?? 0;
+          if (event.scrollDelta.dy < 0) {
+            _apply(current + 1);
+          } else if (event.scrollDelta.dy > 0) {
+            _apply(current - 1);
+          }
+        }
+      },
+      child: TextField(
+        controller: widget.controller,
+        focusNode: _focusNode,
+        keyboardType: TextInputType.number,
+        onChanged: (v) => widget.onValueChanged(int.tryParse(v.trim()) ?? 0),
+      ),
+    );
   }
 }

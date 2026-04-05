@@ -4,6 +4,23 @@
 > **Cập nhật lần cuối:** Tháng 3/2026
 
 ## CẬP NHẬT NHANH GẦN NHẤT
+- Đã đổi flow trang `Bán hàng` desktop sang giống `Xuất hàng`: dùng `checkoutDesktopDispatch` để gửi đơn cho picker (không trừ kho/cộng nợ ngay), đơn vẫn vào lịch sử quản lý và đi đủ trạng thái receive/deliver/confirm.
+- Đã tinh chỉnh typography/màu của popup `Kho hàng` picker theo hướng gọn/hiện đại (giảm tình trạng chữ quá đậm, giảm độ gắt màu nhấn), đồng thời giới hạn chiều cao bottom-sheet `Kho hàng` còn `95%` màn hình.
+- Đã tinh chỉnh thêm popup `Kho hàng` picker theo đúng phong cách `Nhận đơn`: bố cục compact hơn (header + badge tổng kho, ảnh thu gọn), nhóm `màu` rõ ràng và hiển thị `size:tồn` dạng chip/wrap để nhìn nhanh như thẻ nhóm trong nhận đơn.
+- Đã sửa popup `Kho hàng` của picker (mobile): hiển thị lại theo nhóm `màu -> size`, có tổng tồn từng màu và style card gọn/hiện đại hơn; giữ highlight biến thể đang được focus khi nhảy từ đơn hàng.
+- Đã đồng bộ phần đơn chờ duyệt ở panel trái màn `Quản lý`: chi tiết hàng hiển thị theo bảng kiểu Excel (`Mẫu/Màu/SL/Tiền`) giống panel phải, thay cho dạng text gạch đầu dòng.
+- Mobile app đã bỏ popup nhập PIN: màn vào app giờ hiển thị trực tiếp ô PIN + nút `Vào app` (PIN-only login, auto map role như cũ).
+- Đã chỉnh lại UI popup mobile orderer theo yêu cầu gọn/modern: popup chọn 1 mẫu và popup `Xem tất cả` đều group rõ theo `mẫu -> màu -> size`, có tổng theo model/màu và sắp xếp ổn định để dễ quan sát.
+- Theo yêu cầu mới, đã bỏ hẳn tăng/giảm bằng con lăn chuột cho ô `Giá` ở `Nhập hàng` (`add_product_panel.dart`) để tránh đổi giá ngoài ý muốn khi thao tác nhanh.
+- Đã bổ sung cấu hình iOS cho mobile: thêm quyền camera/thư viện/thông báo trong `frontend/ios/Runner/Info.plist` và bật explicit presentation cho local notifications trong `mobile_notification_service.dart` (alert/badge/sound) để tăng tương thích trên iPhone.
+- Đã fix lỗi mở trang `Công nợ` thỉnh thoảng đỏ màn hình rồi tự hết (assert `DropdownButton`): các dropdown filter/khu vực trong `debt_screen.dart` giờ chỉ nhận `initialValue` khi value còn tồn tại trong danh sách `areas` đã load.
+- Trang `Nhập hàng` thêm thông báo thành công dạng `SnackBar` ở đáy màn hình sau khi lưu sản phẩm mới (`Đã thêm sản phẩm mới`), đồng bộ kiểu hiển thị với thông báo lỗi.
+- `Kho hàng` (popup sửa sản phẩm) đã bỏ tính năng lăn chuột để tăng/giảm ở ô `Giá` nhằm tránh đổi giá ngoài ý muốn; vẫn giữ nhập tay và chỉnh bằng ô số như cũ.
+- `Xuất hàng` popup chọn mẫu (`ProductBuyDialog`): lăn chuột trên ô số lượng giờ chỉ đổi số lượng, không kéo trôi danh sách màu/size bên ngoài nữa.
+- Mobile picker tab `Nhận đơn` đã thiết kế lại phần liệt kê chi tiết theo nhóm `mẫu -> màu -> chip size:SL` nhiều dòng, tránh dồn 1 dòng dài và giúp đọc chuyên nghiệp hơn.
+- Đã cập nhật điều hướng từ `Khu vực` -> `Công nợ`: bấm vào một dòng khu vực trong bảng sẽ chuyển thẳng sang trang `Công nợ` và tự áp filter theo đúng khu vực vừa chọn.
+- Đã fix crash `A FocusNode was used after being disposed` ở màn `Nhập hàng` khi thêm/xóa nhiều dòng (có dòng trống): thao tác xóa nhóm màu/xóa dòng size giờ chuyển focus an toàn rồi mới dispose node sau frame, đồng thời thêm key ổn định cho group/row động.
+- Đã cập nhật UI theo yêu cầu quan sát: panel phải `Xuất hàng` được gom giỏ theo nhóm `mẫu + màu` (giữ chỉnh số lượng theo từng size), và `Quản lý > Lịch sử` đổi sang thẻ `dropdown` để bung chi tiết mặt hàng theo bảng kiểu Excel (`Mẫu/Màu/SL/Tiền`), đồng thời tăng độ rộng cột lịch sử.
 - Mobile `orderer` đã có thanh điều hướng đáy riêng: thêm tab `Soạn đơn` + `Công nợ`. Tab `Công nợ` cho phép xem danh sách khách nợ trên mobile và thực hiện `điều chỉnh thủ công` nhanh (tạo debt log +/-) để thử nghiệm/hoàn thiện dần theo nhu cầu thực tế.
 - Theo yêu cầu mới, đã **bật lại `mã hàng` (`products.code`)** cho desktop flow `Nhập hàng/Kho hàng/Xuất hàng/Bán hàng`: backend ORM + API + runtime migration đã thêm cột `products.code` (backfill mặc định từ `name` nếu trống); frontend model/service đã gửi/nhận `code`; form `Nhập hàng` và popup `Sửa sản phẩm` đã có input mã hàng; card sản phẩm và tìm kiếm nội bộ hỗ trợ theo mã.
 - Đã đồng bộ popup `Sửa/Xóa` ở màn `Khu vực` theo style dialog mới (bo góc, spacing gọn, hành động rõ), và chuyển thao tác bảng `Khu vực` sang menu popup action để thống nhất UX với `Công nợ`.
@@ -253,6 +270,7 @@ copy config.json dist\config.json
 | DELETE | `/orders/{id}` | Xóa hóa đơn (hoàn tác kho + nợ) |
 | PUT | `/orders/{id}/date` | Sửa ngày giờ đơn hàng |
 | POST | `/checkout/draft` | Tạo hóa đơn nháp (pending), chưa trừ kho/chưa cộng nợ |
+| POST | `/checkout/desktop-dispatch` | Desktop xuất hàng gửi thẳng cho picker (`approved`), bỏ qua bước duyệt |
 | GET | `/orders/pending` | Danh sách đơn chờ tiếp nhận |
 | PUT | `/orders/{id}/approve` | Chuyển pending → accepted cho picker (chưa trừ kho/chưa cộng nợ) |
 | GET | `/orders/accepted` | Danh sách đơn picker cần xác nhận |
@@ -296,10 +314,11 @@ is_sqlite = DATABASE_URL.startswith("sqlite")   # Flag cho migration conditional
 
 ## 12. DESKTOP STAFF FLOW (HIỆN TẠI)
 
-- Nút `Xuất hàng` ở desktop (`frontend/ui.py`) hiện dùng flow:
-  1. `POST /checkout/draft`
-  2. `PUT /orders/{id}/approve`
-- Vì vậy lúc desktop staff bấm xuất hàng:
-  - **chưa trừ kho ngay**
-  - **chưa cộng công nợ ngay**
-- Kho và công nợ chỉ thay đổi tại bước picker `PUT /orders/{id}/confirm`.
+- Nút `Xuất hàng` desktop Flutter (`frontend/lib/screens/pos_screen.dart`) dùng flow mới:
+  1. `POST /checkout/desktop-dispatch` (tạo đơn ở trạng thái `approved`)
+  2. Picker nhận đơn (`/orders/{id}/receive`) → `assigned`
+  3. Picker giao + xác nhận (`/orders/{id}/deliver`/`confirm`) → `completed`
+- Đặc điểm:
+  - **Bỏ qua bước duyệt desktop**
+  - **Vẫn chưa trừ kho/chưa cộng công nợ tại lúc tạo đơn**
+  - Kho + công nợ chỉ thay đổi ở bước picker xác nhận hoàn tất

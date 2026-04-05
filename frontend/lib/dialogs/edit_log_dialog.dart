@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import '../services/api_service.dart';
+import '../theme.dart';
 
 class EditLogDialog extends StatefulWidget {
   final int custId;
@@ -61,28 +62,63 @@ class _EditLogDialogState extends State<EditLogDialog> {
 
   @override
   Widget build(BuildContext context) {
-    return AlertDialog(
-      title: Text(widget.data != null ? 'Sửa điều chỉnh' : 'Thêm điều chỉnh công nợ'),
-      content: SizedBox(
-        width: 400,
-        child: Column(mainAxisSize: MainAxisSize.min, children: [
-          TextField(controller: _descCtrl, decoration: const InputDecoration(labelText: 'Nội dung')),
-          const SizedBox(height: 8),
-          TextField(controller: _amtCtrl, decoration: const InputDecoration(labelText: 'Số tiền (VD: -100000 hoặc 100000)'), keyboardType: TextInputType.number),
-          const SizedBox(height: 8),
-          TextField(controller: _dtCtrl, decoration: const InputDecoration(labelText: 'Ngày giờ (YYYY-MM-DD HH:MM)')),
-        ]),
+    return Dialog(
+      insetPadding: const EdgeInsets.symmetric(horizontal: 24, vertical: 24),
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+      child: Container(
+        width: 460,
+        padding: const EdgeInsets.all(16),
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(16),
+          border: Border.all(color: kBorder),
+        ),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                Expanded(
+                  child: Text(
+                    widget.data != null ? 'Sửa điều chỉnh' : 'Thêm điều chỉnh công nợ',
+                    style: const TextStyle(fontSize: 24, fontWeight: FontWeight.bold, color: kTextPrimary),
+                  ),
+                ),
+                IconButton(
+                  onPressed: () => Navigator.pop(context, false),
+                  icon: const Icon(Icons.close),
+                  color: kTextSecondary,
+                  mouseCursor: SystemMouseCursors.click,
+                ),
+              ],
+            ),
+            const SizedBox(height: 2),
+            const Text('Nhập số âm để thu tiền, số dương để tăng nợ', style: TextStyle(color: kTextSecondary)),
+            const SizedBox(height: 12),
+            TextField(controller: _descCtrl, decoration: const InputDecoration(labelText: 'Nội dung')),
+            const SizedBox(height: 8),
+            TextField(controller: _amtCtrl, decoration: const InputDecoration(labelText: 'Số tiền (VD: -100000 hoặc 100000)'), keyboardType: TextInputType.number),
+            const SizedBox(height: 8),
+            TextField(controller: _dtCtrl, decoration: const InputDecoration(labelText: 'Ngày giờ (YYYY-MM-DD HH:MM)')),
+            const SizedBox(height: 14),
+            Row(
+              mainAxisAlignment: MainAxisAlignment.end,
+              children: [
+                MouseRegion(
+                  cursor: SystemMouseCursors.click,
+                  child: OutlinedButton(onPressed: () => Navigator.pop(context, false), child: const Text('Hủy')),
+                ),
+                const SizedBox(width: 8),
+                MouseRegion(
+                  cursor: SystemMouseCursors.click,
+                  child: ElevatedButton(onPressed: _save, child: const Text('Lưu điều chỉnh')),
+                ),
+              ],
+            ),
+          ],
+        ),
       ),
-      actions: [
-        MouseRegion(
-          cursor: SystemMouseCursors.click,
-          child: TextButton(onPressed: () => Navigator.pop(context, false), child: const Text('Hủy')),
-        ),
-        MouseRegion(
-          cursor: SystemMouseCursors.click,
-          child: ElevatedButton(onPressed: _save, child: const Text('Lưu')),
-        ),
-      ],
     );
   }
 }
