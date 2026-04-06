@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_localizations/flutter_localizations.dart';
 import 'config.dart';
 import 'theme.dart';
 import 'utils/app_mode_manager.dart';
@@ -46,6 +47,16 @@ class _MyAppState extends State<MyApp> {
       title: 'Quản lý kho & Công nợ',
       debugShowCheckedModeBanner: false,
       theme: buildTheme(),
+      localizationsDelegates: const [
+        GlobalMaterialLocalizations.delegate,
+        GlobalWidgetsLocalizations.delegate,
+        GlobalCupertinoLocalizations.delegate,
+      ],
+      supportedLocales: const [
+        Locale('vi', 'VN'),
+        Locale('en', 'US'),
+      ],
+      locale: const Locale('vi', 'VN'),
       home: DeviceDetector.isMobile ? const MobileHomeScreen() : const HomeScreen(),
     );
   }

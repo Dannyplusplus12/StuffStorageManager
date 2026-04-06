@@ -4,6 +4,14 @@
 > **Cập nhật lần cuối:** Tháng 3/2026
 
 ## CẬP NHẬT NHANH GẦN NHẤT
+- Màn `Doanh thu` đã thêm nút quay lại ở góc trên bên phải khu vực `Chi tiết theo...` để nhảy nhanh ngược cấp thời gian: `Ngày -> Tuần -> Tháng -> Năm`.
+- Trang `Doanh thu` đã thay card `Trung bình / đơn` thành `Số lượng khách hàng` (đếm khách duy nhất theo bộ lọc hiện tại); đồng thời filter `Khách hàng` dạng input+dropdown giữ trạng thái mặc định `Tất cả khách hàng` dưới dạng hint rỗng để bấm vào nhập ngay, không phải xóa text trước.
+- Màn `Doanh thu` đã đổi phần `Chi tiết theo ngày`: bỏ breakdown theo giờ, thay bằng danh sách toàn bộ hóa đơn trong ngày đã chọn và mỗi hóa đơn có dropdown bung chi tiết dạng bảng kiểu Excel (`Mẫu/Màu/Size/SL/Đơn giá/Tiền`) theo yêu cầu.
+- Đã fix lỗi resolve dependencies khi bật `flutter_localizations` ở app Flutter (`frontend/`): nâng `intl` lên `^0.20.2` để khớp version pin từ Flutter SDK.
+- Trang `Doanh thu` đã đổi filter `Khách hàng` sang dạng nhập + dropdown (searchable dropdown) để vừa gõ lọc nhanh vừa chọn trực tiếp từ danh sách.
+- Đã fix lỗi `No MaterialLocalizations found` khi mở chọn ngày ở màn `Doanh thu`: bổ sung cấu hình localization cho `MaterialApp` (`GlobalMaterialLocalizations`, `GlobalWidgetsLocalizations`, `GlobalCupertinoLocalizations`) và set locale mặc định `vi_VN`.
+- Đã nâng cấp trang `Doanh thu`: Việt hóa phần chọn mốc thời gian và bổ sung drill-down shortcut trực tiếp trong bảng chi tiết theo cấp `Năm -> Tháng -> Tuần -> Ngày` (bấm vào dòng để nhảy cấp sâu hơn), đồng thời hiển thị rõ phạm vi thời gian đang xem.
+- Đã thêm menu desktop Flutter `Doanh thu`: màn mới hỗ trợ lọc doanh thu theo `Ngày/Tuần/Tháng/Năm` và thêm 2 dropdown lọc theo `Khu vực` + `Khách hàng`, hiển thị tổng quan doanh thu/đơn trung bình và danh sách chi tiết theo kỳ với phong cách UI đồng bộ trang `Công nợ`.
 - Đã áp logo mới từ `frontend/logo.png` cho app Flutter bằng `flutter_launcher_icons`: cập nhật icon launcher Android (`mipmap-*`), iOS (`Runner/Assets.xcassets/AppIcon.appiconset`) và Windows (`windows/runner/resources/app_icon.ico`).
 - Đã đổi tên app sang `fisd` cho launcher/desktop: Android label (`AndroidManifest.xml`), iOS display/bundle name (`Info.plist`), Windows executable + metadata + title (`fisd.exe`, `Runner.rc`, `main.cpp`, `windows/CMakeLists.txt`).
 - Đã đổi flow trang `Bán hàng` desktop sang giống `Xuất hàng`: dùng `checkoutDesktopDispatch` để gửi đơn cho picker (không trừ kho/cộng nợ ngay), đơn vẫn vào lịch sử quản lý và đi đủ trạng thái receive/deliver/confirm.

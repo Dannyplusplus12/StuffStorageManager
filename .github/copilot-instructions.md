@@ -15,6 +15,7 @@
 - Implement a role/PIN-based employee management system: desktop adds staff-management CRUD (name, phone, role, random PIN), login by PIN loads role-specific UI, and order flow expands to pending->approved->assigned (received by picker)->delivered (with mandatory photo proof), with full desktop tracking/history including who/when/proof image.
 - Mobile app entry must skip role selection and use PIN-only login that auto-detects and shows role UI. The picker must keep the inventory (`Kho hàng`) tab for lookup while processing orders.
 - Mobile app login must be inline on the entry screen (PIN input + direct 'Vào app' button) instead of using a popup dialog.
+- Set app name to 'fisd' across platforms, and use the provided logo as the launcher/external icon instead of the default Flutter icon.
 
 ## UI/Feature Preferences
 - UI/feature preference for current update: add dedicated `Khu vực` menu/page; debt screen layout should keep new-customer form on the left and customer list in the center; customer name input should open full dropdown on focus and filter while typing; area selection is required when creating/updating customers.
@@ -29,6 +30,9 @@
 - Picker 'Nhận đơn' item listing must be grouped by color with multi-line, professional UI (avoid compressed one-line summaries). Quantity wheel scrolling should affect only the quantity control without moving parent lists.
 - Order popups must be grouped clearly by model -> color -> size with a compact modern UI.
 - Picker inventory popup (`Kho hàng` mobile) must be grouped by color then size with a compact modern card UI, including clear stock summaries, closely following the compact visual style of picker 'Nhận đơn' cards, with grouped color sections and size stock shown as chips/wrap for quick scanning. The picker inventory popup should be capped at 95% height.
+- Revenue screen UI/labels must be fully in Vietnamese and support drill-down shortcut navigation by clicking breakdown rows: year → month → week → day.
+- In the revenue screen, show full invoice list for the selected day with expandable Excel-style order details instead of hourly buckets. Replace 'Trung bình / đơn' with customer count, and customer filter should show 'Tất cả khách hàng' as hint but be empty/ready for typing on focus in searchable dropdown input.
+- **Add a top-right back button in the revenue screen detail panel for quick reverse drill navigation (day→week→month→year).**
 
 ## Desktop UI Guidelines
 - Interactive buttons in the desktop Flutter UI should show `SystemMouseCursors.click` cursor feedback (not `grab`).

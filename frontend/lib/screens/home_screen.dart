@@ -6,6 +6,7 @@ import 'pos_screen.dart';
 import 'debt_screen.dart';
 import 'areas_screen.dart';
 import 'sales_screen.dart';
+import 'revenue_screen.dart';
 import 'pending_approval_screen.dart';
 
 export '../app_pages.dart';
@@ -67,6 +68,8 @@ class _HomeScreenState extends State<HomeScreen> {
         return AreasScreen(onOpenDebtByArea: _openDebtByArea);
       case AppPage.sales:
         return const SalesScreen();
+      case AppPage.revenue:
+        return const RevenueScreen();
       case AppPage.pendingApproval:
         return PendingApprovalScreen(onChanged: () => setState(() {}));
     }
@@ -95,6 +98,7 @@ class _BottomNavBar extends StatelessWidget {
             _item(Icons.inventory_2_outlined, Icons.inventory_2, 'Kho hàng', AppPage.inventory),
             _item(Icons.point_of_sale_outlined, Icons.point_of_sale, 'Xuất hàng', AppPage.pos),
             _item(Icons.storefront_outlined, Icons.storefront, 'Bán hàng', AppPage.sales),
+            _item(Icons.bar_chart_outlined, Icons.bar_chart, 'Doanh thu', AppPage.revenue),
             _item(Icons.map_outlined, Icons.map, 'Khu vực', AppPage.areas),
             _item(Icons.people_outline, Icons.people, 'Công nợ', AppPage.debt),
             _item(
