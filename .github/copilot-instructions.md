@@ -16,6 +16,9 @@
 - Mobile app entry must skip role selection and use PIN-only login that auto-detects and shows role UI. The picker must keep the inventory (`Kho hàng`) tab for lookup while processing orders.
 - Mobile app login must be inline on the entry screen (PIN input + direct 'Vào app' button) instead of using a popup dialog.
 - Set app name to 'fisd' across platforms, and use the provided logo as the launcher/external icon instead of the default Flutter icon.
+- Manager role behavior should follow the picker flow, and order dispatch should skip staff approval and go directly to the picker queue.
+- **Consider practical low-cost backup strategies**: store database and delivery images on Google Drive or Telegram in addition to local staff machine storage.
+- **Deployment process**: Code changes should be made in the `backend/` directory of the main repository, then copied to the separate server directory/repo for pushing to Railway.
 
 ## UI/Feature Preferences
 - UI/feature preference for current update: add dedicated `Khu vực` menu/page; debt screen layout should keep new-customer form on the left and customer list in the center; customer name input should open full dropdown on focus and filter while typing; area selection is required when creating/updating customers.
@@ -33,6 +36,8 @@
 - Revenue screen UI/labels must be fully in Vietnamese and support drill-down shortcut navigation by clicking breakdown rows: year → month → week → day.
 - In the revenue screen, show full invoice list for the selected day with expandable Excel-style order details instead of hourly buckets. Replace 'Trung bình / đơn' with customer count, and customer filter should show 'Tất cả khách hàng' as hint but be empty/ready for typing on focus in searchable dropdown input.
 - **Add a top-right back button in the revenue screen detail panel for quick reverse drill navigation (day→week→month→year).**
+- In mobile picker confirm popup, place picker note input at the top (right below date and quantity summary).
+- In desktop management page, hide raw image URL text and keep a cleaner modern layout with the same information structure.
 
 ## Desktop UI Guidelines
 - Interactive buttons in the desktop Flutter UI should show `SystemMouseCursors.click` cursor feedback (not `grab`).

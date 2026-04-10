@@ -4,6 +4,22 @@
 > **Cập nhật lần cuối:** Tháng 3/2026
 
 ## CẬP NHẬT NHANH GẦN NHẤT
+- Đã thêm upload ảnh sản phẩm: backend lưu vào `/product-images/`, phục vụ qua `GET /product-images/{file_name}`, gửi ảnh lên Telegram DB backup; frontend upload ảnh trước khi tạo sản phẩm và mobile resolve URL ảnh từ server.
+- Đã làm dịu màu nền xen kẽ ở lịch sử công nợ và thêm nền nhẹ cho các khối trên trang Nhập hàng để giảm cảm giác nhiều đường kẻ.
+- Đã ghi chú start command cron backup Telegram (pg_dump 18 + PGDG repo) trong `backend/README_DEPLOY.md` để tránh quên khi dựng repo cron.
+- Đã thêm tool `backend/backup_postgres_to_telegram.py` để backup PostgreSQL và gửi file `.dump` lên Telegram channel (dùng `TELEGRAM_DB_CHAT_ID`, `TELEGRAM_DB_BOT_TOKEN`/`TELEGRAM_BOT_TOKEN`, lấy `DATABASE_URL`).
+- Backend đã thêm backup Telegram: tự gửi ảnh giao hàng lên Telegram sau khi deliver, lưu `telegram_file_id` + `telegram_message_id` vào DB, và có migration runtime cho 2 cột mới.
+- Mobile picker popup xác nhận đơn đã dời ô `Ghi chú` lên trên cùng phần nội dung (ngay dưới dòng ngày/SL) để nhập nhanh trước khi rà soát từng mặt hàng.
+- Desktop trang `Quản lý` đã làm mới UI theo style hiện đại (card bo góc, badge trạng thái, spacing rõ ràng), vẫn giữ cấu trúc trái `đơn chờ duyệt` / phải `lịch sử & nhân viên`; đồng thời đã bỏ hiển thị raw URL ảnh trong lịch sử, chỉ giữ nút `Xem ảnh`.
+- Đã fix launcher icon Android chưa nhận logo mới: regenerate icon bằng `flutter_launcher_icons`, bổ sung `android:roundIcon="@mipmap/ic_launcher_round"` trong `AndroidManifest.xml`, và tạo `ic_launcher_round.png` cho tất cả mật độ `mipmap-*`.
+- Backend đã siết validate ảnh giao hàng để chặn client cũ chỉ gửi `photo_path` local (không upload file): nếu ảnh không nằm trên server `/delivery-proofs/...` sẽ trả lỗi yêu cầu cập nhật app mobile. Đồng thời endpoint giao hàng đã hỗ trợ nhận `picker_note` từ picker.
+- Mobile picker khi xác nhận đơn đã thêm ô nhập `ghi chú` (tuỳ chọn) và gửi kèm backend; lịch sử quản lý desktop hiển thị lại `Ghi chú` này trong card đơn.
+- Đã fix lỗi build Windows ở `frontend/windows/runner/main.cpp` do ký tự thừa trước `#include` đầu file (`i#include` -> `#include`).
+- Auto-sync ảnh giao hàng trong desktop Flutter đã đổi từ chu kỳ 5 phút sang gần realtime 10 giây/lần.
+- Desktop Flutter app đã tích hợp auto-sync ảnh giao hàng ngay trong app (không cần chạy script tay): khi mở app desktop sẽ tự gọi `/delivery-proofs/pending` và tải ảnh về thư mục `delivery_proofs` cạnh file `.exe` (khi chạy debug thì về current working directory), đồng bộ lặp mỗi 5 phút và lưu state `last_order_id` nội bộ.
+- Desktop Flutter `Quản lý > Lịch sử` đã thêm nút `Xem ảnh` cho đơn có `delivery_photo_path`: mở popup xem ảnh giao hàng trực tiếp từ server (zoom được) và có nút copy link ảnh để kiểm tra nhanh.
+- Đã triển khai flow ảnh giao hàng theo phương án Railway tạm + đồng bộ về máy staff: backend thêm endpoint multipart `PUT /orders/{id}/deliver-with-photo` (upload ảnh thật), lưu path dạng `/delivery-proofs/...`, thêm API kéo ảnh `GET /delivery-proofs/pending` và tải file `GET /delivery-proofs/{file_name}`; client Flutter mobile cập nhật `deliverOrder` sang multipart upload.
+- Đã thêm script `backend/sync_delivery_proofs.py` để máy staff kéo ảnh giao hàng từ Railway về thư mục local theo batch và lưu `last_order_id` để đồng bộ tăng dần.
 - Màn `Doanh thu` đã thêm nút quay lại ở góc trên bên phải khu vực `Chi tiết theo...` để nhảy nhanh ngược cấp thời gian: `Ngày -> Tuần -> Tháng -> Năm`.
 - Trang `Doanh thu` đã thay card `Trung bình / đơn` thành `Số lượng khách hàng` (đếm khách duy nhất theo bộ lọc hiện tại); đồng thời filter `Khách hàng` dạng input+dropdown giữ trạng thái mặc định `Tất cả khách hàng` dưới dạng hint rỗng để bấm vào nhập ngay, không phải xóa text trước.
 - Màn `Doanh thu` đã đổi phần `Chi tiết theo ngày`: bỏ breakdown theo giờ, thay bằng danh sách toàn bộ hóa đơn trong ngày đã chọn và mỗi hóa đơn có dropdown bung chi tiết dạng bảng kiểu Excel (`Mẫu/Màu/Size/SL/Đơn giá/Tiền`) theo yêu cầu.
@@ -319,6 +335,11 @@ is_sqlite = DATABASE_URL.startswith("sqlite")   # Flag cho migration conditional
   - sang `accepted` → thông báo đã được tiếp nhận
   - sang `completed` → thông báo đã hoàn thành
   - không còn tồn tại → thông báo đã bị từ chối
+
+### Cập nhật vai trò `manager` (mobile)
+- `manager` dùng cùng UI với `orderer` (tab soạn đơn + công nợ).
+- Khác biệt nghiệp vụ: khi `manager` gửi đơn từ mobile, app gọi luồng dispatch trực tiếp (`/checkout/desktop-dispatch`) để tạo đơn trạng thái `approved` và đưa thẳng cho picker.
+- `orderer` vẫn giữ luồng cũ: `pending` → staff duyệt → `approved` → picker.
 
 ---
 

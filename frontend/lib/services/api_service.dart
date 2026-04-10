@@ -1,4 +1,5 @@
 import 'dart:convert';
+import 'dart:io';
 import 'package:http/http.dart' as http;
 import '../config.dart';
 import '../models/product.dart';
@@ -8,8 +9,18 @@ import '../models/order.dart';
 
 class ApiService {
   static String get _b => AppConfig.apiUrl;
+  static String get baseUrl => _b;
   static const _timeout = Duration(seconds: 15);
   static final _headers = {'Content-Type': 'application/json'};
+
+  static String resolveApiUrl(String pathOrUrl) {
+    final raw = pathOrUrl.trim();
+    if (raw.isEmpty) return '';
+    if (raw.startsWith('http://') || raw.startsWith('https://')) return raw;
+    final base = _b.endsWith('/') ? _b.substring(0, _b.length - 1) : _b;
+    final path = raw.startsWith('/') ? raw : '/$raw';
+    return '$base$path';
+  }
 
   // ── Products ──
   static Future<List<Product>> getProducts({String search = ''}) async {
@@ -22,6 +33,18 @@ class ApiService {
   static Future<void> createProduct({required String code, required String name, String description = '', required String imagePath, required List<Map<String, dynamic>> variants}) async {
     final r = await http.post(Uri.parse('$_b/products'), headers: _headers, body: jsonEncode({'code': code, 'name': name, 'description': description, 'image_path': imagePath, 'variants': variants}));
     if (r.statusCode != 200) throw Exception(jsonDecode(utf8.decode(r.bodyBytes))['detail'] ?? 'Lỗi');
+  }
+
+  static Future<String> uploadProductImage(File imageFile) async {
+    final request = http.MultipartRequest('POST', Uri.parse('$_b/product-images/upload'));
+    request.files.add(await http.MultipartFile.fromPath('file', imageFile.path));
+    final response = await request.send().timeout(_timeout);
+    final body = await response.stream.bytesToString();
+    if (response.statusCode == 200) {
+      final data = jsonDecode(body) as Map<String, dynamic>;
+      return (data['path'] ?? '').toString();
+    }
+    throw Exception(jsonDecode(body)['detail'] ?? 'Lỗi upload ảnh sản phẩm');
   }
 
   static Future<void> updateProduct(int id, {required String code, required String name, required String imagePath, required List<Map<String, dynamic>> variants}) async {
@@ -288,15 +311,28 @@ class ApiService {
     required int pickerId,
     required String photoPath,
     List<Map<String, dynamic>>? items,
+    String pickerNote = '',
   }) async {
-    final body = {
-      'picker_id': pickerId,
-      'photo_path': photoPath,
-      'items': items ?? const [],
-    };
-    final r = await http.put(Uri.parse('$_b/orders/$orderId/deliver'), headers: _headers, body: jsonEncode(body));
+    final path = photoPath.trim();
+    if (path.isEmpty) {
+      throw Exception('Thiếu ảnh xác nhận giao hàng');
+    }
+    final f = File(path);
+    if (!await f.exists()) {
+      throw Exception('Không tìm thấy ảnh xác nhận trên thiết bị');
+    }
+
+    final req = http.MultipartRequest('PUT', Uri.parse('$_b/orders/$orderId/deliver-with-photo'));
+    req.fields['picker_id'] = '$pickerId';
+    req.fields['items_json'] = jsonEncode(items ?? const []);
+    req.fields['picker_note'] = pickerNote.trim();
+    req.files.add(await http.MultipartFile.fromPath('photo', path));
+
+    final streamed = await req.send().timeout(const Duration(seconds: 45));
+    final r = await http.Response.fromStream(streamed);
     if (r.statusCode == 200) return jsonDecode(utf8.decode(r.bodyBytes));
-    throw Exception(jsonDecode(utf8.decode(r.bodyBytes))['detail'] ?? 'Lỗi giao đơn');
+    final body = r.bodyBytes.isNotEmpty ? jsonDecode(utf8.decode(r.bodyBytes)) : null;
+    throw Exception(body is Map<String, dynamic> ? (body['detail'] ?? 'Lỗi giao đơn') : 'Lỗi giao đơn');
   }
 
   static Future<List<Order>> getManagementOrders({int limit = 200}) async {

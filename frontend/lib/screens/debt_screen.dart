@@ -791,14 +791,21 @@ class _CustomerHistoryPanelState extends State<_CustomerHistoryPanel> {
                   ? const Center(child: CircularProgressIndicator())
                   : _items.isEmpty
                       ? const Center(child: Text('Chưa có lịch sử'))
-                      : ListView.separated(
+                      : ListView.builder(
+                          padding: const EdgeInsets.all(8),
                           itemCount: _items.length,
-                          separatorBuilder: (_, __) => const Divider(height: 1),
                           itemBuilder: (_, index) {
                             final h = _items[index];
                             final isOrder = h.type == 'ORDER';
+                            final rowColor = index.isEven ? const Color(0xFFF8FAFC) : const Color(0xFFF5F7FB);
                             return Container(
-                              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
+                              margin: const EdgeInsets.only(bottom: 10),
+                              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+                              decoration: BoxDecoration(
+                                color: rowColor,
+                                borderRadius: BorderRadius.circular(10),
+                                border: Border.all(color: kBorder),
+                              ),
                               child: Column(
                                 crossAxisAlignment: CrossAxisAlignment.stretch,
                                 children: [

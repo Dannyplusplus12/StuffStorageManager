@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'dart:async';
+import 'package:flutter/services.dart';
 
 import '../models/order.dart';
 import '../models/employee.dart';
@@ -23,6 +24,89 @@ class _PendingApprovalScreenState extends State<PendingApprovalScreen> {
   List<Employee> _employees = [];
   String _rightTab = 'history';
   Timer? _refreshTimer;
+  final Map<int, String> _historyStatusCache = {};
+  final Set<int> _highlightedHistoryOrders = {};
+
+  String _deliveryPhotoUrl(String pathOrUrl) => ApiService.resolveApiUrl(pathOrUrl);
+
+  Future<void> _copyPhotoLink(String url) async {
+    await Clipboard.setData(ClipboardData(text: url));
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(content: Text('Đã copy link ảnh'), backgroundColor: Colors.green),
+    );
+  }
+
+  Future<void> _openDeliveryPhoto(Order o) async {
+    final raw = o.deliveryPhotoPath.trim();
+    if (raw.isEmpty) return;
+    final url = _deliveryPhotoUrl(raw);
+
+    await showDialog<void>(
+      context: context,
+      builder: (dialogContext) => Dialog(
+        child: ConstrainedBox(
+          constraints: const BoxConstraints(maxWidth: 980, maxHeight: 760),
+          child: Padding(
+            padding: const EdgeInsets.all(12),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  children: [
+                    Expanded(
+                      child: Text('Ảnh giao hàng • Đơn #${o.id}', style: const TextStyle(fontWeight: FontWeight.w700)),
+                    ),
+                    MouseRegion(
+                      cursor: SystemMouseCursors.click,
+                      child: TextButton.icon(
+                        onPressed: () => _copyPhotoLink(url),
+                        icon: const Icon(Icons.copy, size: 16),
+                        label: const Text('Copy link'),
+                      ),
+                    ),
+                    MouseRegion(
+                      cursor: SystemMouseCursors.click,
+                      child: IconButton(
+                        onPressed: () => Navigator.pop(dialogContext),
+                        icon: const Icon(Icons.close),
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 8),
+                Expanded(
+                  child: Container(
+                    width: double.infinity,
+                    decoration: BoxDecoration(
+                      color: const Color(0xFFF8FAFC),
+                      border: Border.all(color: kBorder),
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                    child: InteractiveViewer(
+                      minScale: 0.6,
+                      maxScale: 4,
+                      child: Image.network(
+                        url,
+                        fit: BoxFit.contain,
+                        loadingBuilder: (context, child, progress) {
+                          if (progress == null) return child;
+                          return const Center(child: CircularProgressIndicator());
+                        },
+                        errorBuilder: (_, __, ___) => const Center(
+                          child: Text('Không tải được ảnh giao hàng', style: TextStyle(color: kTextSecondary)),
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
 
   DateTime? _parseApiDate(String raw) {
     final t = raw.trim();
@@ -152,6 +236,16 @@ class _PendingApprovalScreenState extends State<PendingApprovalScreen> {
           if (t != 0) return t;
           return b.id.compareTo(a.id);
         });
+      final changedIds = <int>[];
+      for (final o in history) {
+        final oldStatus = _historyStatusCache[o.id];
+        if (oldStatus != null && oldStatus != o.status) {
+          changedIds.add(o.id);
+        }
+      }
+      _historyStatusCache
+        ..clear()
+        ..addEntries(history.map((o) => MapEntry(o.id, o.status)));
       final emps = rs[2] as List<Employee>;
       if (mounted) {
         setState(() {
@@ -159,6 +253,16 @@ class _PendingApprovalScreenState extends State<PendingApprovalScreen> {
           _historyOrders = history;
           _employees = emps;
         });
+      }
+      if (changedIds.isNotEmpty) {
+        SystemSound.play(SystemSoundType.alert);
+        for (final id in changedIds) {
+          _highlightedHistoryOrders.add(id);
+          Future.delayed(const Duration(seconds: 4), () {
+            if (!mounted) return;
+            setState(() => _highlightedHistoryOrders.remove(id));
+          });
+        }
       }
       await NotificationService.getPendingOrders();
       widget.onChanged?.call();
@@ -332,8 +436,37 @@ class _PendingApprovalScreenState extends State<PendingApprovalScreen> {
 
   @override
   Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.all(16),
+    Color statusColor(String status) {
+      switch (status) {
+        case 'completed':
+          return kSuccess;
+        case 'assigned':
+          return kPrimary;
+        case 'approved':
+          return const Color(0xFF0284C7);
+        case 'pending':
+          return const Color(0xFFF59E0B);
+        default:
+          return kTextSecondary;
+      }
+    }
+
+    String statusLabel(String status) {
+      switch (status) {
+        case 'approved':
+          return 'Đã duyệt';
+        case 'assigned':
+          return 'Đã nhận';
+        case 'completed':
+          return 'Hoàn thành';
+        default:
+          return status.toUpperCase();
+      }
+    }
+
+    return Container(
+      color: const Color(0xFFF3F6FB),
+      padding: const EdgeInsets.all(14),
       child: Row(
         children: [
           Expanded(
@@ -343,56 +476,104 @@ class _PendingApprovalScreenState extends State<PendingApprovalScreen> {
               children: [
                 Row(
                   children: [
-                    const Text('Quản lý', style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold, color: kTextPrimary)),
-                    const SizedBox(width: 8),
+                    const Text('Quản lý', style: TextStyle(fontSize: 26, fontWeight: FontWeight.w700, color: kTextPrimary)),
+                    const SizedBox(width: 10),
                     Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
-                      decoration: BoxDecoration(color: const Color(0xFFF1F5F9), borderRadius: BorderRadius.circular(10), border: Border.all(color: kBorder)),
-                      child: Text('${_orders.length} chờ duyệt', style: const TextStyle(color: kTextSecondary, fontSize: 11, fontWeight: FontWeight.bold)),
+                      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                      decoration: BoxDecoration(
+                        color: Colors.white,
+                        borderRadius: BorderRadius.circular(999),
+                        border: Border.all(color: kBorder),
+                      ),
+                      child: Text('${_orders.length} chờ duyệt', style: const TextStyle(color: kTextSecondary, fontSize: 12, fontWeight: FontWeight.w600)),
                     ),
                     const Spacer(),
                     MouseRegion(
                       cursor: SystemMouseCursors.click,
-                      child: OutlinedButton.icon(onPressed: _load, icon: const Icon(Icons.refresh, size: 16), label: const Text('Làm mới')),
+                      child: OutlinedButton.icon(
+                        onPressed: _load,
+                        icon: const Icon(Icons.refresh, size: 16),
+                        label: const Text('Làm mới'),
+                        style: OutlinedButton.styleFrom(
+                          backgroundColor: Colors.white,
+                          side: const BorderSide(color: kBorder),
+                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                        ),
+                      ),
                     ),
                   ],
                 ),
                 const SizedBox(height: 12),
                 Expanded(
-                  child: _loading
-                      ? const Center(child: CircularProgressIndicator())
-                      : _orders.isEmpty
-                          ? const Center(child: Text('Không có hóa đơn chờ duyệt', style: TextStyle(color: kTextSecondary)))
-                          : ListView.separated(
-                              itemCount: _orders.length,
-                              separatorBuilder: (_, __) => const SizedBox(height: 8),
-                              itemBuilder: (_, i) {
-                                final o = _orders[i];
-                                return Container(
-                                  padding: const EdgeInsets.all(10),
-                                  decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(8), border: Border.all(color: kBorder)),
-                                  child: Column(
-                                    crossAxisAlignment: CrossAxisAlignment.start,
-                                    children: [
-                                      Text('Đơn #${o.id} • ${o.customerName}', style: const TextStyle(fontWeight: FontWeight.bold)),
-                                      const SizedBox(height: 4),
-                                      Text('${formatDate(o.createdAt)} • SL ${o.totalQty} • ${formatCurrency(o.totalAmount)} đ'),
-                                       const SizedBox(height: 6),
-                                       _buildOrderItemsExcelTable(o),
-                                      const SizedBox(height: 8),
-                                      Row(
-                                        mainAxisAlignment: MainAxisAlignment.end,
-                                        children: [
-                                          TextButton(onPressed: () => _reject(o), child: const Text('Từ chối', style: TextStyle(color: Colors.red))),
-                                          const SizedBox(width: 6),
-                                          ElevatedButton(onPressed: () => _approve(o), child: const Text('Duyệt')),
-                                        ],
-                                      ),
-                                    ],
-                                  ),
-                                );
-                              },
-                            ),
+                  child: Container(
+                    decoration: BoxDecoration(
+                      color: Colors.white,
+                      borderRadius: BorderRadius.circular(14),
+                      border: Border.all(color: kBorder),
+                      boxShadow: const [BoxShadow(color: Color(0x11000000), blurRadius: 10, offset: Offset(0, 3))],
+                    ),
+                    child: _loading
+                        ? const Center(child: CircularProgressIndicator())
+                        : _orders.isEmpty
+                            ? const Center(
+                                child: Column(
+                                  mainAxisSize: MainAxisSize.min,
+                                  children: [
+                                    Icon(Icons.inbox_outlined, size: 44, color: kTextSecondary),
+                                    SizedBox(height: 8),
+                                    Text('Không có hóa đơn chờ duyệt', style: TextStyle(color: kTextSecondary)),
+                                  ],
+                                ),
+                              )
+                            : ListView.separated(
+                                padding: const EdgeInsets.all(12),
+                                itemCount: _orders.length,
+                                separatorBuilder: (_, __) => const SizedBox(height: 10),
+                                itemBuilder: (_, i) {
+                                  final o = _orders[i];
+                                  return Container(
+                                    padding: const EdgeInsets.all(12),
+                                    decoration: BoxDecoration(
+                                      color: const Color(0xFFFBFDFF),
+                                      borderRadius: BorderRadius.circular(12),
+                                      border: Border.all(color: kBorder),
+                                    ),
+                                    child: Column(
+                                      crossAxisAlignment: CrossAxisAlignment.start,
+                                      children: [
+                                        Text('Đơn #${o.id} • ${o.customerName}', style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 15)),
+                                        const SizedBox(height: 4),
+                                        Text('${formatDate(o.createdAt)} • SL ${o.totalQty} • ${formatCurrency(o.totalAmount)} đ', style: const TextStyle(color: kTextSecondary)),
+                                        const SizedBox(height: 8),
+                                        _buildOrderItemsExcelTable(o),
+                                        const SizedBox(height: 8),
+                                        Row(
+                                          mainAxisAlignment: MainAxisAlignment.end,
+                                          children: [
+                                            MouseRegion(
+                                              cursor: SystemMouseCursors.click,
+                                              child: TextButton(
+                                                onPressed: () => _reject(o),
+                                                child: const Text('Từ chối', style: TextStyle(color: Colors.red)),
+                                              ),
+                                            ),
+                                            const SizedBox(width: 8),
+                                            MouseRegion(
+                                              cursor: SystemMouseCursors.click,
+                                              child: ElevatedButton.icon(
+                                                onPressed: () => _approve(o),
+                                                icon: const Icon(Icons.check, size: 16),
+                                                label: const Text('Duyệt'),
+                                              ),
+                                            ),
+                                          ],
+                                        ),
+                                      ],
+                                    ),
+                                  );
+                                },
+                              ),
+                  ),
                 ),
               ],
             ),
@@ -401,51 +582,98 @@ class _PendingApprovalScreenState extends State<PendingApprovalScreen> {
           Expanded(
             flex: 6,
             child: Container(
-              decoration: BoxDecoration(color: Colors.white, border: Border.all(color: kBorder), borderRadius: BorderRadius.circular(8)),
+              decoration: BoxDecoration(
+                color: Colors.white,
+                border: Border.all(color: kBorder),
+                borderRadius: BorderRadius.circular(14),
+                boxShadow: const [BoxShadow(color: Color(0x11000000), blurRadius: 10, offset: Offset(0, 3))],
+              ),
               child: Column(
                 children: [
                   Padding(
-                    padding: const EdgeInsets.all(10),
-                    child: Row(
-                      children: [
-                        Expanded(
-                          child: SegmentedButton<String>(
-                            segments: const [
-                              ButtonSegment(value: 'history', icon: Icon(Icons.history), label: Text('Lịch sử')),
-                              ButtonSegment(value: 'staff', icon: Icon(Icons.badge_outlined), label: Text('Nhân viên')),
-                            ],
-                            selected: {_rightTab},
-                            onSelectionChanged: (s) => setState(() => _rightTab = s.first),
-                          ),
-                        ),
+                    padding: const EdgeInsets.fromLTRB(12, 12, 12, 8),
+                    child: SegmentedButton<String>(
+                      segments: const [
+                        ButtonSegment(value: 'history', icon: Icon(Icons.history), label: Text('Lịch sử')),
+                        ButtonSegment(value: 'staff', icon: Icon(Icons.badge_outlined), label: Text('Nhân viên')),
                       ],
+                      selected: {_rightTab},
+                      onSelectionChanged: (s) => setState(() => _rightTab = s.first),
                     ),
                   ),
                   Expanded(
                     child: _rightTab == 'history'
                         ? ListView.builder(
-                            padding: const EdgeInsets.all(10),
+                            padding: const EdgeInsets.fromLTRB(12, 2, 12, 12),
                             itemCount: _historyOrders.length,
                             itemBuilder: (_, i) {
                               final o = _historyOrders[i];
-                              return Container(
-                                margin: const EdgeInsets.only(bottom: 8),
-                                decoration: BoxDecoration(border: Border.all(color: kBorder), borderRadius: BorderRadius.circular(8)),
+                              final c = statusColor(o.status);
+                              final isHighlighted = _highlightedHistoryOrders.contains(o.id);
+                              return AnimatedContainer(
+                                duration: const Duration(milliseconds: 300),
+                                margin: const EdgeInsets.only(bottom: 10),
+                                decoration: BoxDecoration(
+                                  border: Border.all(color: isHighlighted ? kPrimary : kBorder),
+                                  borderRadius: BorderRadius.circular(12),
+                                  color: isHighlighted ? const Color(0xFFFFF7E6) : const Color(0xFFFCFDFF),
+                                ),
                                 child: ExpansionTile(
-                                  tilePadding: const EdgeInsets.symmetric(horizontal: 10, vertical: 2),
+                                  tilePadding: const EdgeInsets.fromLTRB(12, 8, 12, 6),
                                   childrenPadding: EdgeInsets.zero,
-                                  title: Text('Đơn #${o.id} • ${o.status.toUpperCase()}', style: const TextStyle(fontWeight: FontWeight.w700)),
-                                  subtitle: Column(
-                                    crossAxisAlignment: CrossAxisAlignment.start,
+                                  title: Row(
                                     children: [
-                                      Text('${o.customerName} • ${formatDate(o.createdAt)}', style: const TextStyle(color: kTextSecondary, fontSize: 12)),
-                                      if (o.assignedPickerName.isNotEmpty)
-                                        Text('Nhận: ${o.assignedPickerName} ${o.assignedAt.isNotEmpty ? '• ${o.assignedAt}' : ''}', style: const TextStyle(fontSize: 12)),
-                                      if (o.deliveredByName.isNotEmpty)
-                                        Text('Giao: ${o.deliveredByName} ${o.deliveredAt.isNotEmpty ? '• ${o.deliveredAt}' : ''}', style: const TextStyle(fontSize: 12)),
-                                      if (o.deliveryPhotoPath.isNotEmpty)
-                                        Text('Ảnh: ${o.deliveryPhotoPath}', style: const TextStyle(fontSize: 12, color: kPrimary)),
+                                      Expanded(
+                                        child: Text('Đơn #${o.id}', style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 18)),
+                                      ),
+                                      Container(
+                                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                                        decoration: BoxDecoration(
+                                          color: c.withValues(alpha: 0.1),
+                                          borderRadius: BorderRadius.circular(999),
+                                          border: Border.all(color: c.withValues(alpha: 0.4)),
+                                        ),
+                                        child: Text(statusLabel(o.status), style: TextStyle(color: c, fontSize: 11, fontWeight: FontWeight.w700)),
+                                      ),
                                     ],
+                                  ),
+                                  subtitle: Padding(
+                                    padding: const EdgeInsets.only(top: 4),
+                                    child: Column(
+                                      crossAxisAlignment: CrossAxisAlignment.start,
+                                      children: [
+                                        Text('${o.customerName} • ${formatDate(o.createdAt)}', style: const TextStyle(color: kTextSecondary, fontSize: 12)),
+                                        if (o.pickerNote.trim().isNotEmpty)
+                                          Padding(
+                                            padding: const EdgeInsets.only(top: 3),
+                                            child: Text('Ghi chú: ${o.pickerNote}', style: const TextStyle(fontSize: 12, color: kTextPrimary, fontWeight: FontWeight.w600)),
+                                          ),
+                                        if (o.assignedPickerName.isNotEmpty)
+                                          Text('Nhận: ${o.assignedPickerName} ${o.assignedAt.isNotEmpty ? '• ${o.assignedAt}' : ''}', style: const TextStyle(fontSize: 12)),
+                                        if (o.deliveredByName.isNotEmpty)
+                                          Text('Giao: ${o.deliveredByName} ${o.deliveredAt.isNotEmpty ? '• ${o.deliveredAt}' : ''}', style: const TextStyle(fontSize: 12)),
+                                        if (o.deliveryPhotoPath.isNotEmpty)
+                                          Padding(
+                                            padding: const EdgeInsets.only(top: 4),
+                                            child: Align(
+                                              alignment: Alignment.centerLeft,
+                                              child: MouseRegion(
+                                                cursor: SystemMouseCursors.click,
+                                                child: OutlinedButton.icon(
+                                                  onPressed: () => _openDeliveryPhoto(o),
+                                                  icon: const Icon(Icons.image_outlined, size: 16, color: kPrimary),
+                                                  label: const Text('Xem ảnh', style: TextStyle(color: kPrimary)),
+                                                  style: OutlinedButton.styleFrom(
+                                                    side: const BorderSide(color: kBorder),
+                                                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                                                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                                                  ),
+                                                ),
+                                              ),
+                                            ),
+                                          ),
+                                      ],
+                                    ),
                                   ),
                                   children: [_buildOrderItemsExcelTable(o)],
                                 ),
@@ -455,33 +683,38 @@ class _PendingApprovalScreenState extends State<PendingApprovalScreen> {
                         : Column(
                             children: [
                               Padding(
-                                padding: const EdgeInsets.symmetric(horizontal: 10),
+                                padding: const EdgeInsets.fromLTRB(12, 6, 12, 0),
                                 child: Align(
                                   alignment: Alignment.centerRight,
-                                  child: ElevatedButton.icon(onPressed: _createEmployee, icon: const Icon(Icons.add, size: 16), label: const Text('Thêm NV')),
+                                  child: MouseRegion(
+                                    cursor: SystemMouseCursors.click,
+                                    child: ElevatedButton.icon(onPressed: _createEmployee, icon: const Icon(Icons.add, size: 16), label: const Text('Thêm NV')),
+                                  ),
                                 ),
                               ),
                               Expanded(
                                 child: ListView.builder(
-                                  padding: const EdgeInsets.all(10),
+                                  padding: const EdgeInsets.all(12),
                                   itemCount: _employees.length,
                                   itemBuilder: (_, i) {
                                     final e = _employees[i];
-                                    return ListTile(
-                                      title: Text('${e.name} (${e.role})'),
-                                      subtitle: Text('${e.phone.isEmpty ? '-' : e.phone} • PIN: ${e.pin}'),
-                                      trailing: PopupMenuButton<String>(
-                                        onSelected: (v) {
-                                          if (v == 'edit') {
-                                            _editEmployee(e);
-                                          } else {
-                                            _deleteEmployee(e);
-                                          }
-                                        },
-                                        itemBuilder: (_) => const [
-                                          PopupMenuItem(value: 'edit', child: Text('Sửa')),
-                                          PopupMenuItem(value: 'delete', child: Text('Xóa')),
-                                        ],
+                                    return Container(
+                                      margin: const EdgeInsets.only(bottom: 8),
+                                      decoration: BoxDecoration(
+                                        border: Border.all(color: kBorder),
+                                        borderRadius: BorderRadius.circular(10),
+                                        color: const Color(0xFFFCFDFF),
+                                      ),
+                                      child: ListTile(
+                                        title: Text(e.name, style: const TextStyle(fontWeight: FontWeight.w600)),
+                                        subtitle: Text('${e.role.toUpperCase()} • ${e.phone.isEmpty ? '-' : e.phone} • PIN: ${e.pin}'),
+                                        trailing: PopupMenuButton<String>(
+                                          onSelected: (v) => v == 'edit' ? _editEmployee(e) : _deleteEmployee(e),
+                                          itemBuilder: (_) => const [
+                                            PopupMenuItem(value: 'edit', child: Text('Sửa')),
+                                            PopupMenuItem(value: 'delete', child: Text('Xóa')),
+                                          ],
+                                        ),
                                       ),
                                     );
                                   },

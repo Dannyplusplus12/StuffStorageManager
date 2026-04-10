@@ -89,6 +89,7 @@ class _RoleSelectionScreenState extends State<_RoleSelectionScreen> {
           mode,
           employeeId: (login['id'] ?? 0) as int,
           employeeName: (login['name'] ?? '').toString(),
+          employeeRole: role,
         );
         if (!mounted) return;
         widget.onRoleSelected();
@@ -257,11 +258,16 @@ class _OrdererScreenState extends State<_OrdererScreen> with _NotificationMixin 
   }
 
   void _onDraftCreated(int orderId) {
+    final isManager = AppModeManager.isManager;
     setState(() {
-      _trackedOrders[orderId] = 'pending';
+      _trackedOrders[orderId] = isManager ? 'approved' : 'pending';
       _statusMissCount[orderId] = 0;
     });
-    addNotice('📤 Đơn #$orderId đã gửi chờ tiếp nhận');
+    if (isManager) {
+      addNotice('📤 Đơn #$orderId đã gửi thẳng cho picker');
+    } else {
+      addNotice('📤 Đơn #$orderId đã gửi chờ staff tiếp nhận');
+    }
   }
 
   Future<void> _pollOrderStatuses() async {
@@ -278,14 +284,22 @@ class _OrdererScreenState extends State<_OrdererScreen> with _NotificationMixin 
             _trackedOrders.remove(id);
             _statusMissCount.remove(id);
             addNotice('❌ Đơn #$id đã bị từ chối');
+          } else if (AppModeManager.isManager && miss >= 2) {
+            _trackedOrders.remove(id);
+            _statusMissCount.remove(id);
+            addNotice('ℹ️ Đơn #$id không còn trong hệ thống');
           }
         } else {
           _statusMissCount[id] = 0;
           final newStatus = result['status'] as String;
           final lastStatus = _trackedOrders[id];
-          if (newStatus == 'accepted' && lastStatus == 'pending') {
-            _trackedOrders[id] = 'accepted';
+          if ((newStatus == 'approved' || newStatus == 'accepted' || newStatus == 'assigned') &&
+              lastStatus == 'pending') {
+            _trackedOrders[id] = newStatus;
             addNotice('✅ Đơn #$id đã được tiếp nhận, đang soạn hàng');
+          } else if (newStatus == 'assigned' && lastStatus == 'approved') {
+            _trackedOrders[id] = 'assigned';
+            addNotice('✅ Picker đã nhận đơn #$id');
           } else if (newStatus == 'completed') {
             _trackedOrders.remove(id);
             _statusMissCount.remove(id);
@@ -1101,7 +1115,8 @@ class _CreateOrderScreenState extends State<_CreateOrderScreen> {
 
   void _openOrdererProductQuickView(Product p) {
     final image = p.image.trim();
-    final canLoadNetworkImage = image.startsWith('http://') || image.startsWith('https://');
+    final imageUrl = ApiService.resolveApiUrl(image);
+    final canLoadNetworkImage = imageUrl.isNotEmpty;
     final qtys = <int, int>{};
 
     showModalBottomSheet(
@@ -1424,11 +1439,17 @@ class _CreateOrderScreenState extends State<_CreateOrderScreen> {
 
     setState(() => _submitting = true);
     try {
-      final res = await ApiService.checkoutDraft(
-        customerName: _nameCtrl.text.trim(),
-        customerPhone: _phoneCtrl.text.trim(),
-        cart: _cart,
-      );
+      final res = AppModeManager.isManager
+          ? await ApiService.checkoutDesktopDispatch(
+              customerName: _nameCtrl.text.trim(),
+              customerPhone: _phoneCtrl.text.trim(),
+              cart: _cart,
+            )
+          : await ApiService.checkoutDraft(
+              customerName: _nameCtrl.text.trim(),
+              customerPhone: _phoneCtrl.text.trim(),
+              cart: _cart,
+            );
       final orderId = (res['order_id'] ?? 0) as int;
       widget.onDraftCreated(orderId);
       setState(() {
@@ -1861,7 +1882,7 @@ class _AcceptedOrdersScreenState extends State<_AcceptedOrdersScreen> {
     return x?.path;
   }
 
-  Future<void> _confirmWithPicked(Order order, Map<int, int> pickedByKey) async {
+  Future<void> _confirmWithPicked(Order order, Map<int, int> pickedByKey, {String pickerNote = ''}) async {
     setState(() => _confirming.add(order.id));
     try {
       final pickerId = AppModeManager.employeeId;
@@ -1887,6 +1908,7 @@ class _AcceptedOrdersScreenState extends State<_AcceptedOrdersScreen> {
         pickerId: pickerId,
         photoPath: photoPath,
         items: payload,
+        pickerNote: pickerNote,
       );
       final note = (res['picker_note'] ?? '').toString();
       widget.onConfirmed(order.id, note.isEmpty ? null : note);
@@ -1903,6 +1925,7 @@ class _AcceptedOrdersScreenState extends State<_AcceptedOrdersScreen> {
 
   Future<void> _openOrderPopup(Order order) async {
     final pickedByKey = <int, int>{};
+    final pickerNoteCtrl = TextEditingController();
     for (var i = 0; i < order.items.length; i++) {
       final item = order.items[i];
       final key = item.orderItemId ?? (item.variantId ?? (100000 + i));
@@ -1965,6 +1988,17 @@ class _AcceptedOrdersScreenState extends State<_AcceptedOrdersScreen> {
                       child: Text(
                         '${formatDate(order.createdAt)} • ${order.totalQty} sản phẩm',
                         style: const TextStyle(color: kTextSecondary, fontSize: 12),
+                      ),
+                    ),
+                    Padding(
+                      padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
+                      child: TextField(
+                        controller: pickerNoteCtrl,
+                        maxLines: 2,
+                        decoration: const InputDecoration(
+                          hintText: 'Ghi chú cho đơn (tuỳ chọn)',
+                          prefixIcon: Icon(Icons.sticky_note_2_outlined),
+                        ),
                       ),
                     ),
                     Expanded(
@@ -2122,7 +2156,7 @@ class _AcceptedOrdersScreenState extends State<_AcceptedOrdersScreen> {
                                   ? null
                                   : () async {
                                       Navigator.pop(dialogContext);
-                                      await _confirmWithPicked(order, pickedByKey);
+                                      await _confirmWithPicked(order, pickedByKey, pickerNote: pickerNoteCtrl.text.trim());
                                     },
                               icon: _confirming.contains(order.id)
                                   ? const SizedBox(
@@ -2145,6 +2179,7 @@ class _AcceptedOrdersScreenState extends State<_AcceptedOrdersScreen> {
         );
       },
     );
+    pickerNoteCtrl.dispose();
   }
 
   @override
@@ -2301,7 +2336,8 @@ class _PickerInventoryScreenState extends State<_PickerInventoryScreen> {
       showDragHandle: true,
       builder: (_) {
         final image = p.image.trim();
-        final canLoadNetworkImage = image.startsWith('http://') || image.startsWith('https://');
+        final imageUrl = ApiService.resolveApiUrl(image);
+        final canLoadNetworkImage = imageUrl.isNotEmpty;
 
         return FractionallySizedBox(
           heightFactor: 0.95,
@@ -2326,7 +2362,7 @@ class _PickerInventoryScreenState extends State<_PickerInventoryScreen> {
                       ? ClipRRect(
                           borderRadius: BorderRadius.circular(10),
                           child: Image.network(
-                            image,
+                            imageUrl,
                             fit: BoxFit.cover,
                             errorBuilder: (_, __, ___) => const Center(
                               child: Icon(Icons.image_not_supported_outlined, size: 44, color: kTextSecondary),

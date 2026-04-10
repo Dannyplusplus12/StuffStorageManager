@@ -6,6 +6,7 @@ import 'utils/app_mode_manager.dart';
 import 'utils/device_detector.dart';
 import 'services/notification_service.dart';
 import 'services/mobile_notification_service.dart';
+import 'services/delivery_proof_sync_service.dart';
 import 'screens/home_screen.dart';
 import 'screens/mobile_home_screen.dart';
 
@@ -33,11 +34,16 @@ class _MyAppState extends State<MyApp> {
     NotificationService.onPendingOrdersUpdated = () {
       setState(() {});  // Rebuild to show notification badge
     };
+
+    if (DeviceDetector.isDesktop) {
+      DeliveryProofSyncService.startAutoSync(intervalSeconds: 10);
+    }
   }
 
   @override
   void dispose() {
     NotificationService.stopPolling();
+    DeliveryProofSyncService.stop();
     super.dispose();
   }
 

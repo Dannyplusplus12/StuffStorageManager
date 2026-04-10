@@ -1,9 +1,14 @@
-from fastapi import FastAPI, HTTPException, Depends
+from fastapi import FastAPI, HTTPException, Depends, UploadFile, File, Form
+from fastapi.responses import FileResponse
 from pydantic import BaseModel
 from typing import List, Optional
 from datetime import datetime
 from sqlalchemy import desc, func, Column, Integer, String, DateTime
 from sqlalchemy.orm import Session
+import os
+import uuid
+import json
+import requests
 try:
     from backend import database as _db
 except ModuleNotFoundError:
@@ -47,6 +52,74 @@ class OrderDateUpdate(BaseModel):
     created_at: str  # YYYY-MM-DD HH:MM
 
 app = FastAPI()
+
+_delivery_upload_dir = os.environ.get("DELIVERY_UPLOAD_DIR", "").strip()
+if not _delivery_upload_dir:
+    _delivery_upload_dir = "/tmp/delivery_proofs" if not is_sqlite else os.path.join(os.path.dirname(__file__), "delivery_proofs")
+os.makedirs(_delivery_upload_dir, exist_ok=True)
+
+_MAX_DELIVERY_PHOTO_BYTES = int(os.environ.get("MAX_DELIVERY_PHOTO_MB", "8")) * 1024 * 1024
+_product_upload_dir = _delivery_upload_dir
+
+
+def _save_delivery_photo_file(order_id: int, photo: UploadFile) -> str:
+    filename = (photo.filename or "proof.jpg").strip()
+    ext = os.path.splitext(filename)[1].lower()
+    if ext not in (".jpg", ".jpeg", ".png", ".webp", ".heic"):
+        raise HTTPException(status_code=400, detail="Ảnh giao hàng phải là jpg/png/webp/heic")
+
+    safe_name = f"order_{order_id}_{datetime.utcnow().strftime('%Y%m%d%H%M%S')}_{uuid.uuid4().hex[:8]}{ext}"
+    abs_path = os.path.join(_delivery_upload_dir, safe_name)
+
+    total = 0
+    with open(abs_path, "wb") as out:
+        while True:
+            chunk = photo.file.read(1024 * 1024)
+            if not chunk:
+                break
+            total += len(chunk)
+            if total > _MAX_DELIVERY_PHOTO_BYTES:
+                out.close()
+                try:
+                    os.remove(abs_path)
+                except Exception:
+                    pass
+                raise HTTPException(status_code=400, detail=f"Ảnh vượt giới hạn {_MAX_DELIVERY_PHOTO_BYTES // (1024 * 1024)}MB")
+            out.write(chunk)
+
+    return f"/delivery-proofs/{safe_name}"
+
+
+def _save_product_image_file(photo: UploadFile) -> str:
+    filename = (photo.filename or "product.jpg").strip()
+    ext = os.path.splitext(filename)[1].lower()
+    if ext not in (".jpg", ".jpeg", ".png", ".webp", ".heic", ".bmp"):
+        raise HTTPException(status_code=400, detail="Ảnh sản phẩm phải là jpg/png/webp/heic/bmp")
+
+    safe_name = f"product_{datetime.utcnow().strftime('%Y%m%d%H%M%S')}_{uuid.uuid4().hex[:8]}{ext}"
+    abs_path = os.path.join(_product_upload_dir, safe_name)
+
+    with open(abs_path, "wb") as out:
+        while True:
+            chunk = photo.file.read(1024 * 1024)
+            if not chunk:
+                break
+            out.write(chunk)
+
+    return f"/product-images/{safe_name}"
+
+
+def _normalize_picker_confirm_items(raw_items: list) -> List['PickerConfirmItem']:
+    normalized = []
+    for x in raw_items:
+        if not isinstance(x, dict):
+            continue
+        normalized.append(PickerConfirmItem(
+            order_item_id=x.get('order_item_id'),
+            variant_id=x.get('variant_id'),
+            picked_qty=int(x.get('picked_qty') or 0),
+        ))
+    return normalized
 
 def ensure_created_ts_columns():
     if not is_sqlite:
@@ -147,6 +220,27 @@ def ensure_picker_note_column():
     except Exception as e:
         print("Warning: ensure_picker_note_column failed:", e)
 
+def ensure_telegram_columns():
+    try:
+        with engine.connect() as conn:
+            if is_sqlite:
+                info = conn.execute(text("PRAGMA table_info('orders')")).fetchall()
+                cols = [r[1] for r in info]
+                if 'telegram_file_id' not in cols:
+                    conn.execute(text("ALTER TABLE orders ADD COLUMN telegram_file_id VARCHAR DEFAULT ''"))
+                if 'telegram_message_id' not in cols:
+                    conn.execute(text("ALTER TABLE orders ADD COLUMN telegram_message_id VARCHAR DEFAULT ''"))
+                conn.commit()
+            else:
+                try:
+                    conn.execute(text("ALTER TABLE orders ADD COLUMN IF NOT EXISTS telegram_file_id VARCHAR DEFAULT ''"))
+                    conn.execute(text("ALTER TABLE orders ADD COLUMN IF NOT EXISTS telegram_message_id VARCHAR DEFAULT ''"))
+                    conn.commit()
+                except Exception:
+                    conn.rollback()
+    except Exception as e:
+        print("Warning: ensure_telegram_columns failed:", e)
+
 def ensure_area_schema_and_seed():
     seed_areas = ["Chợ đêm", "Chợ hàn", "Hội An", "Nha Trang"]
     try:
@@ -245,9 +339,43 @@ def ensure_order_flow_columns():
 
 ensure_status_column()
 ensure_picker_note_column()
+ensure_telegram_columns()
 ensure_area_schema_and_seed()
 ensure_employee_schema_and_seed()
 ensure_order_flow_columns()
+
+
+def _send_photo_to_telegram(photo_path: str, caption: str) -> dict:
+    token = os.environ.get('TELEGRAM_BOT_TOKEN')
+    chat_id = os.environ.get('TELEGRAM_CHAT_ID')
+    if not token or not chat_id:
+        return {}
+
+
+def _send_product_image_to_telegram(photo_path: str, caption: str) -> None:
+    token = os.environ.get('TELEGRAM_DB_BOT_TOKEN')
+    chat_id = os.environ.get('TELEGRAM_DB_CHAT_ID')
+    if not token or not chat_id:
+        return
+    url = f"https://api.telegram.org/bot{token}/sendPhoto"
+    try:
+        with open(photo_path, 'rb') as f:
+            files = {'photo': f}
+            data = {'chat_id': chat_id, 'caption': caption}
+            requests.post(url, files=files, data=data, timeout=30)
+    except Exception as e:
+        print("Warning: telegram product image send failed:", e)
+    url = f"https://api.telegram.org/bot{token}/sendPhoto"
+    try:
+        with open(photo_path, 'rb') as f:
+            files = {'photo': f}
+            data = {'chat_id': chat_id, 'caption': caption}
+            r = requests.post(url, files=files, data=data, timeout=30)
+        if r.status_code == 200:
+            return r.json().get('result') or {}
+    except Exception as e:
+        print("Warning: telegram send failed:", e)
+    return {}
 
 def _get_default_area_id(db: Session):
     area = db.query(Area).filter(Area.name == "Chợ hàn").first()
@@ -390,6 +518,66 @@ class DeliverOrderRequest(BaseModel):
     picker_id: int
     photo_path: str
     items: List[PickerConfirmItem] = []
+    picker_note: str = ""
+
+
+def _deliver_order_internal(order_id: int, picker_id: int, photo_path: str, items: List[PickerConfirmItem], db: Session, picker_note: str = ""):
+    normalized_photo_path = photo_path.strip()
+    if not normalized_photo_path:
+        raise HTTPException(status_code=400, detail='Bắt buộc chụp ảnh xác nhận giao hàng')
+
+    abs_photo_path = None
+    if normalized_photo_path.startswith('/delivery-proofs/'):
+        file_name = os.path.basename(normalized_photo_path)
+        abs_path = os.path.join(_delivery_upload_dir, file_name)
+        if not os.path.exists(abs_path):
+            raise HTTPException(status_code=400, detail='Ảnh xác nhận không tồn tại trên server, vui lòng chụp và gửi lại')
+        normalized_photo_path = f'/delivery-proofs/{file_name}'
+        abs_photo_path = abs_path
+    elif normalized_photo_path.startswith('http://') or normalized_photo_path.startswith('https://'):
+        pass
+    else:
+        raise HTTPException(status_code=400, detail='Ứng dụng mobile cũ chưa hỗ trợ upload ảnh. Vui lòng cập nhật app mobile mới nhất')
+
+    picker = db.query(Employee).filter(Employee.id == picker_id).first()
+    if not picker or picker.role != 'picker':
+        raise HTTPException(status_code=400, detail='Picker không hợp lệ')
+
+    order = db.query(Order).filter(Order.id == order_id).first()
+    if not order:
+        raise HTTPException(status_code=404, detail='Hóa đơn không tồn tại')
+    if order.status != 'assigned':
+        raise HTTPException(status_code=400, detail='Chỉ giao đơn đã nhận')
+    if order.assigned_picker_id != picker.id:
+        raise HTTPException(status_code=403, detail='Bạn không phải người đã nhận đơn này')
+
+    proxy = PickerConfirmRequest(items=items)
+    result = confirm_order(order_id, proxy if items else None, db, picker_note=picker_note)
+    order.delivered_by_id = picker.id
+    order.delivered_at = datetime.now()
+    order.delivery_photo_path = normalized_photo_path
+    db.commit()
+
+    if abs_photo_path:
+        try:
+            caption_parts = [
+                f"Đơn #{order.id} • {order.customer_name or 'Khách lẻ'}",
+                f"Picker: {picker.name}",
+                order.delivered_at.strftime('%Y-%m-%d %H:%M') if order.delivered_at else '',
+            ]
+            if order.picker_note:
+                caption_parts.append(f"Ghi chú: {order.picker_note}")
+            caption = "\n".join([p for p in caption_parts if p])
+            result = _send_photo_to_telegram(abs_photo_path, caption)
+            if result:
+                photos = result.get('photo') or []
+                if photos:
+                    order.telegram_file_id = photos[-1].get('file_id', '') or ''
+                order.telegram_message_id = str(result.get('message_id') or '')
+                db.commit()
+        except Exception as e:
+            print("Warning: telegram backup failed:", e)
+    return result
 
 # --- API NHÂN VIÊN / PHÂN QUYỀN ---
 @app.post('/auth/pin-login')
@@ -494,6 +682,32 @@ def create_product(p: ProductCreate, db: Session = Depends(get_db)):
         db.add(Variant(product_id=new_prod.id, color=v.color, size=v.size, price=v.price, stock=v.stock))
     db.commit()
     return {"status": "ok"}
+
+
+@app.post("/product-images/upload")
+def upload_product_image(file: UploadFile = File(...)):
+    path = _save_product_image_file(file)
+    abs_path = None
+    if path.startswith('/product-images/'):
+        abs_path = os.path.join(_product_upload_dir, os.path.basename(path))
+    if abs_path:
+        try:
+            caption = f"Ảnh sản phẩm • {datetime.now().strftime('%Y-%m-%d %H:%M')}"
+            _send_product_image_to_telegram(abs_path, caption)
+        except Exception as e:
+            print("Warning: product image telegram backup failed:", e)
+    return {"path": path}
+
+
+@app.get('/product-images/{file_name}')
+def get_product_image_file(file_name: str):
+    safe_name = os.path.basename(file_name)
+    if safe_name != file_name:
+        raise HTTPException(status_code=400, detail='Tên file không hợp lệ')
+    abs_path = os.path.join(_product_upload_dir, safe_name)
+    if not os.path.exists(abs_path):
+        raise HTTPException(status_code=404, detail='Không tìm thấy ảnh')
+    return FileResponse(abs_path)
 
 @app.put("/products/{product_id}")
 def update_product(product_id: int, p_data: ProductUpdate, db: Session = Depends(get_db)):
@@ -1244,27 +1458,65 @@ def get_assigned_orders(picker_id: int, db: Session = Depends(get_db)):
 
 @app.put('/orders/{order_id}/deliver')
 def deliver_order(order_id: int, data: DeliverOrderRequest, db: Session = Depends(get_db)):
-    if not data.photo_path.strip():
-        raise HTTPException(status_code=400, detail='Bắt buộc chụp ảnh xác nhận giao hàng')
-    picker = db.query(Employee).filter(Employee.id == data.picker_id).first()
-    if not picker or picker.role != 'picker':
-        raise HTTPException(status_code=400, detail='Picker không hợp lệ')
+    return _deliver_order_internal(order_id, data.picker_id, data.photo_path, data.items, db, picker_note=data.picker_note)
 
-    order = db.query(Order).filter(Order.id == order_id).first()
-    if not order:
-        raise HTTPException(status_code=404, detail='Hóa đơn không tồn tại')
-    if order.status != 'assigned':
-        raise HTTPException(status_code=400, detail='Chỉ giao đơn đã nhận')
-    if order.assigned_picker_id != picker.id:
-        raise HTTPException(status_code=403, detail='Bạn không phải người đã nhận đơn này')
 
-    proxy = PickerConfirmRequest(items=data.items)
-    result = confirm_order(order_id, proxy if data.items else None, db)
-    order.delivered_by_id = picker.id
-    order.delivered_at = datetime.now()
-    order.delivery_photo_path = data.photo_path.strip()
-    db.commit()
-    return result
+@app.put('/orders/{order_id}/deliver-with-photo')
+async def deliver_order_with_photo(
+    order_id: int,
+    picker_id: int = Form(...),
+    items_json: str = Form('[]'),
+    picker_note: str = Form(''),
+    photo: UploadFile = File(...),
+    db: Session = Depends(get_db),
+):
+    try:
+        raw_items = json.loads(items_json or '[]')
+        if not isinstance(raw_items, list):
+            raw_items = []
+    except Exception:
+        raise HTTPException(status_code=400, detail='Dữ liệu items không hợp lệ')
+
+    normalized_items = _normalize_picker_confirm_items(raw_items)
+    photo_path = _save_delivery_photo_file(order_id, photo)
+    return _deliver_order_internal(order_id, picker_id, photo_path, normalized_items, db, picker_note=picker_note)
+
+
+@app.get('/delivery-proofs/pending')
+def list_pending_delivery_proofs(since_order_id: int = 0, limit: int = 200, db: Session = Depends(get_db)):
+    lim = 200 if limit <= 0 else min(limit, 500)
+    q = db.query(Order).filter(
+        Order.status == 'completed',
+        Order.delivery_photo_path.isnot(None),
+        Order.delivery_photo_path != '',
+        Order.id > since_order_id,
+    ).order_by(Order.id.asc()).limit(lim)
+
+    orders = q.all()
+    data = []
+    for o in orders:
+        rel = (o.delivery_photo_path or '').strip()
+        file_name = os.path.basename(rel)
+        data.append({
+            'order_id': o.id,
+            'delivered_at': o.delivered_at.strftime('%Y-%m-%d %H:%M') if o.delivered_at else '',
+            'customer_name': o.customer_name or 'Khách lẻ',
+            'photo_path': rel,
+            'file_name': file_name,
+            'download_url': rel if rel.startswith('/delivery-proofs/') else f'/delivery-proofs/{file_name}',
+        })
+    return {'data': data, 'count': len(data)}
+
+
+@app.get('/delivery-proofs/{file_name}')
+def get_delivery_proof_file(file_name: str):
+    safe_name = os.path.basename(file_name)
+    if safe_name != file_name:
+        raise HTTPException(status_code=400, detail='Tên file không hợp lệ')
+    abs_path = os.path.join(_delivery_upload_dir, safe_name)
+    if not os.path.exists(abs_path):
+        raise HTTPException(status_code=404, detail='Không tìm thấy ảnh')
+    return FileResponse(abs_path)
 
 
 @app.get('/orders/management')
@@ -1364,7 +1616,7 @@ def approve_order(order_id: int, db: Session = Depends(get_db)):
 
 
 @app.put("/orders/{order_id}/confirm")
-def confirm_order(order_id: int, data: Optional[PickerConfirmRequest] = None, db: Session = Depends(get_db)):
+def confirm_order(order_id: int, data: Optional[PickerConfirmRequest] = None, db: Session = Depends(get_db), picker_note: str = ""):
     """
     Picker confirms delivery → applies to database:
     - Deduct stock from variants (by picked quantities)
@@ -1448,8 +1700,17 @@ def confirm_order(order_id: int, data: Optional[PickerConfirmRequest] = None, db
 
         order.total_amount = delivered_total
         order.picker_note = ""
+        shortage_note = ""
         if shortage_parts:
-            order.picker_note = "Thiếu hàng: " + "; ".join(shortage_parts)
+            shortage_note = "Thiếu hàng: " + "; ".join(shortage_parts)
+
+        manual_note = (picker_note or "").strip()
+        if shortage_note and manual_note:
+            order.picker_note = f"{shortage_note} | Ghi chú picker: {manual_note}"
+        elif shortage_note:
+            order.picker_note = shortage_note
+        elif manual_note:
+            order.picker_note = manual_note
 
         order.status = 'completed'
         order.is_draft = 0
