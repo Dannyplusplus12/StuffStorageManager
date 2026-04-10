@@ -276,6 +276,46 @@ class _PendingApprovalScreenState extends State<PendingApprovalScreen> {
     if (!silent && mounted) setState(() => _loading = false);
   }
 
+  Future<void> _cancel(Order order) async {
+    final ok = await showDialog<bool>(
+      context: context,
+      builder: (_) => AlertDialog(
+        title: const Text('Hủy đơn'),
+        content: Text('Hủy đơn #${order.id}?'),
+        actions: [
+          MouseRegion(
+            cursor: SystemMouseCursors.click,
+            child: TextButton(onPressed: () => Navigator.pop(context, false), child: const Text('Không')),
+          ),
+          MouseRegion(
+            cursor: SystemMouseCursors.click,
+            child: ElevatedButton(
+              onPressed: () => Navigator.pop(context, true),
+              style: ElevatedButton.styleFrom(backgroundColor: Colors.red),
+              child: const Text('Hủy đơn'),
+            ),
+          ),
+        ],
+      ),
+    );
+
+    if (ok != true) return;
+
+    try {
+      await ApiService.cancelOrder(order.id);
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Đã hủy đơn #${order.id}'), backgroundColor: Colors.orange),
+      );
+      await _load();
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Hủy đơn thất bại: $e'), backgroundColor: Colors.red),
+      );
+    }
+  }
+
   Future<void> _approve(Order order) async {
     try {
       await ApiService.approveOrder(order.id);
@@ -555,8 +595,8 @@ class _PendingApprovalScreenState extends State<PendingApprovalScreen> {
                                             MouseRegion(
                                               cursor: SystemMouseCursors.click,
                                               child: TextButton(
-                                                onPressed: () => _reject(o),
-                                                child: const Text('Từ chối', style: TextStyle(color: Colors.red)),
+                                                onPressed: () => _cancel(o),
+                                                child: const Text('Hủy đơn', style: TextStyle(color: Colors.red)),
                                               ),
                                             ),
                                             const SizedBox(width: 8),
@@ -677,7 +717,30 @@ class _PendingApprovalScreenState extends State<PendingApprovalScreen> {
                                       ],
                                     ),
                                   ),
-                                  children: [_buildOrderItemsExcelTable(o)],
+                                  children: [
+                                    _buildOrderItemsExcelTable(o),
+                                    if (o.status == 'pending' || o.status == 'approved' || o.status == 'assigned')
+                                      Padding(
+                                        padding: const EdgeInsets.fromLTRB(12, 0, 12, 12),
+                                        child: Row(
+                                          mainAxisAlignment: MainAxisAlignment.end,
+                                          children: [
+                                            MouseRegion(
+                                              cursor: SystemMouseCursors.click,
+                                              child: OutlinedButton.icon(
+                                                onPressed: () => _cancel(o),
+                                                icon: const Icon(Icons.cancel_outlined, size: 16, color: Colors.red),
+                                                label: const Text('Hủy đơn', style: TextStyle(color: Colors.red)),
+                                                style: OutlinedButton.styleFrom(
+                                                  side: const BorderSide(color: Colors.red),
+                                                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                                                ),
+                                              ),
+                                            ),
+                                          ],
+                                        ),
+                                      ),
+                                  ],
                                 ),
                               );
                             },

@@ -744,6 +744,7 @@ class _PickerScreenState extends State<_PickerScreen> with _NotificationMixin {
         _approvedKey.currentState?.reloadOrders();
         _assignedKey.currentState?.reloadOrders();
       }
+      _assignedKey.currentState?.reloadOrders(silent: true);
       _lastSeenAcceptedIds = currentIds;
       await prefs.setStringList(
         _seenAcceptedKey,
@@ -813,6 +814,9 @@ class _PickerScreenState extends State<_PickerScreen> with _NotificationMixin {
                 addNotice('✅ Đã giao xong đơn #$id');
               }
               _approvedKey.currentState?.reloadOrders();
+            },
+            onCancelled: (id) {
+              addNotice('❌ Đơn #$id đã bị hủy');
             },
             onOpenItem: _jumpToInventoryItem,
           ),
@@ -1694,7 +1698,7 @@ class _ApprovedOrdersScreenState extends State<_ApprovedOrdersScreen> {
     _load();
   }
 
-  Future<void> reloadOrders() => _load();
+  Future<void> reloadOrders({bool silent = false}) => _load(silent: silent);
 
   Future<void> _load({bool silent = false}) async {
     if (!silent) setState(() => _loading = true);
@@ -1832,7 +1836,8 @@ class _ApprovedOrdersScreenState extends State<_ApprovedOrdersScreen> {
 class _AcceptedOrdersScreen extends StatefulWidget {
   final void Function(int orderId, String? pickerNote) onConfirmed;
   final void Function(OrderItem item) onOpenItem;
-  const _AcceptedOrdersScreen({super.key, required this.onConfirmed, required this.onOpenItem});
+  final void Function(int orderId)? onCancelled;
+  const _AcceptedOrdersScreen({super.key, required this.onConfirmed, required this.onOpenItem, this.onCancelled});
 
   @override
   State<_AcceptedOrdersScreen> createState() => _AcceptedOrdersScreenState();
@@ -1842,6 +1847,7 @@ class _AcceptedOrdersScreenState extends State<_AcceptedOrdersScreen> {
   bool _loading = true;
   List<Order> _orders = [];
   final Set<int> _confirming = {};
+  final Set<int> _lastOrderIds = {};
 
   @override
   void initState() {
@@ -1849,7 +1855,7 @@ class _AcceptedOrdersScreenState extends State<_AcceptedOrdersScreen> {
     _load();
   }
 
-  Future<void> reloadOrders() => _load();
+  Future<void> reloadOrders({bool silent = false}) => _load(silent: silent);
 
   Future<void> _load({bool silent = false}) async {
     if (!silent) {
@@ -1862,6 +1868,17 @@ class _AcceptedOrdersScreenState extends State<_AcceptedOrdersScreen> {
         return;
       }
       final orders = await ApiService.getAssignedOrders(pickerId);
+      final newIds = orders.map((o) => o.id).toSet();
+      if (_lastOrderIds.isNotEmpty) {
+        final removed = _lastOrderIds.difference(newIds);
+        for (final id in removed) {
+          if (_confirming.contains(id)) continue;
+          widget.onCancelled?.call(id);
+        }
+      }
+      _lastOrderIds
+        ..clear()
+        ..addAll(newIds);
       if (mounted) setState(() => _orders = orders);
     } catch (e) {
       if (mounted && !silent) {

@@ -267,6 +267,15 @@ class ApiService {
     throw Exception(jsonDecode(utf8.decode(r.bodyBytes))['detail'] ?? 'Lỗi từ chối hóa đơn');
   }
 
+  /// Cancel an order in pending/approved/assigned states
+  static Future<Map<String, dynamic>> cancelOrder(int orderId) async {
+    final r = await http.delete(Uri.parse('$_b/orders/$orderId/cancel'));
+    if (r.statusCode == 200) {
+      return jsonDecode(utf8.decode(r.bodyBytes));
+    }
+    throw Exception(jsonDecode(utf8.decode(r.bodyBytes))['detail'] ?? 'Lỗi hủy đơn');
+  }
+
   /// Get all accepted orders (for picker)
   static Future<List<Order>> getAcceptedOrders() async {
     final r = await http.get(Uri.parse('$_b/orders/accepted')).timeout(_timeout);

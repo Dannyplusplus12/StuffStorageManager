@@ -37,6 +37,7 @@ class _RolePinDialogState extends State<RolePinDialog> {
         widget.requestedRole,
         employeeId: (login['id'] ?? 0) as int,
         employeeName: (login['name'] ?? '').toString(),
+        employeeRole: (login['role'] ?? '').toString(),
       );
       if (mounted) Navigator.pop(context, true);
     } catch (_) {
