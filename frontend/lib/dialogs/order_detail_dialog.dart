@@ -54,7 +54,7 @@ class OrderDetailDialog extends StatelessWidget {
               const SizedBox(height: 8),
               Align(
                 alignment: Alignment.centerRight,
-                child: Text('Tổng cộng: ${formatCurrency(totalVerify)} VNĐ', style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: kPrimary)),
+                child: Text('Tổng cộng: ${formatCurrency(totalVerify)} k', style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: kPrimary)),
               ),
               const SizedBox(height: 8),
               Align(

@@ -524,7 +524,7 @@ class _RevenueScreenState extends State<RevenueScreen> {
         Expanded(
           child: _summaryCard(
             title: 'Tổng doanh thu',
-            value: '${formatCurrency(_totalRevenue)} đ',
+            value: '${formatCurrency(_totalRevenue)} k',
             icon: Icons.payments_outlined,
             iconColor: kSuccess,
             bgColor: const Color(0xFFF0FDF4),
@@ -671,7 +671,7 @@ class _RevenueScreenState extends State<RevenueScreen> {
                                         padding: EdgeInsets.only(right: 6),
                                         child: Icon(Icons.subdirectory_arrow_right, size: 16, color: kTextSecondary),
                                       ),
-                                    Text('${formatCurrency(b.amount)} đ', style: const TextStyle(fontWeight: FontWeight.w700, color: kTextPrimary)),
+                                    Text('${formatCurrency(b.amount)} k', style: const TextStyle(fontWeight: FontWeight.w700, color: kTextPrimary)),
                                   ],
                                 ),
                                 const SizedBox(height: 6),
@@ -753,7 +753,7 @@ class _RevenueScreenState extends State<RevenueScreen> {
                               ),
                             ),
                             const SizedBox(width: 8),
-                            Text('${formatCurrency(t.revenue)} đ', style: const TextStyle(fontWeight: FontWeight.w700, color: kSuccess)),
+                            Text('${formatCurrency(t.revenue)} k', style: const TextStyle(fontWeight: FontWeight.w700, color: kSuccess)),
                           ],
                         ),
                       );
@@ -825,7 +825,7 @@ class _RevenueScreenState extends State<RevenueScreen> {
                                     overflow: TextOverflow.ellipsis,
                                   ),
                                 ),
-                                Text('${formatCurrency(o.totalAmount)} đ', style: const TextStyle(fontWeight: FontWeight.w700, color: kTextPrimary)),
+                                Text('${formatCurrency(o.totalAmount)} k', style: const TextStyle(fontWeight: FontWeight.w700, color: kTextPrimary)),
                               ],
                             ),
                             subtitle: Padding(
@@ -878,8 +878,8 @@ class _RevenueScreenState extends State<RevenueScreen> {
                                           Padding(padding: const EdgeInsets.all(6), child: Text(parsed.color.isEmpty ? '-' : parsed.color)),
                                           Padding(padding: const EdgeInsets.all(6), child: Text(parsed.size.isEmpty ? '-' : parsed.size)),
                                           Padding(padding: const EdgeInsets.all(6), child: Text('${it.quantity}')),
-                                          Padding(padding: const EdgeInsets.all(6), child: Text('${formatCurrency(it.price)} đ')),
-                                          Padding(padding: const EdgeInsets.all(6), child: Text('${formatCurrency(lineMoney)} đ')),
+                                          Padding(padding: const EdgeInsets.all(6), child: Text('${formatCurrency(it.price)} k')),
+                                          Padding(padding: const EdgeInsets.all(6), child: Text('${formatCurrency(lineMoney)} k')),
                                         ],
                                       );
                                     }),

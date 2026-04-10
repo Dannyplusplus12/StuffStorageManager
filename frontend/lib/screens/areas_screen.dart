@@ -207,7 +207,7 @@ class _AreasScreenState extends State<AreasScreen> {
                               onTap: () => widget.onOpenDebtByArea?.call(a.id),
                             ),
                             DataCell(Text('${a.customerCount}'), onTap: () => widget.onOpenDebtByArea?.call(a.id)),
-                            DataCell(Text('${formatCurrency(a.totalDebt)} đ'), onTap: () => widget.onOpenDebtByArea?.call(a.id)),
+                            DataCell(Text('${formatCurrency(a.totalDebt)} k'), onTap: () => widget.onOpenDebtByArea?.call(a.id)),
                             DataCell(PopupMenuButton<String>(
                               onSelected: (v) {
                                 if (v == 'edit') {

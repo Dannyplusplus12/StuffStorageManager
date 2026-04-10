@@ -200,7 +200,7 @@ class _PendingApprovalScreenState extends State<PendingApprovalScreen> {
                   Padding(padding: const EdgeInsets.all(6), child: Text(r['product'].toString())),
                   Padding(padding: const EdgeInsets.all(6), child: Text(r['color'].toString())),
                   Padding(padding: const EdgeInsets.all(6), child: Text('${r['qty']}')),
-                  Padding(padding: const EdgeInsets.all(6), child: Text('${formatCurrency(r['money'] as int)} đ')),
+                  Padding(padding: const EdgeInsets.all(6), child: Text('${formatCurrency(r['money'] as int)} k')),
                 ])),
           ],
         ),
@@ -543,7 +543,7 @@ class _PendingApprovalScreenState extends State<PendingApprovalScreen> {
                                       children: [
                                         Text('Đơn #${o.id} • ${o.customerName}', style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 15)),
                                         const SizedBox(height: 4),
-                                        Text('${formatDate(o.createdAt)} • SL ${o.totalQty} • ${formatCurrency(o.totalAmount)} đ', style: const TextStyle(color: kTextSecondary)),
+                                        Text('${formatDate(o.createdAt)} • SL ${o.totalQty} • ${formatCurrency(o.totalAmount)} k', style: const TextStyle(color: kTextSecondary)),
                                         const SizedBox(height: 8),
                                         _buildOrderItemsExcelTable(o),
                                         const SizedBox(height: 8),

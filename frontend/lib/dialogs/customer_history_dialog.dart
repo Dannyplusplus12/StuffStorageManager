@@ -172,7 +172,7 @@ class _CustomerHistoryDialogState extends State<CustomerHistoryDialog> {
                                     DataCell(Text(formatDate(h.date))),
                                     DataCell(Text(isOrder ? 'Xuất đơn hàng' : 'Điều chỉnh', style: TextStyle(color: isOrder ? Colors.blue : Colors.green))),
                                     DataCell(SizedBox(width: 250, child: Text(h.desc, overflow: TextOverflow.ellipsis))),
-                                    DataCell(Text(formatSignedCurrency(h.amount), style: TextStyle(color: h.amount > 0 ? Colors.red : Colors.green, fontWeight: FontWeight.bold))),
+                                    DataCell(Text('${formatSignedCurrency(h.amount)} k', style: TextStyle(color: h.amount > 0 ? Colors.red : Colors.green, fontWeight: FontWeight.bold))),
                                     DataCell(Row(mainAxisSize: MainAxisSize.min, children: [
                                       if (isOrder) ...[
                                         MouseRegion(

@@ -452,7 +452,7 @@ class _OrdererDebtScreenState extends State<_OrdererDebtScreen> {
                           trailing: Row(
                             mainAxisSize: MainAxisSize.min,
                             children: [
-                              Text('${formatCurrency(c.debt)} đ', style: const TextStyle(color: kDanger, fontWeight: FontWeight.bold)),
+                              Text('${formatCurrency(c.debt)} k', style: const TextStyle(color: kDanger, fontWeight: FontWeight.bold)),
                               const SizedBox(width: 6),
                               const Icon(Icons.chevron_right_rounded, color: kTextSecondary),
                             ],
@@ -554,7 +554,7 @@ class _OrdererCustomerHistorySheetState extends State<_OrdererCustomerHistoryShe
 
   Widget _historyTile(HistoryItem h) {
     final isOrder = h.type == 'ORDER';
-    final amountTxt = '${h.amount >= 0 ? '+' : ''}${formatCurrency(h.amount)} đ';
+    final amountTxt = '${h.amount >= 0 ? '+' : ''}${formatCurrency(h.amount)} k';
     return Container(
       margin: const EdgeInsets.only(bottom: 8),
       padding: const EdgeInsets.all(10),
@@ -605,7 +605,7 @@ class _OrdererCustomerHistorySheetState extends State<_OrdererCustomerHistoryShe
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         Text(widget.customer.name, style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
-                        Text('Nợ hiện tại: ${formatCurrency(widget.customer.debt)} đ', style: const TextStyle(color: kDanger, fontWeight: FontWeight.w700)),
+                        Text('Nợ hiện tại: ${formatCurrency(widget.customer.debt)} k', style: const TextStyle(color: kDanger, fontWeight: FontWeight.w700)),
                       ],
                     ),
                   ),
@@ -936,7 +936,7 @@ class _CreateOrderScreenState extends State<_CreateOrderScreen> {
                     Padding(
                       padding: const EdgeInsets.fromLTRB(16, 0, 16, 10),
                       child: Text(
-                        '${_cart.length} mẫu • Tổng ${formatCurrency(_total)} đ',
+                        '${_cart.length} mẫu • Tổng ${formatCurrency(_total)} k',
                         style: const TextStyle(color: kTextSecondary, fontSize: 12),
                       ),
                     ),
@@ -982,7 +982,7 @@ class _CreateOrderScreenState extends State<_CreateOrderScreen> {
                                                   child: Text(modelName, style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w700, color: kTextPrimary)),
                                                 ),
                                                 Text(
-                                                  '$modelQty cái • ${formatCurrency(modelMoney)} đ',
+                                                  '$modelQty cái • ${formatCurrency(modelMoney)} k',
                                                   style: const TextStyle(fontSize: 12, color: kTextSecondary, fontWeight: FontWeight.w600),
                                                 ),
                                               ],
@@ -1009,12 +1009,12 @@ class _CreateOrderScreenState extends State<_CreateOrderScreen> {
                                                   crossAxisAlignment: CrossAxisAlignment.start,
                                                   children: [
                                                     Text(
-                                                      'Màu $colorName • $totalQty cái • ${formatCurrency(colorMoney)} đ',
+                                                      'Màu $colorName • $totalQty cái • ${formatCurrency(colorMoney)} k',
                                                       style: const TextStyle(fontWeight: FontWeight.w600, color: kPrimary),
                                                     ),
                                                     const SizedBox(height: 6),
                                                     ...sortedItems.map((item) {
-                                                      return Padding(
+                                                return Padding(
                                                         padding: const EdgeInsets.only(bottom: 6),
                                                         child: Row(
                                                           crossAxisAlignment: CrossAxisAlignment.start,
@@ -1023,7 +1023,7 @@ class _CreateOrderScreenState extends State<_CreateOrderScreen> {
                                                               child: Padding(
                                                                 padding: const EdgeInsets.symmetric(vertical: 4),
                                                                 child: Text(
-                                                                  'Size ${item.size} • ${formatCurrency(item.price)} đ',
+                                                                  'Size ${item.size} • ${formatCurrency(item.price)} k',
                                                                   style: const TextStyle(fontSize: 13, color: kTextPrimary),
                                                                 ),
                                                               ),
@@ -1289,7 +1289,7 @@ class _CreateOrderScreenState extends State<_CreateOrderScreen> {
                                           children: [
                                             Text('Size ${v.size}', style: const TextStyle(fontWeight: FontWeight.w600)),
                                             const SizedBox(height: 2),
-                                            Text('${formatCurrency(v.price)} đ', style: const TextStyle(color: kTextSecondary)),
+                                            Text('${formatCurrency(v.price)} k', style: const TextStyle(color: kTextSecondary)),
                                             Text(
                                               'Kho: ${v.stock}${outOfStock ? ' (HẾT)' : ''}',
                                               style: TextStyle(color: outOfStock ? kDanger : kTextSecondary, fontSize: 12),
@@ -1579,7 +1579,7 @@ class _CreateOrderScreenState extends State<_CreateOrderScreen> {
                         ..._cart.map(
                           (c) => ListTile(
                             title: Text('${c.productName} (${c.color}-${c.size})'),
-                            subtitle: Text('${formatCurrency(c.price)} đ x ${c.quantity}'),
+                            subtitle: Text('${formatCurrency(c.price)} k x ${c.quantity}'),
                             trailing: IconButton(
                               icon: const Icon(Icons.delete_outline),
                               onPressed: () => setState(() => _cart.remove(c)),
@@ -1603,7 +1603,7 @@ class _CreateOrderScreenState extends State<_CreateOrderScreen> {
               children: [
                 Expanded(
                   child: Text(
-                    'Tổng: ${formatCurrency(_total)} đ',
+                    'Tổng: ${formatCurrency(_total)} k',
                     style: const TextStyle(fontWeight: FontWeight.bold),
                   ),
                 ),
@@ -1763,7 +1763,7 @@ class _ApprovedOrdersScreenState extends State<_ApprovedOrdersScreen> {
           margin: const EdgeInsets.only(bottom: 8),
           child: ExpansionTile(
             title: Text('Đơn #${o.id} • ${o.customerName}'),
-            subtitle: Text('${formatDate(o.createdAt)} • ${formatCurrency(o.totalAmount)} đ'),
+            subtitle: Text('${formatDate(o.createdAt)} • ${formatCurrency(o.totalAmount)} k'),
             childrenPadding: const EdgeInsets.fromLTRB(16, 0, 16, 12),
             children: [
               Align(
@@ -2055,6 +2055,7 @@ class _AcceptedOrdersScreenState extends State<_AcceptedOrdersScreen> {
                                                 final enough = item.enoughStock ?? true;
                                                 final parsed = _splitVariantInfo(item.variantInfo);
 
+                                                final itemTotal = item.price * currentQty;
                                                 return Padding(
                                                   padding: const EdgeInsets.only(bottom: 6),
                                                   child: Row(
@@ -2071,7 +2072,7 @@ class _AcceptedOrdersScreenState extends State<_AcceptedOrdersScreen> {
                                                           child: Padding(
                                                             padding: const EdgeInsets.symmetric(vertical: 4),
                                                             child: Text(
-                                                              'Size ${parsed.size} • YC ${item.quantity}$stockText',
+                                                              'Size ${parsed.size} • YC ${item.quantity}$stockText • ${formatCurrency(item.price)} k • ${formatCurrency(itemTotal)} k',
                                                               style: TextStyle(fontSize: 13, color: enough ? kTextPrimary : kDanger),
                                                             ),
                                                           ),

@@ -320,7 +320,7 @@ class _SalesScreenState extends State<SalesScreen> {
                 padding: const EdgeInsets.symmetric(horizontal: 4),
                 child: Row(
                   children: [
-                    Text('TỔNG TIỀN: ${formatCurrency(_total)} đ', style: const TextStyle(fontSize: 34, fontWeight: FontWeight.bold)),
+                    Text('TỔNG TIỀN: ${formatCurrency(_total)} k', style: const TextStyle(fontSize: 34, fontWeight: FontWeight.bold)),
                     const Spacer(),
                     SizedBox(
                       height: 48,

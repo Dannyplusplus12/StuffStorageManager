@@ -50,7 +50,7 @@ class _MyAppState extends State<MyApp> {
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
-      title: 'Quản lý kho & Công nợ',
+      title: 'Fisd',
       debugShowCheckedModeBanner: false,
       theme: buildTheme(),
       localizationsDelegates: const [

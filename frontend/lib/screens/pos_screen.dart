@@ -615,7 +615,7 @@ class PosScreenState extends State<PosScreen> {
           mainAxisAlignment: MainAxisAlignment.spaceBetween,
           children: [
             const Text('Tổng tiền:', style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600)),
-            Text('${formatCurrency(_total)} đ',
+            Text('${formatCurrency(_total)} k',
                 style: const TextStyle(fontSize: 18, color: kPrimary, fontWeight: FontWeight.bold)),
           ],
         ),
@@ -710,7 +710,7 @@ class PosScreenState extends State<PosScreen> {
               ),
               const SizedBox(height: 4),
               Text(
-                'SL $totalQty • ${formatCurrency(totalMoney)} đ',
+                'SL $totalQty • ${formatCurrency(totalMoney)} k',
                 style: const TextStyle(fontSize: 11, color: kTextSecondary, fontWeight: FontWeight.w600),
               ),
               const SizedBox(height: 6),

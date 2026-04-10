@@ -446,7 +446,7 @@ class _DebtScreenState extends State<DebtScreen> {
           Container(
             padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
             decoration: BoxDecoration(color: const Color(0xFFFEE2E2), borderRadius: BorderRadius.circular(10)),
-            child: Text('Tổng nợ: ${formatCurrency(_totalDebt)} đ', style: const TextStyle(color: kDanger, fontWeight: FontWeight.bold)),
+            child: Text('Tổng nợ: ${formatCurrency(_totalDebt)} k', style: const TextStyle(color: kDanger, fontWeight: FontWeight.bold)),
           ),
           const SizedBox(height: 10),
           Expanded(
@@ -483,7 +483,7 @@ class _DebtScreenState extends State<DebtScreen> {
                                   mainAxisAlignment: MainAxisAlignment.end,
                                   children: [
                                     Expanded(
-                                      child: Text('${formatCurrency(c.debt)} đ', textAlign: TextAlign.right, style: const TextStyle(color: kDanger, fontWeight: FontWeight.bold)),
+                                      child: Text('${formatCurrency(c.debt)} k', textAlign: TextAlign.right, style: const TextStyle(color: kDanger, fontWeight: FontWeight.bold)),
                                     ),
                                     PopupMenuButton<String>(
                                       onSelected: (v) {
@@ -676,7 +676,7 @@ class _CustomerHistoryPanelState extends State<_CustomerHistoryPanel> {
           const SizedBox(height: 6),
           Text('Nội dung: ${h.desc}', style: const TextStyle(color: kTextSecondary)),
           const SizedBox(height: 4),
-          Text('Số tiền: ${formatSignedCurrency(h.amount)}', style: const TextStyle(color: kTextSecondary)),
+          Text('Số tiền: ${formatSignedCurrency(h.amount)} k', style: const TextStyle(color: kTextSecondary)),
           if (isOrder) ...[
             const SizedBox(height: 8),
             if (orderItems.isEmpty)
@@ -740,7 +740,7 @@ class _CustomerHistoryPanelState extends State<_CustomerHistoryPanel> {
                             Padding(padding: const EdgeInsets.all(6), child: Text(r['product'].toString())),
                             Padding(padding: const EdgeInsets.all(6), child: Text(r['color'].toString())),
                             Padding(padding: const EdgeInsets.all(6), child: Text('${r['qty']}')),
-                            Padding(padding: const EdgeInsets.all(6), child: Text('${formatCurrency(r['money'] as int)} đ')),
+                            Padding(padding: const EdgeInsets.all(6), child: Text('${formatCurrency(r['money'] as int)} k')),
                           ])),
                     ],
                   ),
@@ -819,7 +819,7 @@ class _CustomerHistoryPanelState extends State<_CustomerHistoryPanel> {
                                         ),
                                       ),
                                       Text(
-                                        formatSignedCurrency(h.amount),
+                                        '${formatSignedCurrency(h.amount)} k',
                                         style: TextStyle(
                                           color: h.amount > 0 ? Colors.red : Colors.green,
                                           fontWeight: FontWeight.bold,
