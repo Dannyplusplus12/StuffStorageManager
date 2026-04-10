@@ -24,6 +24,50 @@ import '../utils/app_mode_manager.dart';
   return (color: color, size: size);
 }
 
+void _openImagePreview(BuildContext context, String imageUrl, String rawPath) {
+  showDialog<void>(
+    context: context,
+    builder: (_) => Dialog(
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+      child: ConstrainedBox(
+        constraints: const BoxConstraints(maxWidth: 520, maxHeight: 520),
+        child: Padding(
+          padding: const EdgeInsets.all(12),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Row(
+                children: [
+                  const Expanded(child: Text('Ảnh sản phẩm', style: TextStyle(fontWeight: FontWeight.w600))),
+                  IconButton(
+                    onPressed: () => Navigator.pop(context),
+                    icon: const Icon(Icons.close),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 8),
+              Expanded(
+                child: Center(
+                  child: imageUrl.isNotEmpty
+                      ? Image.network(
+                          imageUrl,
+                          fit: BoxFit.contain,
+                          alignment: Alignment.center,
+                          errorBuilder: (_, __, ___) => const Center(child: Text('Không tải được ảnh')),
+                        )
+                      : (rawPath.isNotEmpty
+                          ? Text('Ảnh cục bộ: $rawPath', style: const TextStyle(color: kTextSecondary))
+                          : const Text('Chưa có ảnh')),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    ),
+  );
+}
+
 class MobileHomeScreen extends StatefulWidget {
   const MobileHomeScreen({super.key});
 
@@ -1213,34 +1257,33 @@ class _CreateOrderScreenState extends State<_CreateOrderScreen> {
                   ],
                 ),
                 const SizedBox(height: 10),
-                    Container(
-                      width: double.infinity,
-                  height: 120,
-                      decoration: BoxDecoration(
-                        color: const Color(0xFFF1F5F9),
-                        border: Border.all(color: kBorder),
-                        borderRadius: BorderRadius.circular(10),
-                      ),
-                      child: canLoadNetworkImage
-                          ? ClipRRect(
+                    Row(
+                      children: [
+                        Expanded(
+                          child: Container(
+                            height: 44,
+                            decoration: BoxDecoration(
+                              color: const Color(0xFFF1F5F9),
+                              border: Border.all(color: kBorder),
                               borderRadius: BorderRadius.circular(10),
-                              child: Image.network(
-                                image,
-                                fit: BoxFit.cover,
-                                errorBuilder: (_, __, ___) => const Center(
-                                  child: Icon(Icons.image_not_supported_outlined, size: 44, color: kTextSecondary),
-                                ),
-                              ),
-                            )
-                          : const Center(
-                              child: Icon(Icons.checkroom, size: 48, color: kTextSecondary),
                             ),
+                            child: Row(
+                              children: [
+                                const SizedBox(width: 10),
+                                const Icon(Icons.image_outlined, color: kTextSecondary),
+                                const SizedBox(width: 8),
+                                const Expanded(child: Text('Ảnh sản phẩm', style: TextStyle(color: kTextSecondary))),
+                                TextButton.icon(
+                                  onPressed: () => _openImagePreview(context, imageUrl, image),
+                                  icon: const Icon(Icons.visibility_outlined, size: 16),
+                                  label: const Text('Xem ảnh'),
+                                ),
+                              ],
+                            ),
+                          ),
+                        ),
+                      ],
                     ),
-                    if (image.isNotEmpty && !canLoadNetworkImage)
-                      Padding(
-                        padding: const EdgeInsets.only(top: 6),
-                        child: Text('Ảnh cục bộ: $image', style: const TextStyle(fontSize: 11, color: kTextSecondary)),
-                      ),
                     const SizedBox(height: 12),
                     const Text('Mẫu • Màu • Size', style: TextStyle(fontWeight: FontWeight.w700)),
                     const SizedBox(height: 8),
@@ -2366,34 +2409,33 @@ class _PickerInventoryScreenState extends State<_PickerInventoryScreen> {
                 children: [
                 Text(p.name, style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
                 const SizedBox(height: 10),
-                Container(
-                  width: double.infinity,
-                  height: 180,
-                  decoration: BoxDecoration(
-                    color: const Color(0xFFF1F5F9),
-                    border: Border.all(color: kBorder),
-                    borderRadius: BorderRadius.circular(10),
-                  ),
-                  child: canLoadNetworkImage
-                      ? ClipRRect(
+                Row(
+                  children: [
+                    Expanded(
+                      child: Container(
+                        height: 44,
+                        decoration: BoxDecoration(
+                          color: const Color(0xFFF1F5F9),
+                          border: Border.all(color: kBorder),
                           borderRadius: BorderRadius.circular(10),
-                          child: Image.network(
-                            imageUrl,
-                            fit: BoxFit.cover,
-                            errorBuilder: (_, __, ___) => const Center(
-                              child: Icon(Icons.image_not_supported_outlined, size: 44, color: kTextSecondary),
-                            ),
-                          ),
-                        )
-                      : const Center(
-                          child: Icon(Icons.checkroom, size: 48, color: kTextSecondary),
                         ),
+                        child: Row(
+                          children: [
+                            const SizedBox(width: 10),
+                            const Icon(Icons.image_outlined, color: kTextSecondary),
+                            const SizedBox(width: 8),
+                            const Expanded(child: Text('Ảnh sản phẩm', style: TextStyle(color: kTextSecondary))),
+                            TextButton.icon(
+                              onPressed: () => _openImagePreview(context, imageUrl, image),
+                              icon: const Icon(Icons.visibility_outlined, size: 16),
+                              label: const Text('Xem ảnh'),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                  ],
                 ),
-                if (image.isNotEmpty && !canLoadNetworkImage)
-                  Padding(
-                    padding: const EdgeInsets.only(top: 6),
-                    child: Text('Ảnh cục bộ: $image', style: const TextStyle(fontSize: 11, color: kTextSecondary)),
-                  ),
                 const SizedBox(height: 12),
                 const Text('Màu & size tồn kho', style: TextStyle(fontWeight: FontWeight.w600, color: kTextPrimary)),
                 const SizedBox(height: 8),

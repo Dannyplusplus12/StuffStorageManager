@@ -1,6 +1,38 @@
+import 'dart:io';
+
 import 'package:intl/intl.dart';
 
 final _dtFmt = DateFormat('dd/MM/yyyy HH:mm');
+
+const double kProductImageAspect = 4 / 5;
+
+File? resolveLocalProductImageFile(String imagePath) {
+  final raw = imagePath.trim();
+  if (!raw.startsWith('assets/images/')) return null;
+  final relative = raw.replaceAll('/', Platform.pathSeparator);
+  final candidates = <String>[];
+  try {
+    candidates.add(Directory.current.path);
+  } catch (_) {}
+  try {
+    final exeDir = File(Platform.resolvedExecutable).parent.path;
+    candidates.add(exeDir);
+    var cursor = Directory(exeDir);
+    for (var i = 0; i < 6; i++) {
+      final parent = cursor.parent;
+      if (parent.path == cursor.path) break;
+      candidates.add(parent.path);
+      cursor = parent;
+    }
+  } catch (_) {}
+
+  for (final base in candidates.toSet()) {
+    final path = '$base${Platform.pathSeparator}$relative';
+    final file = File(path);
+    if (file.existsSync()) return file;
+  }
+  return null;
+}
 
 String formatCurrency(num value) {
   final isNeg = value < 0;

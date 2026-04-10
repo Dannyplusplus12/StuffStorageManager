@@ -4,6 +4,8 @@
 > **Cập nhật lần cuối:** Tháng 3/2026
 
 ## CẬP NHẬT NHANH GẦN NHẤT
+- Chuẩn hóa tên app thành "Fisd" ở Android launcher, đồng thời thêm helper resolve ảnh local để card kho hàng và popup sửa luôn hiển thị ảnh sản phẩm ổn định.
+- Chuẩn hóa tên app thành "Fisd" trên Windows/Android/iOS và áp dụng tỉ lệ ảnh sản phẩm chung (4:3) cho các màn hình/ popup; card kho hàng desktop đã hiển thị ảnh sản phẩm với ưu tiên ảnh local rồi tới server.
 - Đã chuyển timestamp backend/backup sang giờ Việt Nam (UTC+7) để hiển thị đúng thời gian duyệt đơn, công nợ, và file backup.
 - Đã cho phép picker xác nhận đơn dù kho thiếu (ghi chú thiếu hàng), cập nhật tên app mobile thành "Fisd", và ưu tiên hiển thị ảnh local cho sản phẩm cũ khi có.
 - Đã thêm đổi ảnh cho sản phẩm cũ trong popup sửa sản phẩm (upload ảnh mới lên server trước khi lưu).

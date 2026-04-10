@@ -1,4 +1,5 @@
 import 'dart:io';
+import 'dart:math' as math;
 
 import 'package:file_selector/file_selector.dart';
 import 'package:flutter/material.dart';
@@ -7,6 +8,7 @@ import 'package:flutter/gestures.dart';
 import '../models/product.dart' show Product, Variant;
 import '../services/api_service.dart';
 import '../theme.dart';
+import '../utils.dart';
 
 class EditProductDialog extends StatefulWidget {
   final Product product;
@@ -45,6 +47,68 @@ class _EditProductDialogState extends State<EditProductDialog> {
   }
 
   String _fileName(String path) => path.split(RegExp(r'[\\/]')).last;
+
+  void _openImagePreview() {
+    showDialog<void>(
+      context: context,
+      builder: (_) {
+        Widget content;
+        if (_previewImagePath != null) {
+          content = Image.file(
+            File(_previewImagePath!),
+            fit: BoxFit.contain,
+            alignment: Alignment.center,
+          );
+        } else {
+          final localFile = resolveLocalProductImageFile(_imagePath);
+          if (localFile != null) {
+            content = Image.file(
+              localFile,
+              fit: BoxFit.contain,
+              alignment: Alignment.center,
+            );
+          } else {
+            final remoteUrl = ApiService.resolveApiUrl(_imagePath);
+            content = remoteUrl.isNotEmpty
+                ? Image.network(
+                    remoteUrl,
+                    fit: BoxFit.contain,
+                    alignment: Alignment.center,
+                    errorBuilder: (_, __, ___) => const Center(child: Text('Không tải được ảnh')),
+                  )
+                : const Center(child: Text('Chưa có ảnh'));
+          }
+        }
+
+        return Dialog(
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+          child: ConstrainedBox(
+            constraints: const BoxConstraints(maxWidth: 720, maxHeight: 640),
+            child: Padding(
+              padding: const EdgeInsets.all(12),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Row(
+                    children: [
+                      const Expanded(child: Text('Ảnh sản phẩm', style: TextStyle(fontWeight: FontWeight.w600))),
+                      IconButton(
+                        onPressed: () => Navigator.pop(context),
+                        icon: const Icon(Icons.close),
+                        mouseCursor: SystemMouseCursors.click,
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 8),
+                  Expanded(child: Center(child: content)),
+                ],
+              ),
+            ),
+          ),
+        );
+      },
+    );
+  }
 
   Future<void> _pickImageFile() async {
     try {
@@ -228,49 +292,25 @@ class _EditProductDialogState extends State<EditProductDialog> {
                 children: [
                   Expanded(
                     child: Container(
-                      height: 120,
+                      height: 48,
                       decoration: BoxDecoration(
                         color: const Color(0xFFF8FAFC),
                         borderRadius: BorderRadius.circular(10),
                         border: Border.all(color: kBorder),
                       ),
-                      child: _previewImagePath != null
-                          ? ClipRRect(
-                              borderRadius: BorderRadius.circular(10),
-                              child: Image.file(
-                                File(_previewImagePath!),
-                                fit: BoxFit.cover,
-                                errorBuilder: (_, __, ___) => const Center(child: Text('Không tải được ảnh')),
-                              ),
-                            )
-                          : () {
-                              final localPath = _imagePath.startsWith('assets/images/')
-                                  ? '${Directory.current.path}${Platform.pathSeparator}${_imagePath.replaceAll('/', Platform.pathSeparator)}'
-                                  : '';
-                              final localFile = localPath.isNotEmpty ? File(localPath) : null;
-                              if (localFile != null && localFile.existsSync()) {
-                                return ClipRRect(
-                                  borderRadius: BorderRadius.circular(10),
-                                  child: Image.file(
-                                    localFile,
-                                    fit: BoxFit.cover,
-                                    errorBuilder: (_, __, ___) => const Center(child: Text('Không tải được ảnh')),
-                                  ),
-                                );
-                              }
-                              final remoteUrl = ApiService.resolveApiUrl(_imagePath);
-                              if (remoteUrl.isNotEmpty) {
-                                return ClipRRect(
-                                  borderRadius: BorderRadius.circular(10),
-                                  child: Image.network(
-                                    remoteUrl,
-                                    fit: BoxFit.cover,
-                                    errorBuilder: (_, __, ___) => const Center(child: Text('Không tải được ảnh')),
-                                  ),
-                                );
-                              }
-                              return const Center(child: Text('Chưa có ảnh'));
-                            }(),
+                      child: Row(
+                        children: [
+                          const SizedBox(width: 10),
+                          const Icon(Icons.image_outlined, color: kTextSecondary),
+                          const SizedBox(width: 8),
+                          const Expanded(child: Text('Ảnh sản phẩm', style: TextStyle(color: kTextSecondary))),
+                          TextButton.icon(
+                            onPressed: _openImagePreview,
+                            icon: const Icon(Icons.visibility_outlined, size: 16),
+                            label: const Text('Xem ảnh'),
+                          ),
+                        ],
+                      ),
                     ),
                   ),
                   const SizedBox(width: 10),

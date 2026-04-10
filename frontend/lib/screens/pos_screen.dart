@@ -1,4 +1,5 @@
-﻿import 'dart:math' as math;
+﻿import 'dart:io';
+import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
 import '../models/product.dart';
@@ -100,6 +101,26 @@ class PosScreenState extends State<PosScreen> {
     if (!mounted) return;
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(content: Text(msg), backgroundColor: bg, duration: const Duration(seconds: 2)),
+    );
+  }
+
+  Widget _buildProductImage(Product p) {
+    final image = p.image.trim();
+    final remoteUrl = ApiService.resolveApiUrl(image);
+    final localFile = resolveLocalProductImageFile(image);
+    if (localFile != null) {
+      return Image.file(localFile, fit: BoxFit.cover, errorBuilder: (_, __, ___) => _imageFallback());
+    }
+    if (remoteUrl.isNotEmpty) {
+      return Image.network(remoteUrl, fit: BoxFit.cover, errorBuilder: (_, __, ___) => _imageFallback());
+    }
+    return _imageFallback();
+  }
+
+  Widget _imageFallback() {
+    return Container(
+      color: const Color(0xFFF1F5F9),
+      child: Center(child: Icon(Icons.directions_walk, size: 40, color: Colors.grey[400])),
     );
   }
 
@@ -446,7 +467,7 @@ class PosScreenState extends State<PosScreen> {
       final cols = ((c.maxWidth + 10) / 170).floor().clamp(1, 20);
       return GridView.builder(
         gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
-            crossAxisCount: cols, crossAxisSpacing: 10, mainAxisSpacing: 10, childAspectRatio: 148 / 220),
+            crossAxisCount: cols, crossAxisSpacing: 10, mainAxisSpacing: 10, childAspectRatio: 160 / 250),
         itemCount: _products.length,
         itemBuilder: (_, i) => _card(_products[i]),
       );
@@ -468,7 +489,7 @@ class PosScreenState extends State<PosScreen> {
       badgeBg = kWarning;
       badgeLabel = 'Còn ít';
     }
-        return MouseRegion(
+    return MouseRegion(
       cursor: SystemMouseCursors.click,
       child: GestureDetector(
         onTap: () => widget.inventoryMode ? _editProduct(p) : _buyProduct(p),
@@ -481,9 +502,9 @@ class PosScreenState extends State<PosScreen> {
               child: Stack(children: [
                 ClipRRect(
                   borderRadius: const BorderRadius.vertical(top: Radius.circular(7)),
-                  child: Container(
-                    color: const Color(0xFFF1F5F9),
-                    child: Center(child: Icon(Icons.directions_walk, size: 40, color: Colors.grey[400])),
+                  child: AspectRatio(
+                    aspectRatio: kProductImageAspect,
+                    child: _buildProductImage(p),
                   ),
                 ),
                 if (badgeBg != null)

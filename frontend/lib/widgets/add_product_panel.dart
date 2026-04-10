@@ -7,6 +7,7 @@ import 'package:flutter/services.dart';
 
 import '../services/api_service.dart';
 import '../theme.dart';
+import '../utils.dart';
 
 class AddProductPanel extends StatefulWidget {
   final VoidCallback onAdded;
@@ -382,19 +383,21 @@ class _AddProductPanelState extends State<AddProductPanel> {
                           children: [
                             const Text('Ảnh sản phẩm', style: TextStyle(fontWeight: FontWeight.w700, color: kTextPrimary)),
                             const SizedBox(height: 8),
-                            Container(
-                              height: 200,
-                              decoration: BoxDecoration(color: const Color(0xFFF8FAFC), border: Border.all(color: const Color(0xFFE2E8F0)), borderRadius: BorderRadius.circular(8)),
-                              child: _previewImagePath == null
-                                  ? const Center(child: Text('Chưa chọn ảnh', style: TextStyle(color: Colors.grey)))
-                                  : ClipRRect(
-                                      borderRadius: BorderRadius.circular(8),
-                                      child: Image.file(
-                                        File(_previewImagePath!),
-                                        fit: BoxFit.cover,
-                                        errorBuilder: (_, __, ___) => const Center(child: Text('Không tải được ảnh', style: TextStyle(color: Colors.grey))),
+                            AspectRatio(
+                              aspectRatio: kProductImageAspect,
+                              child: Container(
+                                decoration: BoxDecoration(color: const Color(0xFFF8FAFC), border: Border.all(color: const Color(0xFFE2E8F0)), borderRadius: BorderRadius.circular(8)),
+                                child: _previewImagePath == null
+                                    ? const Center(child: Text('Chưa chọn ảnh', style: TextStyle(color: Colors.grey)))
+                                    : ClipRRect(
+                                        borderRadius: BorderRadius.circular(8),
+                                        child: Image.file(
+                                          File(_previewImagePath!),
+                                          fit: BoxFit.cover,
+                                          errorBuilder: (_, __, ___) => const Center(child: Text('Không tải được ảnh', style: TextStyle(color: Colors.grey))),
+                                        ),
                                       ),
-                                    ),
+                              ),
                             ),
                             const SizedBox(height: 10),
                             MouseRegion(
