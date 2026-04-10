@@ -1986,7 +1986,7 @@ class _AcceptedOrdersScreenState extends State<_AcceptedOrdersScreen> {
                     Padding(
                       padding: const EdgeInsets.fromLTRB(16, 0, 16, 10),
                       child: Text(
-                        '${formatDate(order.createdAt)} • ${order.totalQty} sản phẩm',
+                        '${formatDate(order.createdAt)} • ${order.totalQty} sản phẩm • ${formatCurrency(order.totalAmount)} k',
                         style: const TextStyle(color: kTextSecondary, fontSize: 12),
                       ),
                     ),
@@ -2071,9 +2071,24 @@ class _AcceptedOrdersScreenState extends State<_AcceptedOrdersScreen> {
                                                           },
                                                           child: Padding(
                                                             padding: const EdgeInsets.symmetric(vertical: 4),
-                                                            child: Text(
-                                                              'Size ${parsed.size} • YC ${item.quantity}$stockText • ${formatCurrency(item.price)} k • ${formatCurrency(itemTotal)} k',
-                                                              style: TextStyle(fontSize: 13, color: enough ? kTextPrimary : kDanger),
+                                                            child: Column(
+                                                              crossAxisAlignment: CrossAxisAlignment.start,
+                                                              children: [
+                                                                Text(
+                                                                  'Size ${parsed.size}',
+                                                                  style: TextStyle(fontSize: 13, color: enough ? kTextPrimary : kDanger, fontWeight: FontWeight.w600),
+                                                                ),
+                                                                const SizedBox(height: 2),
+                                                                Text(
+                                                                  'YC ${item.quantity}$stockText',
+                                                                  style: TextStyle(fontSize: 12, color: enough ? kTextSecondary : kDanger),
+                                                                ),
+                                                                const SizedBox(height: 2),
+                                                                Text(
+                                                                  'Giá ${formatCurrency(item.price)} k • Thành ${formatCurrency(itemTotal)} k',
+                                                                  style: TextStyle(fontSize: 12, color: enough ? kTextSecondary : kDanger),
+                                                                ),
+                                                              ],
                                                             ),
                                                           ),
                                                         ),

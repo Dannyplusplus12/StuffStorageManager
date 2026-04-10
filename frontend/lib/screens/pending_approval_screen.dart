@@ -453,6 +453,8 @@ class _PendingApprovalScreenState extends State<PendingApprovalScreen> {
 
     String statusLabel(String status) {
       switch (status) {
+        case 'pending':
+          return 'Đợi duyệt';
         case 'approved':
           return 'Đã duyệt';
         case 'assigned':

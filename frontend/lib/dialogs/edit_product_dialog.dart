@@ -1,3 +1,6 @@
+import 'dart:io';
+
+import 'package:file_selector/file_selector.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter/gestures.dart';
@@ -16,6 +19,7 @@ class _EditProductDialogState extends State<EditProductDialog> {
   late final TextEditingController _codeCtrl;
   late final TextEditingController _nameCtrl;
   late String _imagePath;
+  String? _previewImagePath;
   late List<_ColorGroup> _groups;
 
   @override
@@ -40,7 +44,71 @@ class _EditProductDialogState extends State<EditProductDialog> {
     super.dispose();
   }
 
+  String _fileName(String path) => path.split(RegExp(r'[\\/]')).last;
+
+  Future<void> _pickImageFile() async {
+    try {
+      final file = await openFile(
+        acceptedTypeGroups: const [
+          XTypeGroup(label: 'images', extensions: ['png', 'jpg', 'jpeg', 'webp', 'bmp']),
+        ],
+        confirmButtonText: 'Chọn ảnh',
+      );
+      if (file == null) return;
+
+      final source = File(file.path);
+      if (!await source.exists()) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('Không tìm thấy file ảnh đã chọn'), backgroundColor: Colors.red),
+          );
+        }
+        return;
+      }
+
+      final targetDir = Directory('${Directory.current.path}${Platform.pathSeparator}assets${Platform.pathSeparator}images');
+      if (!await targetDir.exists()) {
+        await targetDir.create(recursive: true);
+      }
+
+      final absSource = source.absolute.path.replaceAll('\\', '/');
+      final absTarget = targetDir.absolute.path.replaceAll('\\', '/');
+
+      String relativePath;
+      String previewPath;
+
+      if (absSource.startsWith(absTarget)) {
+        final fileName = _fileName(source.path);
+        relativePath = 'assets/images/$fileName';
+        previewPath = source.path;
+      } else {
+        final fileName = _fileName(source.path);
+        final dot = fileName.lastIndexOf('.');
+        final name = dot > 0 ? fileName.substring(0, dot) : fileName;
+        final ext = dot > 0 ? fileName.substring(dot) : '';
+        final unique = '${name}_${DateTime.now().millisecondsSinceEpoch}$ext';
+        final dest = File('${targetDir.path}${Platform.pathSeparator}$unique');
+        await source.copy(dest.path);
+        relativePath = 'assets/images/$unique';
+        previewPath = dest.path;
+      }
+
+      if (!mounted) return;
+      setState(() {
+        _imagePath = relativePath;
+        _previewImagePath = previewPath;
+      });
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Lỗi tải ảnh: $e'), backgroundColor: Colors.red),
+        );
+      }
+    }
+  }
+
   Future<void> _save() async {
+    final previewPath = _previewImagePath;
     final variants = <Map<String, dynamic>>[];
     for (final g in _groups) {
       if (g.color.trim().isEmpty) continue;
@@ -52,11 +120,15 @@ class _EditProductDialogState extends State<EditProductDialog> {
       }
     }
     try {
+      var imagePath = _imagePath;
+      if (previewPath != null && imagePath.isNotEmpty && !imagePath.startsWith('/product-images/')) {
+        imagePath = await ApiService.uploadProductImage(File(previewPath));
+      }
       await ApiService.updateProduct(
         widget.product.id,
         code: _codeCtrl.text.trim(),
         name: _nameCtrl.text.trim(),
-        imagePath: _imagePath,
+        imagePath: imagePath,
         variants: variants,
       );
       if (mounted) Navigator.pop(context, true);
@@ -149,6 +221,52 @@ class _EditProductDialogState extends State<EditProductDialog> {
                   SizedBox(width: 160, child: TextField(controller: _codeCtrl, decoration: const InputDecoration(labelText: 'Mã hàng'))),
                   const SizedBox(width: 8),
                   Expanded(child: TextField(controller: _nameCtrl, decoration: const InputDecoration(labelText: 'Tên sản phẩm'))),
+                ],
+              ),
+              const SizedBox(height: 8),
+              Row(
+                children: [
+                  Expanded(
+                    child: Container(
+                      height: 120,
+                      decoration: BoxDecoration(
+                        color: const Color(0xFFF8FAFC),
+                        borderRadius: BorderRadius.circular(10),
+                        border: Border.all(color: kBorder),
+                      ),
+                      child: _previewImagePath != null
+                          ? ClipRRect(
+                              borderRadius: BorderRadius.circular(10),
+                              child: Image.file(
+                                File(_previewImagePath!),
+                                fit: BoxFit.cover,
+                                errorBuilder: (_, __, ___) => const Center(child: Text('Không tải được ảnh')),
+                              ),
+                            )
+                          : (ApiService.resolveApiUrl(_imagePath).isNotEmpty
+                              ? ClipRRect(
+                                  borderRadius: BorderRadius.circular(10),
+                                  child: Image.network(
+                                    ApiService.resolveApiUrl(_imagePath),
+                                    fit: BoxFit.cover,
+                                    errorBuilder: (_, __, ___) => const Center(child: Text('Không tải được ảnh')),
+                                  ),
+                                )
+                              : const Center(child: Text('Chưa có ảnh'))),
+                    ),
+                  ),
+                  const SizedBox(width: 10),
+                  SizedBox(
+                    height: 40,
+                    child: MouseRegion(
+                      cursor: SystemMouseCursors.click,
+                      child: OutlinedButton.icon(
+                        onPressed: _pickImageFile,
+                        icon: const Icon(Icons.upload_file, size: 16),
+                        label: const Text('Đổi ảnh'),
+                      ),
+                    ),
+                  ),
                 ],
               ),
               const SizedBox(height: 8),

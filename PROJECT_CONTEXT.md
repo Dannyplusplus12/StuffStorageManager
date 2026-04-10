@@ -4,6 +4,8 @@
 > **Cập nhật lần cuối:** Tháng 3/2026
 
 ## CẬP NHẬT NHANH GẦN NHẤT
+- Đã thêm đổi ảnh cho sản phẩm cũ trong popup sửa sản phẩm (upload ảnh mới lên server trước khi lưu).
+- Đã đổi label trạng thái pending thành "Đợi duyệt", chuyển đơn vị tiền sang "k" toàn app, và làm rõ trình bày popup giao đơn mobile (thêm tổng tiền + tách dòng thông tin size/giá).
 - Đã thêm upload ảnh sản phẩm: backend lưu vào `/product-images/`, phục vụ qua `GET /product-images/{file_name}`, gửi ảnh lên Telegram DB backup; frontend upload ảnh trước khi tạo sản phẩm và mobile resolve URL ảnh từ server.
 - Đã làm dịu màu nền xen kẽ ở lịch sử công nợ và thêm nền nhẹ cho các khối trên trang Nhập hàng để giảm cảm giác nhiều đường kẻ.
 - Đã ghi chú start command cron backup Telegram (pg_dump 18 + PGDG repo) trong `backend/README_DEPLOY.md` để tránh quên khi dựng repo cron.
