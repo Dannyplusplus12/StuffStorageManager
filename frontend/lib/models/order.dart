@@ -1,3 +1,5 @@
+import 'dart:convert';
+
 class OrderItem {
   final int? orderItemId;
   final String productName;
@@ -47,6 +49,7 @@ class Order {
   final String deliveredByName;
   final String deliveredAt;
   final String deliveryPhotoPath;
+  final List<String> deliveryPhotoPaths;
   final List<OrderItem> items;
 
   Order({
@@ -65,6 +68,7 @@ class Order {
     this.deliveredByName = '',
     this.deliveredAt = '',
     this.deliveryPhotoPath = '',
+    this.deliveryPhotoPaths = const [],
     required this.items,
   });
 
@@ -84,8 +88,30 @@ class Order {
         deliveredByName: (j['delivered_by_name'] ?? '').toString(),
         deliveredAt: (j['delivered_at'] ?? '').toString(),
         deliveryPhotoPath: (j['delivery_photo_path'] ?? '').toString(),
+        deliveryPhotoPaths: _parsePhotoPaths(j),
         items: (j['items'] as List? ?? []).map((i) => OrderItem.fromJson(i)).toList(),
       );
+
+  static List<String> _parsePhotoPaths(Map<String, dynamic> j) {
+    final rawList = j['delivery_photo_paths'];
+    if (rawList is List) {
+      return rawList.map((e) => e.toString()).where((e) => e.trim().isNotEmpty).toList();
+    }
+    final raw = (j['delivery_photo_path'] ?? '').toString().trim();
+    if (raw.isEmpty) return const [];
+    if (raw.startsWith('[')) {
+      try {
+        final decoded = jsonDecode(raw);
+        if (decoded is List) {
+          return decoded.map((e) => e.toString()).where((e) => e.trim().isNotEmpty).toList();
+        }
+      } catch (_) {}
+    }
+    if (raw.contains('|')) {
+      return raw.split('|').map((e) => e.trim()).where((e) => e.isNotEmpty).toList();
+    }
+    return [raw];
+  }
 
   Map<String, dynamic> toJson() => {
         'id': id,

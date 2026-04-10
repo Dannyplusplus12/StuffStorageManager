@@ -9,6 +9,9 @@ class MobileNotificationService {
 
     const android = AndroidInitializationSettings('@mipmap/ic_launcher');
     const ios = DarwinInitializationSettings(
+      requestAlertPermission: true,
+      requestBadgePermission: true,
+      requestSoundPermission: true,
       defaultPresentAlert: true,
       defaultPresentBadge: true,
       defaultPresentSound: true,
@@ -29,7 +32,9 @@ class MobileNotificationService {
   }
 
   static Future<void> show(String title, String body) async {
-    if (!_initialized) return;
+    if (!_initialized) {
+      await init();
+    }
 
     const details = NotificationDetails(
       android: AndroidNotificationDetails(

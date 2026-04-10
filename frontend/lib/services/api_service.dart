@@ -318,24 +318,28 @@ class ApiService {
   static Future<Map<String, dynamic>> deliverOrder(
     int orderId, {
     required int pickerId,
-    required String photoPath,
+    required List<String> photoPaths,
     List<Map<String, dynamic>>? items,
     String pickerNote = '',
   }) async {
-    final path = photoPath.trim();
-    if (path.isEmpty) {
+    final paths = photoPaths.map((e) => e.trim()).where((e) => e.isNotEmpty).toList();
+    if (paths.isEmpty) {
       throw Exception('Thiếu ảnh xác nhận giao hàng');
     }
-    final f = File(path);
-    if (!await f.exists()) {
-      throw Exception('Không tìm thấy ảnh xác nhận trên thiết bị');
+    for (final path in paths) {
+      final f = File(path);
+      if (!await f.exists()) {
+        throw Exception('Không tìm thấy ảnh xác nhận trên thiết bị');
+      }
     }
 
     final req = http.MultipartRequest('PUT', Uri.parse('$_b/orders/$orderId/deliver-with-photo'));
     req.fields['picker_id'] = '$pickerId';
     req.fields['items_json'] = jsonEncode(items ?? const []);
     req.fields['picker_note'] = pickerNote.trim();
-    req.files.add(await http.MultipartFile.fromPath('photo', path));
+    for (final path in paths) {
+      req.files.add(await http.MultipartFile.fromPath('photos', path));
+    }
 
     final streamed = await req.send().timeout(const Duration(seconds: 45));
     final r = await http.Response.fromStream(streamed);

@@ -63,31 +63,51 @@ class DeliveryProofSyncService {
         final orderId = _toInt(row['order_id']);
         final fileName = (row['file_name'] ?? '').toString().trim();
         final downloadUrl = (row['download_url'] ?? '').toString().trim();
-        if (orderId <= 0 || fileName.isEmpty || downloadUrl.isEmpty) continue;
+        final downloadUrls = (row['download_urls'] as List?)
+                ?.map((e) => e.toString())
+                .where((e) => e.trim().isNotEmpty)
+                .toList() ??
+            const [];
+        final fileNames = (row['file_names'] as List?)
+                ?.map((e) => e.toString())
+                .where((e) => e.trim().isNotEmpty)
+                .toList() ??
+            const [];
+        if (orderId <= 0 || (downloadUrls.isEmpty && (fileName.isEmpty || downloadUrl.isEmpty))) continue;
 
         if (orderId > maxSeen) maxSeen = orderId;
 
-        final target = File('${outDir.path}${Platform.pathSeparator}order_${orderId}_$fileName');
-        if (await target.exists() && await target.length() > 0) continue;
+        final urlsToFetch = downloadUrls.isNotEmpty ? downloadUrls : [downloadUrl];
+        final namesToUse = fileNames.isNotEmpty ? fileNames : [fileName];
+        for (var i = 0; i < urlsToFetch.length; i++) {
+          final url = urlsToFetch[i];
+          final name = i < namesToUse.length && namesToUse[i].trim().isNotEmpty
+              ? namesToUse[i]
+              : fileName;
+          if (url.trim().isEmpty || name.trim().isEmpty) continue;
 
-        final resolved = ApiService.resolveApiUrl(downloadUrl);
-        final photoResp = await http.get(Uri.parse(resolved)).timeout(const Duration(seconds: 60));
+          final target = File('${outDir.path}${Platform.pathSeparator}order_${orderId}_$name');
+          if (await target.exists() && await target.length() > 0) continue;
 
-        if (photoResp.statusCode == 404) {
-          missing += 1;
-          continue;
+          final resolved = ApiService.resolveApiUrl(url);
+          final photoResp = await http.get(Uri.parse(resolved)).timeout(const Duration(seconds: 60));
+
+          if (photoResp.statusCode == 404) {
+            missing += 1;
+            continue;
+          }
+
+          if (photoResp.statusCode != 200) {
+            developer.log(
+              'Delivery proof download failed #$orderId (${photoResp.statusCode})',
+              name: 'DeliveryProofSyncService',
+            );
+            continue;
+          }
+
+          await target.writeAsBytes(photoResp.bodyBytes, flush: true);
+          downloaded += 1;
         }
-
-        if (photoResp.statusCode != 200) {
-          developer.log(
-            'Delivery proof download failed #$orderId (${photoResp.statusCode})',
-            name: 'DeliveryProofSyncService',
-          );
-          continue;
-        }
-
-        await target.writeAsBytes(photoResp.bodyBytes, flush: true);
-        downloaded += 1;
       }
 
       if (maxSeen > lastOrderId) {

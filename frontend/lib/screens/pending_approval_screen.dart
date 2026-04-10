@@ -38,9 +38,11 @@ class _PendingApprovalScreenState extends State<PendingApprovalScreen> {
   }
 
   Future<void> _openDeliveryPhoto(Order o) async {
-    final raw = o.deliveryPhotoPath.trim();
-    if (raw.isEmpty) return;
-    final url = _deliveryPhotoUrl(raw);
+    final paths = o.deliveryPhotoPaths.isNotEmpty
+        ? o.deliveryPhotoPaths
+        : (o.deliveryPhotoPath.trim().isEmpty ? const <String>[] : [o.deliveryPhotoPath.trim()]);
+    if (paths.isEmpty) return;
+    final urls = paths.map(_deliveryPhotoUrl).toList();
 
     await showDialog<void>(
       context: context,
@@ -60,7 +62,7 @@ class _PendingApprovalScreenState extends State<PendingApprovalScreen> {
                     MouseRegion(
                       cursor: SystemMouseCursors.click,
                       child: TextButton.icon(
-                        onPressed: () => _copyPhotoLink(url),
+                        onPressed: () => _copyPhotoLink(urls.first),
                         icon: const Icon(Icons.copy, size: 16),
                         label: const Text('Copy link'),
                       ),
@@ -83,21 +85,24 @@ class _PendingApprovalScreenState extends State<PendingApprovalScreen> {
                       border: Border.all(color: kBorder),
                       borderRadius: BorderRadius.circular(8),
                     ),
-                    child: InteractiveViewer(
-                      minScale: 0.6,
-                      maxScale: 4,
-                      child: Image.network(
-                        url,
-                        fit: BoxFit.contain,
-                        loadingBuilder: (context, child, progress) {
-                          if (progress == null) return child;
-                          return const Center(child: CircularProgressIndicator());
-                        },
-                        errorBuilder: (_, __, ___) => const Center(
-                          child: Text('Không tải được ảnh giao hàng', style: TextStyle(color: kTextSecondary)),
+                      child: InteractiveViewer(
+                        minScale: 0.6,
+                        maxScale: 4,
+                        child: PageView.builder(
+                          itemCount: urls.length,
+                          itemBuilder: (_, i) => Image.network(
+                            urls[i],
+                            fit: BoxFit.contain,
+                            loadingBuilder: (context, child, progress) {
+                              if (progress == null) return child;
+                              return const Center(child: CircularProgressIndicator());
+                            },
+                            errorBuilder: (_, __, ___) => const Center(
+                              child: Text('Không tải được ảnh giao hàng', style: TextStyle(color: kTextSecondary)),
+                            ),
+                          ),
                         ),
                       ),
-                    ),
                   ),
                 ),
               ],
@@ -694,7 +699,7 @@ class _PendingApprovalScreenState extends State<PendingApprovalScreen> {
                                           Text('Nhận: ${o.assignedPickerName} ${o.assignedAt.isNotEmpty ? '• ${o.assignedAt}' : ''}', style: const TextStyle(fontSize: 12)),
                                         if (o.deliveredByName.isNotEmpty)
                                           Text('Giao: ${o.deliveredByName} ${o.deliveredAt.isNotEmpty ? '• ${o.deliveredAt}' : ''}', style: const TextStyle(fontSize: 12)),
-                                        if (o.deliveryPhotoPath.isNotEmpty)
+                                        if (o.deliveryPhotoPath.isNotEmpty || o.deliveryPhotoPaths.isNotEmpty)
                                           Padding(
                                             padding: const EdgeInsets.only(top: 4),
                                             child: Align(
@@ -704,7 +709,12 @@ class _PendingApprovalScreenState extends State<PendingApprovalScreen> {
                                                 child: OutlinedButton.icon(
                                                   onPressed: () => _openDeliveryPhoto(o),
                                                   icon: const Icon(Icons.image_outlined, size: 16, color: kPrimary),
-                                                  label: const Text('Xem ảnh', style: TextStyle(color: kPrimary)),
+                                                  label: Text(
+                                                    o.deliveryPhotoPaths.length > 1
+                                                        ? 'Xem ảnh (${o.deliveryPhotoPaths.length})'
+                                                        : 'Xem ảnh',
+                                                    style: const TextStyle(color: kPrimary),
+                                                  ),
                                                   style: OutlinedButton.styleFrom(
                                                     side: const BorderSide(color: kBorder),
                                                     padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),

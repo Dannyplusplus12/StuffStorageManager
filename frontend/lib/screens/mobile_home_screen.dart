@@ -1848,11 +1848,19 @@ class _AcceptedOrdersScreenState extends State<_AcceptedOrdersScreen> {
   List<Order> _orders = [];
   final Set<int> _confirming = {};
   final Set<int> _lastOrderIds = {};
+  Timer? _refreshTimer;
 
   @override
   void initState() {
     super.initState();
     _load();
+    _refreshTimer = Timer.periodic(const Duration(seconds: 10), (_) => _load(silent: true));
+  }
+
+  @override
+  void dispose() {
+    _refreshTimer?.cancel();
+    super.dispose();
   }
 
   Future<void> reloadOrders({bool silent = false}) => _load(silent: silent);
@@ -1914,7 +1922,7 @@ class _AcceptedOrdersScreenState extends State<_AcceptedOrdersScreen> {
     return lines.take(2).join('\n');
   }
 
-  Future<String?> _pickDeliveryPhotoPath() async {
+  Future<List<String>> _pickDeliveryPhotoPaths() async {
     final picker = ImagePicker();
     final source = await showModalBottomSheet<ImageSource>(
       context: context,
@@ -1937,9 +1945,13 @@ class _AcceptedOrdersScreenState extends State<_AcceptedOrdersScreen> {
         ),
       ),
     );
-    if (source == null) return null;
+    if (source == null) return [];
+    if (source == ImageSource.gallery) {
+      final xs = await picker.pickMultiImage(imageQuality: 75);
+      return xs.map((x) => x.path).where((p) => p.trim().isNotEmpty).toList();
+    }
     final x = await picker.pickImage(source: source, imageQuality: 75);
-    return x?.path;
+    return x?.path.trim().isNotEmpty == true ? [x!.path] : [];
   }
 
   Future<void> _confirmWithPicked(Order order, Map<int, int> pickedByKey, {String pickerNote = ''}) async {
@@ -1958,15 +1970,15 @@ class _AcceptedOrdersScreenState extends State<_AcceptedOrdersScreen> {
         });
       }
 
-      final photoPath = await _pickDeliveryPhotoPath();
-      if (photoPath == null || photoPath.trim().isEmpty) {
+      final photoPaths = await _pickDeliveryPhotoPaths();
+      if (photoPaths.isEmpty) {
         throw Exception('Bắt buộc có ảnh xác nhận giao hàng');
       }
 
       final res = await ApiService.deliverOrder(
         order.id,
         pickerId: pickerId,
-        photoPath: photoPath,
+        photoPaths: photoPaths,
         items: payload,
         pickerNote: pickerNote,
       );
@@ -1986,6 +1998,7 @@ class _AcceptedOrdersScreenState extends State<_AcceptedOrdersScreen> {
   Future<void> _openOrderPopup(Order order) async {
     final pickedByKey = <int, int>{};
     final pickerNoteCtrl = TextEditingController();
+    final pickerNoteFocus = FocusNode();
     for (var i = 0; i < order.items.length; i++) {
       final item = order.items[i];
       final key = item.orderItemId ?? (item.variantId ?? (100000 + i));
@@ -2036,218 +2049,227 @@ class _AcceptedOrdersScreenState extends State<_AcceptedOrdersScreen> {
               heightFactor: 0.9,
               child: SafeArea(
                 top: false,
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Padding(
-                      padding: const EdgeInsets.fromLTRB(16, 8, 16, 4),
-                      child: Text('Đơn #${order.id} — ${order.customerName}', style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
-                    ),
-                    Padding(
-                      padding: const EdgeInsets.fromLTRB(16, 0, 16, 10),
-                      child: Text(
-                        '${formatDate(order.createdAt)} • ${order.totalQty} sản phẩm • ${formatCurrency(order.totalAmount)} k',
-                        style: const TextStyle(color: kTextSecondary, fontSize: 12),
+                child: GestureDetector(
+                  behavior: HitTestBehavior.opaque,
+                  onTap: () => FocusScope.of(dialogContext).unfocus(),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Padding(
+                        padding: const EdgeInsets.fromLTRB(16, 8, 16, 4),
+                        child: Text('Đơn #${order.id} — ${order.customerName}', style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
                       ),
-                    ),
-                    Padding(
-                      padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
-                      child: TextField(
-                        controller: pickerNoteCtrl,
-                        maxLines: 2,
-                        decoration: const InputDecoration(
-                          hintText: 'Ghi chú cho đơn (tuỳ chọn)',
-                          prefixIcon: Icon(Icons.sticky_note_2_outlined),
+                      Padding(
+                        padding: const EdgeInsets.fromLTRB(16, 0, 16, 10),
+                        child: Text(
+                          '${formatDate(order.createdAt)} • ${order.totalQty} sản phẩm • ${formatCurrency(order.totalAmount)} k',
+                          style: const TextStyle(color: kTextSecondary, fontSize: 12),
                         ),
                       ),
-                    ),
-                    Expanded(
-                      child: SingleChildScrollView(
-                        padding: const EdgeInsets.fromLTRB(16, 0, 16, 12),
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            ...() {
-                              final grouped = <String, Map<String, List<MapEntry<int, OrderItem>>>>{};
-                              for (final entry in order.items.asMap().entries) {
-                                final item = entry.value;
-                                final pair = _splitVariantInfo(item.variantInfo);
-                                grouped.putIfAbsent(item.productName, () => {});
-                                grouped[item.productName]!.putIfAbsent(pair.color, () => []).add(MapEntry(entry.key, item));
-                              }
+                      Padding(
+                        padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
+                        child: TextField(
+                          controller: pickerNoteCtrl,
+                          focusNode: pickerNoteFocus,
+                          maxLines: 2,
+                          decoration: InputDecoration(
+                            hintText: 'Ghi chú cho đơn (tuỳ chọn)',
+                            prefixIcon: const Icon(Icons.sticky_note_2_outlined),
+                            suffixIcon: IconButton(
+                              icon: const Icon(Icons.check_circle_outline),
+                              onPressed: () => pickerNoteFocus.unfocus(),
+                            ),
+                          ),
+                        ),
+                      ),
+                      Expanded(
+                        child: SingleChildScrollView(
+                          padding: const EdgeInsets.fromLTRB(16, 0, 16, 12),
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              ...() {
+                                final grouped = <String, Map<String, List<MapEntry<int, OrderItem>>>>{};
+                                for (final entry in order.items.asMap().entries) {
+                                  final item = entry.value;
+                                  final pair = _splitVariantInfo(item.variantInfo);
+                                  grouped.putIfAbsent(item.productName, () => {});
+                                  grouped[item.productName]!.putIfAbsent(pair.color, () => []).add(MapEntry(entry.key, item));
+                                }
 
-                              return grouped.entries.map((modelEntry) {
-                                return Container(
-                                  margin: const EdgeInsets.only(bottom: 10),
-                                  padding: const EdgeInsets.all(10),
-                                  decoration: BoxDecoration(
-                                    color: Colors.white,
-                                    borderRadius: BorderRadius.circular(10),
-                                    border: Border.all(color: kBorder),
-                                  ),
-                                  child: Column(
-                                    crossAxisAlignment: CrossAxisAlignment.start,
-                                    children: [
-                                      Text(modelEntry.key, style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 15, color: kTextPrimary)),
-                                      const SizedBox(height: 8),
-                                      ...modelEntry.value.entries.map((colorEntry) {
-                                        final totalReq = colorEntry.value.fold<int>(0, (s, x) => s + x.value.quantity);
-                                        return Container(
-                                          margin: const EdgeInsets.only(bottom: 8),
-                                          padding: const EdgeInsets.all(8),
-                                          decoration: BoxDecoration(
-                                            color: const Color(0xFFF8FAFC),
-                                            borderRadius: BorderRadius.circular(8),
-                                            border: Border.all(color: kBorder),
-                                          ),
-                                          child: Column(
-                                            crossAxisAlignment: CrossAxisAlignment.start,
-                                            children: [
-                                              Text('Màu ${colorEntry.key} • YC $totalReq', style: const TextStyle(fontWeight: FontWeight.w600, color: kPrimary)),
-                                              const SizedBox(height: 6),
-                                              ...colorEntry.value.map((pair) {
-                                                final index = pair.key;
-                                                final item = pair.value;
-                                                final key = item.orderItemId ?? (item.variantId ?? (100000 + index));
-                                                final currentQty = pickedByKey[key] ?? 0;
-                                                final stock = item.currentStock;
-                                                final stockText = stock == null ? '' : ' • Kho: $stock';
-                                                final enough = item.enoughStock ?? true;
-                                                final parsed = _splitVariantInfo(item.variantInfo);
+                                return grouped.entries.map((modelEntry) {
+                                  return Container(
+                                    margin: const EdgeInsets.only(bottom: 10),
+                                    padding: const EdgeInsets.all(10),
+                                    decoration: BoxDecoration(
+                                      color: Colors.white,
+                                      borderRadius: BorderRadius.circular(10),
+                                      border: Border.all(color: kBorder),
+                                    ),
+                                    child: Column(
+                                      crossAxisAlignment: CrossAxisAlignment.start,
+                                      children: [
+                                        Text(modelEntry.key, style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 15, color: kTextPrimary)),
+                                        const SizedBox(height: 8),
+                                        ...modelEntry.value.entries.map((colorEntry) {
+                                          final totalReq = colorEntry.value.fold<int>(0, (s, x) => s + x.value.quantity);
+                                          return Container(
+                                            margin: const EdgeInsets.only(bottom: 8),
+                                            padding: const EdgeInsets.all(8),
+                                            decoration: BoxDecoration(
+                                              color: const Color(0xFFF8FAFC),
+                                              borderRadius: BorderRadius.circular(8),
+                                              border: Border.all(color: kBorder),
+                                            ),
+                                            child: Column(
+                                              crossAxisAlignment: CrossAxisAlignment.start,
+                                              children: [
+                                                Text('Màu ${colorEntry.key} • YC $totalReq', style: const TextStyle(fontWeight: FontWeight.w600, color: kPrimary)),
+                                                const SizedBox(height: 6),
+                                                ...colorEntry.value.map((pair) {
+                                                  final index = pair.key;
+                                                  final item = pair.value;
+                                                  final key = item.orderItemId ?? (item.variantId ?? (100000 + index));
+                                                  final currentQty = pickedByKey[key] ?? 0;
+                                                  final stock = item.currentStock;
+                                                  final stockText = stock == null ? '' : ' • Kho: $stock';
+                                                  final enough = item.enoughStock ?? true;
+                                                  final parsed = _splitVariantInfo(item.variantInfo);
 
-                                                final itemTotal = item.price * currentQty;
-                                                return Padding(
-                                                  padding: const EdgeInsets.only(bottom: 6),
-                                                  child: Row(
-                                                    crossAxisAlignment: CrossAxisAlignment.start,
-                                                    children: [
-                                                      Expanded(
-                                                        child: InkWell(
-                                                          mouseCursor: SystemMouseCursors.click,
-                                                          borderRadius: BorderRadius.circular(6),
-                                                          onTap: () {
-                                                            Navigator.pop(dialogContext);
-                                                            widget.onOpenItem(item);
-                                                          },
-                                                          child: Padding(
-                                                            padding: const EdgeInsets.symmetric(vertical: 4),
-                                                            child: Column(
-                                                              crossAxisAlignment: CrossAxisAlignment.start,
+                                                  final itemTotal = item.price * currentQty;
+                                                  return Padding(
+                                                    padding: const EdgeInsets.only(bottom: 6),
+                                                    child: Row(
+                                                      crossAxisAlignment: CrossAxisAlignment.start,
+                                                      children: [
+                                                        Expanded(
+                                                          child: InkWell(
+                                                            mouseCursor: SystemMouseCursors.click,
+                                                            borderRadius: BorderRadius.circular(6),
+                                                            onTap: () {
+                                                              Navigator.pop(dialogContext);
+                                                              widget.onOpenItem(item);
+                                                            },
+                                                            child: Padding(
+                                                              padding: const EdgeInsets.symmetric(vertical: 4),
+                                                              child: Column(
+                                                                crossAxisAlignment: CrossAxisAlignment.start,
+                                                                children: [
+                                                                  Text(
+                                                                    'Size ${parsed.size}',
+                                                                    style: TextStyle(fontSize: 13, color: enough ? kTextPrimary : kDanger, fontWeight: FontWeight.w600),
+                                                                  ),
+                                                                  const SizedBox(height: 2),
+                                                                  Text(
+                                                                    'YC ${item.quantity}$stockText',
+                                                                    style: TextStyle(fontSize: 12, color: enough ? kTextSecondary : kDanger),
+                                                                  ),
+                                                                  const SizedBox(height: 2),
+                                                                  Text(
+                                                                    'Giá ${formatCurrency(item.price)} k • Thành ${formatCurrency(itemTotal)} k',
+                                                                    style: TextStyle(fontSize: 12, color: enough ? kTextSecondary : kDanger),
+                                                                  ),
+                                                                ],
+                                                              ),
+                                                            ),
+                                                          ),
+                                                        ),
+                                                        const SizedBox(width: 8),
+                                                        SizedBox(
+                                                          width: 120,
+                                                          child: Container(
+                                                            height: 40,
+                                                            decoration: BoxDecoration(
+                                                              border: Border.all(color: kBorder),
+                                                              borderRadius: BorderRadius.circular(6),
+                                                              color: Colors.white,
+                                                            ),
+                                                            child: Row(
                                                               children: [
-                                                                Text(
-                                                                  'Size ${parsed.size}',
-                                                                  style: TextStyle(fontSize: 13, color: enough ? kTextPrimary : kDanger, fontWeight: FontWeight.w600),
+                                                                InkWell(
+                                                                  mouseCursor: SystemMouseCursors.click,
+                                                                  onTap: () => changeQty(item, key, currentQty - 1),
+                                                                  child: const Padding(
+                                                                    padding: EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+                                                                    child: Icon(Icons.remove, size: 16),
+                                                                  ),
                                                                 ),
-                                                                const SizedBox(height: 2),
-                                                                Text(
-                                                                  'YC ${item.quantity}$stockText',
-                                                                  style: TextStyle(fontSize: 12, color: enough ? kTextSecondary : kDanger),
+                                                                Expanded(
+                                                                  child: InkWell(
+                                                                    mouseCursor: SystemMouseCursors.click,
+                                                                    onTap: () => openManualInput(item, key),
+                                                                    child: Center(
+                                                                      child: Text(
+                                                                        '$currentQty',
+                                                                        style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14),
+                                                                      ),
+                                                                    ),
+                                                                  ),
                                                                 ),
-                                                                const SizedBox(height: 2),
-                                                                Text(
-                                                                  'Giá ${formatCurrency(item.price)} k • Thành ${formatCurrency(itemTotal)} k',
-                                                                  style: TextStyle(fontSize: 12, color: enough ? kTextSecondary : kDanger),
+                                                                InkWell(
+                                                                  mouseCursor: SystemMouseCursors.click,
+                                                                  onTap: () => changeQty(item, key, currentQty + 1),
+                                                                  child: const Padding(
+                                                                    padding: EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+                                                                    child: Icon(Icons.add, size: 16),
+                                                                  ),
                                                                 ),
                                                               ],
                                                             ),
                                                           ),
                                                         ),
-                                                      ),
-                                                      const SizedBox(width: 8),
-                                                      SizedBox(
-                                                        width: 120,
-                                                        child: Container(
-                                                          height: 40,
-                                                          decoration: BoxDecoration(
-                                                            border: Border.all(color: kBorder),
-                                                            borderRadius: BorderRadius.circular(6),
-                                                            color: Colors.white,
-                                                          ),
-                                                          child: Row(
-                                                            children: [
-                                                              InkWell(
-                                                                mouseCursor: SystemMouseCursors.click,
-                                                                onTap: () => changeQty(item, key, currentQty - 1),
-                                                                child: const Padding(
-                                                                  padding: EdgeInsets.symmetric(horizontal: 10, vertical: 8),
-                                                                  child: Icon(Icons.remove, size: 16),
-                                                                ),
-                                                              ),
-                                                              Expanded(
-                                                                child: InkWell(
-                                                                  mouseCursor: SystemMouseCursors.click,
-                                                                  onTap: () => openManualInput(item, key),
-                                                                  child: Center(
-                                                                    child: Text(
-                                                                      '$currentQty',
-                                                                      style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14),
-                                                                    ),
-                                                                  ),
-                                                                ),
-                                                              ),
-                                                              InkWell(
-                                                                mouseCursor: SystemMouseCursors.click,
-                                                                onTap: () => changeQty(item, key, currentQty + 1),
-                                                                child: const Padding(
-                                                                  padding: EdgeInsets.symmetric(horizontal: 10, vertical: 8),
-                                                                  child: Icon(Icons.add, size: 16),
-                                                                ),
-                                                              ),
-                                                            ],
-                                                          ),
-                                                        ),
-                                                      ),
-                                                    ],
-                                                  ),
-                                                );
-                                              }),
-                                            ],
-                                          ),
-                                        );
-                                      }),
-                                    ],
-                                  ),
-                                );
-                              });
-                            }(),
+                                                      ],
+                                                    ),
+                                                  );
+                                                }),
+                                              ],
+                                            ),
+                                          );
+                                        }),
+                                      ],
+                                    ),
+                                  );
+                                });
+                              }(),
+                            ],
+                          ),
+                        ),
+                      ),
+                      Padding(
+                        padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
+                        child: Row(
+                          children: [
+                            Expanded(
+                              child: OutlinedButton(
+                                onPressed: () => Navigator.pop(dialogContext),
+                                child: const Text('Đóng'),
+                              ),
+                            ),
+                            const SizedBox(width: 10),
+                            Expanded(
+                              child: ElevatedButton.icon(
+                                style: ElevatedButton.styleFrom(backgroundColor: kSuccess, foregroundColor: Colors.white),
+                                onPressed: _confirming.contains(order.id)
+                                    ? null
+                                    : () async {
+                                        Navigator.pop(dialogContext);
+                                        await _confirmWithPicked(order, pickedByKey, pickerNote: pickerNoteCtrl.text.trim());
+                                      },
+                                icon: _confirming.contains(order.id)
+                                    ? const SizedBox(
+                                        width: 14,
+                                        height: 14,
+                                        child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
+                                      )
+                                    : const Icon(Icons.check_circle_outline),
+                                label: const Text('Xác nhận đơn'),
+                              ),
+                            ),
                           ],
                         ),
                       ),
-                    ),
-                    Padding(
-                      padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
-                      child: Row(
-                        children: [
-                          Expanded(
-                            child: OutlinedButton(
-                              onPressed: () => Navigator.pop(dialogContext),
-                              child: const Text('Đóng'),
-                            ),
-                          ),
-                          const SizedBox(width: 10),
-                          Expanded(
-                            child: ElevatedButton.icon(
-                              style: ElevatedButton.styleFrom(backgroundColor: kSuccess, foregroundColor: Colors.white),
-                              onPressed: _confirming.contains(order.id)
-                                  ? null
-                                  : () async {
-                                      Navigator.pop(dialogContext);
-                                      await _confirmWithPicked(order, pickedByKey, pickerNote: pickerNoteCtrl.text.trim());
-                                    },
-                              icon: _confirming.contains(order.id)
-                                  ? const SizedBox(
-                                      width: 14,
-                                      height: 14,
-                                      child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
-                                    )
-                                  : const Icon(Icons.check_circle_outline),
-                              label: const Text('Xác nhận đơn'),
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                  ],
+                    ],
+                  ),
                 ),
               ),
             );
@@ -2256,6 +2278,7 @@ class _AcceptedOrdersScreenState extends State<_AcceptedOrdersScreen> {
       },
     );
     pickerNoteCtrl.dispose();
+    pickerNoteFocus.dispose();
   }
 
   @override
@@ -2318,6 +2341,7 @@ class _PickerInventoryScreenState extends State<_PickerInventoryScreen> {
   bool _loading = true;
   String _search = '';
   final TextEditingController _searchCtrl = TextEditingController();
+  Timer? _searchDebounce;
   List<Product> _products = [];
   int? _highlightProductId;
 
@@ -2330,6 +2354,7 @@ class _PickerInventoryScreenState extends State<_PickerInventoryScreen> {
   @override
   void dispose() {
     _searchCtrl.dispose();
+    _searchDebounce?.cancel();
     super.dispose();
   }
 
@@ -2560,7 +2585,11 @@ class _PickerInventoryScreenState extends State<_PickerInventoryScreen> {
                       },
                     ),
             ),
-            onChanged: (v) => setState(() => _search = v),
+            onChanged: (v) {
+              setState(() => _search = v);
+              _searchDebounce?.cancel();
+              _searchDebounce = Timer(const Duration(milliseconds: 250), () => _load(silent: true));
+            },
             onSubmitted: (_) => _load(),
           ),
         ),

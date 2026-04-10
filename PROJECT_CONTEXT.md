@@ -4,6 +4,7 @@
 > **Cập nhật lần cuối:** Tháng 3/2026
 
 ## CẬP NHẬT NHANH GẦN NHẤT
+- Mobile iOS: tăng độ ổn định thông báo (request permission rõ ràng + auto-init), picker kho hàng search realtime, hỗ trợ giao đơn nhiều ảnh và staff xem nhiều ảnh giao hàng.
 - Thêm hủy đơn trong quản lý cho trạng thái chờ duyệt/đã duyệt/đã nhận, kèm thông báo cho picker khi đơn bị hủy.
 - Đã fix gửi ảnh Telegram khi giao đơn: triển khai `_send_photo_to_telegram` và trả về kết quả xác nhận đơn dù backup Telegram thất bại.
 - Chuẩn hóa tên app thành "Fisd" ở Android launcher, đồng thời thêm helper resolve ảnh local để card kho hàng và popup sửa luôn hiển thị ảnh sản phẩm ổn định.
