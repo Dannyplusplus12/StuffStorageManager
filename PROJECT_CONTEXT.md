@@ -4,6 +4,8 @@
 > **Cập nhật lần cuối:** Tháng 3/2026
 
 ## CẬP NHẬT NHANH GẦN NHẤT
+- Đã chuyển timestamp backend/backup sang giờ Việt Nam (UTC+7) để hiển thị đúng thời gian duyệt đơn, công nợ, và file backup.
+- Đã cho phép picker xác nhận đơn dù kho thiếu (ghi chú thiếu hàng), cập nhật tên app mobile thành "Fisd", và ưu tiên hiển thị ảnh local cho sản phẩm cũ khi có.
 - Đã thêm đổi ảnh cho sản phẩm cũ trong popup sửa sản phẩm (upload ảnh mới lên server trước khi lưu).
 - Đã đổi label trạng thái pending thành "Đợi duyệt", chuyển đơn vị tiền sang "k" toàn app, và làm rõ trình bày popup giao đơn mobile (thêm tổng tiền + tách dòng thông tin size/giá).
 - Đã thêm upload ảnh sản phẩm: backend lưu vào `/product-images/`, phục vụ qua `GET /product-images/{file_name}`, gửi ảnh lên Telegram DB backup; frontend upload ảnh trước khi tạo sản phẩm và mobile resolve URL ảnh từ server.

@@ -243,16 +243,34 @@ class _EditProductDialogState extends State<EditProductDialog> {
                                 errorBuilder: (_, __, ___) => const Center(child: Text('Không tải được ảnh')),
                               ),
                             )
-                          : (ApiService.resolveApiUrl(_imagePath).isNotEmpty
-                              ? ClipRRect(
+                          : () {
+                              final localPath = _imagePath.startsWith('assets/images/')
+                                  ? '${Directory.current.path}${Platform.pathSeparator}${_imagePath.replaceAll('/', Platform.pathSeparator)}'
+                                  : '';
+                              final localFile = localPath.isNotEmpty ? File(localPath) : null;
+                              if (localFile != null && localFile.existsSync()) {
+                                return ClipRRect(
                                   borderRadius: BorderRadius.circular(10),
-                                  child: Image.network(
-                                    ApiService.resolveApiUrl(_imagePath),
+                                  child: Image.file(
+                                    localFile,
                                     fit: BoxFit.cover,
                                     errorBuilder: (_, __, ___) => const Center(child: Text('Không tải được ảnh')),
                                   ),
-                                )
-                              : const Center(child: Text('Chưa có ảnh'))),
+                                );
+                              }
+                              final remoteUrl = ApiService.resolveApiUrl(_imagePath);
+                              if (remoteUrl.isNotEmpty) {
+                                return ClipRRect(
+                                  borderRadius: BorderRadius.circular(10),
+                                  child: Image.network(
+                                    remoteUrl,
+                                    fit: BoxFit.cover,
+                                    errorBuilder: (_, __, ___) => const Center(child: Text('Không tải được ảnh')),
+                                  ),
+                                );
+                              }
+                              return const Center(child: Text('Chưa có ảnh'));
+                            }(),
                     ),
                   ),
                   const SizedBox(width: 10),
