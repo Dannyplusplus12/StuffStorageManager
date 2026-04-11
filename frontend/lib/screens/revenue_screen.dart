@@ -6,7 +6,7 @@ import '../services/api_service.dart';
 import '../theme.dart';
 import '../utils.dart';
 
-enum _RevenuePeriod { day, week, month, year }
+enum _RevenuePeriod { day, month, year }
 
 class RevenueScreen extends StatefulWidget {
   const RevenueScreen({super.key});
@@ -82,11 +82,6 @@ class _RevenueScreenState extends State<RevenueScreen> {
     switch (_period) {
       case _RevenuePeriod.day:
         return dt.year == anchor.year && dt.month == anchor.month && dt.day == anchor.day;
-      case _RevenuePeriod.week:
-        final dayStart = DateTime(anchor.year, anchor.month, anchor.day);
-        final startOfWeek = dayStart.subtract(Duration(days: dayStart.weekday - 1));
-        final endOfWeek = startOfWeek.add(const Duration(days: 7));
-        return !dt.isBefore(startOfWeek) && dt.isBefore(endOfWeek);
       case _RevenuePeriod.month:
         return dt.year == anchor.year && dt.month == anchor.month;
       case _RevenuePeriod.year:
@@ -163,10 +158,8 @@ class _RevenueScreenState extends State<RevenueScreen> {
     switch (_period) {
       case _RevenuePeriod.day:
         return 'h_${dt.hour}';
-      case _RevenuePeriod.week:
-        return 'w_${dt.weekday}';
       case _RevenuePeriod.month:
-        return _monthWeekKey(dt.subtract(Duration(days: dt.weekday - 1)));
+        return 'd_${dt.day}';
       case _RevenuePeriod.year:
         return 'm_${dt.month}';
     }
@@ -183,40 +176,19 @@ class _RevenueScreenState extends State<RevenueScreen> {
             label: '${i.toString().padLeft(2, '0')}:00 - ${i.toString().padLeft(2, '0')}:59',
           ),
         );
-      case _RevenuePeriod.week:
-        final dayStart = DateTime(anchor.year, anchor.month, anchor.day);
-        final startOfWeek = dayStart.subtract(Duration(days: dayStart.weekday - 1));
-        return List.generate(
-          7,
-          (i) {
-            final d = startOfWeek.add(Duration(days: i));
-            final wd = i + 1;
-            return _PeriodSlot(
-              key: 'w_$wd',
-              label: '${_weekdayLabel(wd)} (${_dateOnly(d)})',
-              nextPeriod: _RevenuePeriod.day,
-              nextAnchorDate: d,
-            );
-          },
-        );
       case _RevenuePeriod.month:
-        final firstDay = DateTime(anchor.year, anchor.month, 1);
         final lastDay = DateTime(anchor.year, anchor.month + 1, 0);
-        var weekStart = firstDay.subtract(Duration(days: firstDay.weekday - 1));
-        int weekNo = 1;
         final out = <_PeriodSlot>[];
-        while (!weekStart.isAfter(lastDay)) {
-          final weekEnd = weekStart.add(const Duration(days: 6));
+        for (var day = 1; day <= lastDay.day; day++) {
+          final d = DateTime(anchor.year, anchor.month, day);
           out.add(
             _PeriodSlot(
-              key: _monthWeekKey(weekStart),
-              label: 'Tuần $weekNo (${_dateOnly(weekStart)} - ${_dateOnly(weekEnd)})',
-              nextPeriod: _RevenuePeriod.week,
-              nextAnchorDate: weekStart,
+              key: 'd_$day',
+              label: '${d.day.toString().padLeft(2, '0')}/${d.month.toString().padLeft(2, '0')}/${d.year}',
+              nextPeriod: _RevenuePeriod.day,
+              nextAnchorDate: d,
             ),
           );
-          weekNo++;
-          weekStart = weekStart.add(const Duration(days: 7));
         }
         return out;
       case _RevenuePeriod.year:
@@ -235,9 +207,6 @@ class _RevenueScreenState extends State<RevenueScreen> {
     }
   }
 
-  String _monthWeekKey(DateTime weekStart) =>
-      'mw_${weekStart.year}${weekStart.month.toString().padLeft(2, '0')}${weekStart.day.toString().padLeft(2, '0')}';
-
   String _dateOnly(DateTime dt) => '${dt.day.toString().padLeft(2, '0')}/${dt.month.toString().padLeft(2, '0')}/${dt.year}';
 
   String get _selectedTimeLabel {
@@ -245,11 +214,6 @@ class _RevenueScreenState extends State<RevenueScreen> {
     switch (_period) {
       case _RevenuePeriod.day:
         return 'Ngày ${_dateOnly(anchor)}';
-      case _RevenuePeriod.week:
-        final dayStart = DateTime(anchor.year, anchor.month, anchor.day);
-        final startOfWeek = dayStart.subtract(Duration(days: dayStart.weekday - 1));
-        final endOfWeek = startOfWeek.add(const Duration(days: 6));
-        return 'Tuần ${_dateOnly(startOfWeek)} - ${_dateOnly(endOfWeek)}';
       case _RevenuePeriod.month:
         return 'Tháng ${anchor.month.toString().padLeft(2, '0')}/${anchor.year}';
       case _RevenuePeriod.year:
@@ -268,8 +232,6 @@ class _RevenueScreenState extends State<RevenueScreen> {
   ({_RevenuePeriod period, DateTime anchor})? get _backTarget {
     switch (_period) {
       case _RevenuePeriod.day:
-        return (period: _RevenuePeriod.week, anchor: _anchorDate);
-      case _RevenuePeriod.week:
         return (period: _RevenuePeriod.month, anchor: DateTime(_anchorDate.year, _anchorDate.month, 1));
       case _RevenuePeriod.month:
         return (period: _RevenuePeriod.year, anchor: DateTime(_anchorDate.year, 1, 1));
@@ -288,18 +250,175 @@ class _RevenueScreenState extends State<RevenueScreen> {
   }
 
   Future<void> _pickAnchorDate() async {
-    final selected = await showDatePicker(
-      context: context,
-      initialDate: _anchorDate,
-      firstDate: DateTime(2020, 1, 1),
-      lastDate: DateTime(2100, 12, 31),
-      locale: const Locale('vi', 'VN'),
-      helpText: 'Chọn mốc thời gian',
-      cancelText: 'Hủy',
-      confirmText: 'Chọn',
+    var selected = DateTime(_anchorDate.year, _anchorDate.month, _anchorDate.day);
+    final inputCtrl = TextEditingController(
+      text: '${selected.day.toString().padLeft(2, '0')}/${selected.month.toString().padLeft(2, '0')}/${selected.year}',
     );
-    if (selected == null) return;
-    setState(() => _anchorDate = selected);
+
+    String dateText(DateTime dt) => '${dt.day.toString().padLeft(2, '0')}/${dt.month.toString().padLeft(2, '0')}/${dt.year}';
+
+    DateTime safeDate(int year, int month, int day) {
+      final maxDay = DateTime(year, month + 1, 0).day;
+      final d = day > maxDay ? maxDay : day;
+      return DateTime(year, month, d < 1 ? 1 : d);
+    }
+
+    await showDialog<void>(
+      context: context,
+      builder: (dialogContext) => StatefulBuilder(
+        builder: (dialogContext, setDialogState) {
+          final firstDay = DateTime(selected.year, selected.month, 1);
+          final daysInMonth = DateTime(selected.year, selected.month + 1, 0).day;
+          final leading = (firstDay.weekday + 6) % 7;
+
+          final cells = <Widget>[];
+          for (var i = 0; i < leading; i++) {
+            cells.add(const SizedBox.shrink());
+          }
+          for (var day = 1; day <= daysInMonth; day++) {
+            final d = DateTime(selected.year, selected.month, day);
+            final active = d.year == selected.year && d.month == selected.month && d.day == selected.day;
+            cells.add(
+              InkWell(
+                borderRadius: BorderRadius.circular(20),
+                onTap: () {
+                  setDialogState(() {
+                    selected = d;
+                    inputCtrl.text = dateText(selected);
+                  });
+                },
+                child: Center(
+                  child: Container(
+                    width: 38,
+                    height: 38,
+                    alignment: Alignment.center,
+                    decoration: BoxDecoration(
+                      color: active ? kPrimary : Colors.transparent,
+                      shape: BoxShape.circle,
+                    ),
+                    child: Text(
+                      '$day',
+                      style: TextStyle(
+                        color: active ? Colors.white : kTextPrimary,
+                        fontWeight: active ? FontWeight.w700 : FontWeight.w400,
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+            );
+          }
+
+          return Dialog(
+            child: ConstrainedBox(
+              constraints: const BoxConstraints(maxWidth: 700, maxHeight: 480),
+              child: Padding(
+                padding: const EdgeInsets.all(12),
+                child: Column(
+                  children: [
+                    const Align(
+                      alignment: Alignment.centerLeft,
+                      child: Text('Chọn mốc thời gian', style: TextStyle(fontSize: 18, fontWeight: FontWeight.w700)),
+                    ),
+                    const SizedBox(height: 8),
+                    SizedBox(
+                      height: 320,
+                      child: Column(
+                        children: [
+                          Row(
+                            children: [
+                              Expanded(
+                                child: Text('Tháng ${selected.month} năm ${selected.year}', style: const TextStyle(fontSize: 22, fontWeight: FontWeight.w500)),
+                              ),
+                              IconButton(
+                                onPressed: () => setDialogState(() {
+                                  final p = DateTime(selected.year, selected.month - 1, 1);
+                                  selected = safeDate(p.year, p.month, selected.day);
+                                  inputCtrl.text = dateText(selected);
+                                }),
+                                icon: const Icon(Icons.chevron_left),
+                              ),
+                              IconButton(
+                                onPressed: () => setDialogState(() {
+                                  final n = DateTime(selected.year, selected.month + 1, 1);
+                                  selected = safeDate(n.year, n.month, selected.day);
+                                  inputCtrl.text = dateText(selected);
+                                }),
+                                icon: const Icon(Icons.chevron_right),
+                              ),
+                            ],
+                          ),
+                          const SizedBox(height: 8),
+                          const Row(
+                            children: [
+                              Expanded(child: Center(child: Text('T2'))),
+                              Expanded(child: Center(child: Text('T3'))),
+                              Expanded(child: Center(child: Text('T4'))),
+                              Expanded(child: Center(child: Text('T5'))),
+                              Expanded(child: Center(child: Text('T6'))),
+                              Expanded(child: Center(child: Text('T7'))),
+                              Expanded(child: Center(child: Text('CN'))),
+                            ],
+                          ),
+                          const SizedBox(height: 2),
+                          Expanded(
+                            child: GridView.count(
+                              crossAxisCount: 7,
+                              physics: const NeverScrollableScrollPhysics(),
+                              childAspectRatio: 1.45,
+                              children: cells,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                    Row(
+                      children: [
+                        const Text('Đã chọn:', style: TextStyle(color: kTextSecondary, fontSize: 13)),
+                        const SizedBox(width: 10),
+                        SizedBox(
+                          width: 190,
+                          child: TextField(
+                            controller: inputCtrl,
+                            decoration: const InputDecoration(hintText: 'dd/mm/yyyy', isDense: true),
+                            style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w600, color: kTextPrimary),
+                            onChanged: (v) {
+                              final m = RegExp(r'^(\d{1,2})\/(\d{1,2})\/(\d{4})$').firstMatch(v.trim());
+                              if (m == null) return;
+                              final dd = int.tryParse(m.group(1) ?? '');
+                              final mm = int.tryParse(m.group(2) ?? '');
+                              final yy = int.tryParse(m.group(3) ?? '');
+                              if (dd == null || mm == null || yy == null || mm < 1 || mm > 12) return;
+                              final maxDay = DateTime(yy, mm + 1, 0).day;
+                              if (dd < 1 || dd > maxDay) return;
+                              setDialogState(() => selected = DateTime(yy, mm, dd));
+                            },
+                          ),
+                        ),
+                        const Spacer(),
+                        TextButton(onPressed: () => Navigator.pop(dialogContext), child: const Text('Hủy')),
+                        const SizedBox(width: 8),
+                        ElevatedButton(
+                          onPressed: () {
+                            final picked = _period == _RevenuePeriod.day
+                                ? DateTime(selected.year, selected.month, selected.day)
+                                : (_period == _RevenuePeriod.month ? DateTime(selected.year, selected.month, 1) : DateTime(selected.year, 1, 1));
+                            setState(() => _anchorDate = picked);
+                            Navigator.pop(dialogContext);
+                          },
+                          child: const Text('Chọn'),
+                        ),
+                      ],
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          );
+        },
+      ),
+    );
+    inputCtrl.dispose();
   }
 
   List<_TopCustomerRevenue> get _topCustomers {
@@ -352,32 +471,10 @@ class _RevenueScreenState extends State<RevenueScreen> {
     return '${dt.hour.toString().padLeft(2, '0')}:${dt.minute.toString().padLeft(2, '0')}';
   }
 
-  String _weekdayLabel(int weekday) {
-    switch (weekday) {
-      case DateTime.monday:
-        return 'Thứ 2';
-      case DateTime.tuesday:
-        return 'Thứ 3';
-      case DateTime.wednesday:
-        return 'Thứ 4';
-      case DateTime.thursday:
-        return 'Thứ 5';
-      case DateTime.friday:
-        return 'Thứ 6';
-      case DateTime.saturday:
-        return 'Thứ 7';
-      case DateTime.sunday:
-      default:
-        return 'Chủ nhật';
-    }
-  }
-
   String _periodLabel(_RevenuePeriod p) {
     switch (p) {
       case _RevenuePeriod.day:
         return 'Ngày';
-      case _RevenuePeriod.week:
-        return 'Tuần';
       case _RevenuePeriod.month:
         return 'Tháng';
       case _RevenuePeriod.year:
