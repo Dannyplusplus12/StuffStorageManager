@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'dart:async';
+import 'dart:io';
 import 'package:flutter/services.dart';
 
 import '../models/order.dart';
@@ -23,11 +24,14 @@ class _PendingApprovalScreenState extends State<PendingApprovalScreen> {
   List<Order> _historyOrders = [];
   List<Employee> _employees = [];
   String _rightTab = 'history';
+  String _employeeSearch = '';
+  String _employeeRoleFilter = 'all';
   Timer? _refreshTimer;
   final Map<int, String> _historyStatusCache = {};
   final Set<int> _highlightedHistoryOrders = {};
 
   String _deliveryPhotoUrl(String pathOrUrl) => ApiService.resolveApiUrl(pathOrUrl);
+  File? _deliveryPhotoFile(String pathOrUrl) => resolveLocalDeliveryProofFile(pathOrUrl);
 
   Future<void> _copyPhotoLink(String url) async {
     await Clipboard.setData(ClipboardData(text: url));
@@ -42,70 +46,139 @@ class _PendingApprovalScreenState extends State<PendingApprovalScreen> {
         ? o.deliveryPhotoPaths
         : (o.deliveryPhotoPath.trim().isEmpty ? const <String>[] : [o.deliveryPhotoPath.trim()]);
     if (paths.isEmpty) return;
-    final urls = paths.map(_deliveryPhotoUrl).toList();
+    final assets = paths
+        .map((p) => (file: _deliveryPhotoFile(p), url: _deliveryPhotoUrl(p)))
+        .toList();
+    final pageController = PageController();
+    var currentIndex = 0;
 
     await showDialog<void>(
       context: context,
-      builder: (dialogContext) => Dialog(
-        child: ConstrainedBox(
-          constraints: const BoxConstraints(maxWidth: 980, maxHeight: 760),
-          child: Padding(
-            padding: const EdgeInsets.all(12),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Row(
-                  children: [
-                    Expanded(
-                      child: Text('Ảnh giao hàng • Đơn #${o.id}', style: const TextStyle(fontWeight: FontWeight.w700)),
-                    ),
-                    MouseRegion(
-                      cursor: SystemMouseCursors.click,
-                      child: TextButton.icon(
-                        onPressed: () => _copyPhotoLink(urls.first),
-                        icon: const Icon(Icons.copy, size: 16),
-                        label: const Text('Copy link'),
+      builder: (dialogContext) => StatefulBuilder(
+        builder: (dialogContext, setState) => Dialog(
+          child: ConstrainedBox(
+            constraints: const BoxConstraints(maxWidth: 980, maxHeight: 760),
+            child: Padding(
+              padding: const EdgeInsets.all(12),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    children: [
+                      Expanded(
+                        child: Text(
+                          'Ảnh giao hàng • Đơn #${o.id}',
+                          style: const TextStyle(fontWeight: FontWeight.w700),
+                        ),
                       ),
-                    ),
-                    MouseRegion(
-                      cursor: SystemMouseCursors.click,
-                      child: IconButton(
-                        onPressed: () => Navigator.pop(dialogContext),
-                        icon: const Icon(Icons.close),
+                      if (assets.length > 1)
+                        Padding(
+                          padding: const EdgeInsets.only(right: 8),
+                          child: Text('Ảnh ${currentIndex + 1}/${assets.length}', style: const TextStyle(color: kTextSecondary)),
+                        ),
+                      MouseRegion(
+                        cursor: SystemMouseCursors.click,
+                        child: TextButton.icon(
+                          onPressed: () => _copyPhotoLink(assets[currentIndex].file?.path ?? assets[currentIndex].url),
+                          icon: const Icon(Icons.copy, size: 16),
+                          label: const Text('Copy link'),
+                        ),
                       ),
-                    ),
-                  ],
-                ),
-                const SizedBox(height: 8),
-                Expanded(
-                  child: Container(
-                    width: double.infinity,
-                    decoration: BoxDecoration(
-                      color: const Color(0xFFF8FAFC),
-                      border: Border.all(color: kBorder),
-                      borderRadius: BorderRadius.circular(8),
-                    ),
+                      MouseRegion(
+                        cursor: SystemMouseCursors.click,
+                        child: IconButton(
+                          onPressed: () => Navigator.pop(dialogContext),
+                          icon: const Icon(Icons.close),
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 8),
+                  Expanded(
+                    child: Container(
+                      width: double.infinity,
+                      decoration: BoxDecoration(
+                        color: const Color(0xFFF8FAFC),
+                        border: Border.all(color: kBorder),
+                        borderRadius: BorderRadius.circular(8),
+                      ),
                       child: InteractiveViewer(
                         minScale: 0.6,
                         maxScale: 4,
                         child: PageView.builder(
-                          itemCount: urls.length,
-                          itemBuilder: (_, i) => Image.network(
-                            urls[i],
-                            fit: BoxFit.contain,
-                            loadingBuilder: (context, child, progress) {
-                              if (progress == null) return child;
-                              return const Center(child: CircularProgressIndicator());
-                            },
-                            errorBuilder: (_, __, ___) => const Center(
-                              child: Text('Không tải được ảnh giao hàng', style: TextStyle(color: kTextSecondary)),
-                            ),
-                          ),
+                          controller: pageController,
+                          itemCount: assets.length,
+                          onPageChanged: (index) => setState(() => currentIndex = index),
+                          itemBuilder: (_, i) {
+                            final file = assets[i].file;
+                            if (file != null) {
+                              return Image.file(
+                                file,
+                                fit: BoxFit.contain,
+                                errorBuilder: (_, __, ___) => const Center(
+                                  child: Text('Không tải được ảnh giao hàng', style: TextStyle(color: kTextSecondary)),
+                                ),
+                              );
+                            }
+                            return Image.network(
+                              assets[i].url,
+                              fit: BoxFit.contain,
+                              loadingBuilder: (context, child, progress) {
+                                if (progress == null) return child;
+                                return const Center(child: CircularProgressIndicator());
+                              },
+                              errorBuilder: (_, __, ___) => const Center(
+                                child: Text('Không tải được ảnh giao hàng', style: TextStyle(color: kTextSecondary)),
+                              ),
+                            );
+                          },
                         ),
                       ),
+                    ),
                   ),
-                ),
-              ],
+                  if (assets.length > 1) ...[
+                    const SizedBox(height: 10),
+                    SizedBox(
+                      height: 64,
+                      child: ListView.separated(
+                        scrollDirection: Axis.horizontal,
+                        itemCount: assets.length,
+                        separatorBuilder: (_, __) => const SizedBox(width: 8),
+                        itemBuilder: (_, i) {
+                          final active = i == currentIndex;
+                          return MouseRegion(
+                            cursor: SystemMouseCursors.click,
+                            child: GestureDetector(
+                              onTap: () => pageController.jumpToPage(i),
+                              child: Container(
+                                width: 80,
+                                decoration: BoxDecoration(
+                                  borderRadius: BorderRadius.circular(8),
+                                  border: Border.all(color: active ? kPrimary : kBorder, width: active ? 2 : 1),
+                                ),
+                                child: ClipRRect(
+                                  borderRadius: BorderRadius.circular(6),
+                                  child: assets[i].file != null
+                                      ? Image.file(
+                                          assets[i].file!,
+                                          fit: BoxFit.cover,
+                                          errorBuilder: (_, __, ___) => const Center(child: Icon(Icons.broken_image_outlined)),
+                                        )
+                                      : Image.network(
+                                          assets[i].url,
+                                          fit: BoxFit.cover,
+                                          errorBuilder: (_, __, ___) => const Center(child: Icon(Icons.broken_image_outlined)),
+                                        ),
+                                ),
+                              ),
+                            ),
+                          );
+                        },
+                      ),
+                    ),
+                  ],
+                ],
+              ),
             ),
           ),
         ),
@@ -380,6 +453,9 @@ class _PendingApprovalScreenState extends State<PendingApprovalScreen> {
   Future<void> _createEmployee() async {
     final nameCtrl = TextEditingController();
     final phoneCtrl = TextEditingController();
+    final emailCtrl = TextEditingController();
+    final addressCtrl = TextEditingController();
+    final notesCtrl = TextEditingController();
     String role = 'picker';
     final ok = await showDialog<bool>(
       context: context,
@@ -392,6 +468,12 @@ class _PendingApprovalScreenState extends State<PendingApprovalScreen> {
               TextField(controller: nameCtrl, decoration: const InputDecoration(labelText: 'Tên')),
               const SizedBox(height: 8),
               TextField(controller: phoneCtrl, decoration: const InputDecoration(labelText: 'SĐT')),
+              const SizedBox(height: 8),
+              TextField(controller: emailCtrl, decoration: const InputDecoration(labelText: 'Email (tuỳ chọn)')),
+              const SizedBox(height: 8),
+              TextField(controller: addressCtrl, decoration: const InputDecoration(labelText: 'Địa chỉ (tuỳ chọn)')),
+              const SizedBox(height: 8),
+              TextField(controller: notesCtrl, maxLines: 2, decoration: const InputDecoration(labelText: 'Ghi chú (tuỳ chọn)')),
               const SizedBox(height: 8),
               DropdownButtonFormField<String>(
                 initialValue: role,
@@ -414,7 +496,14 @@ class _PendingApprovalScreenState extends State<PendingApprovalScreen> {
     );
     if (ok != true) return;
     try {
-      final res = await ApiService.createEmployee(name: nameCtrl.text.trim(), phone: phoneCtrl.text.trim(), role: role);
+      final res = await ApiService.createEmployee(
+        name: nameCtrl.text.trim(),
+        phone: phoneCtrl.text.trim(),
+        email: emailCtrl.text.trim(),
+        address: addressCtrl.text.trim(),
+        notes: notesCtrl.text.trim(),
+        role: role,
+      );
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Đã tạo. PIN: ${res['pin']}'), backgroundColor: Colors.green));
       await _load();
@@ -427,7 +516,12 @@ class _PendingApprovalScreenState extends State<PendingApprovalScreen> {
   Future<void> _editEmployee(Employee e) async {
     final nameCtrl = TextEditingController(text: e.name);
     final phoneCtrl = TextEditingController(text: e.phone);
+    final emailCtrl = TextEditingController(text: e.email);
+    final addressCtrl = TextEditingController(text: e.address);
+    final notesCtrl = TextEditingController(text: e.notes);
+    final pinCtrl = TextEditingController();
     String role = e.role;
+    bool isActive = e.isActive;
     final ok = await showDialog<bool>(
       context: context,
       builder: (_) => AlertDialog(
@@ -440,6 +534,21 @@ class _PendingApprovalScreenState extends State<PendingApprovalScreen> {
               const SizedBox(height: 8),
               TextField(controller: phoneCtrl, decoration: const InputDecoration(labelText: 'SĐT')),
               const SizedBox(height: 8),
+              TextField(controller: emailCtrl, decoration: const InputDecoration(labelText: 'Email')),
+              const SizedBox(height: 8),
+              TextField(controller: addressCtrl, decoration: const InputDecoration(labelText: 'Địa chỉ')),
+              const SizedBox(height: 8),
+              TextField(controller: notesCtrl, maxLines: 2, decoration: const InputDecoration(labelText: 'Ghi chú')),
+              const SizedBox(height: 8),
+              TextField(
+                controller: pinCtrl,
+                keyboardType: TextInputType.number,
+                decoration: const InputDecoration(
+                  labelText: 'PIN mới (để trống nếu giữ nguyên)',
+                  hintText: '4-8 chữ số',
+                ),
+              ),
+              const SizedBox(height: 8),
               DropdownButtonFormField<String>(
                 initialValue: role,
                 items: const [
@@ -449,6 +558,13 @@ class _PendingApprovalScreenState extends State<PendingApprovalScreen> {
                 ],
                 onChanged: (v) => setLocal(() => role = v ?? e.role),
                 decoration: const InputDecoration(labelText: 'Vai trò'),
+              ),
+              const SizedBox(height: 8),
+              SwitchListTile(
+                contentPadding: EdgeInsets.zero,
+                value: isActive,
+                onChanged: (v) => setLocal(() => isActive = v),
+                title: const Text('Tài khoản đang hoạt động'),
               ),
             ],
           ),
@@ -461,12 +577,189 @@ class _PendingApprovalScreenState extends State<PendingApprovalScreen> {
     );
     if (ok != true) return;
     try {
-      await ApiService.updateEmployee(e.id, name: nameCtrl.text.trim(), phone: phoneCtrl.text.trim(), role: role);
+      await ApiService.updateEmployee(
+        e.id,
+        name: nameCtrl.text.trim(),
+        phone: phoneCtrl.text.trim(),
+        email: emailCtrl.text.trim(),
+        address: addressCtrl.text.trim(),
+        notes: notesCtrl.text.trim(),
+        role: role,
+        pin: pinCtrl.text.trim().isEmpty ? null : pinCtrl.text.trim(),
+        isActive: isActive,
+      );
       await _load();
     } catch (err) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('$err'), backgroundColor: Colors.red));
     }
+  }
+
+  String _roleLabel(String role) {
+    switch (role) {
+      case 'picker':
+        return 'Picker';
+      case 'orderer':
+        return 'Orderer';
+      case 'manager':
+        return 'Manager';
+      default:
+        return role;
+    }
+  }
+
+  Future<void> _openEmployeeDeliveryHistory(Employee employee) async {
+    final searchCtrl = TextEditingController();
+    var range = 1; // 1=day, 2=month, 3=year
+    var loading = true;
+    var orders = <Order>[];
+    String? error;
+
+    Future<void> load(BuildContext dialogCtx, StateSetter setDialogState) async {
+      if (!dialogCtx.mounted) return;
+      setDialogState(() {
+        loading = true;
+        error = null;
+      });
+      try {
+        final now = DateTime.now();
+        final days = range == 1 ? 1 : (range == 2 ? now.day : now.difference(DateTime(now.year, 1, 1)).inDays + 1);
+        final rows = await ApiService.getEmployeeDeliveries(
+          employee.id,
+          search: searchCtrl.text.trim(),
+          days: days,
+          limit: 300,
+        );
+        if (!dialogCtx.mounted) return;
+        setDialogState(() {
+          orders = rows;
+          loading = false;
+        });
+      } catch (e) {
+        if (!dialogCtx.mounted) return;
+        setDialogState(() {
+          error = '$e';
+          loading = false;
+        });
+      }
+    }
+
+    await showDialog<void>(
+      context: context,
+      builder: (dialogContext) => StatefulBuilder(
+        builder: (dialogContext, setDialogState) {
+          if (loading && orders.isEmpty && error == null) {
+            WidgetsBinding.instance.addPostFrameCallback((_) => load(dialogContext, setDialogState));
+          }
+          return Dialog(
+            child: ConstrainedBox(
+              constraints: const BoxConstraints(maxWidth: 980, maxHeight: 760),
+              child: Container(
+                color: const Color(0xFFF8FAFC),
+                padding: const EdgeInsets.all(12),
+                child: Column(
+                  children: [
+                    Row(
+                      children: [
+                        Expanded(
+                          child: Text('Lịch sử giao • ${employee.name}', style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 16)),
+                        ),
+                        IconButton(onPressed: () => Navigator.pop(dialogContext), icon: const Icon(Icons.close)),
+                      ],
+                    ),
+                    const SizedBox(height: 8),
+                    Row(
+                      children: [
+                        Expanded(
+                          child: TextField(
+                            controller: searchCtrl,
+                            decoration: const InputDecoration(
+                              hintText: 'Tìm theo mã đơn / tên khách',
+                              prefixIcon: Icon(Icons.search),
+                              isDense: true,
+                            ),
+                            onSubmitted: (_) => load(dialogContext, setDialogState),
+                          ),
+                        ),
+                        const SizedBox(width: 8),
+                        DropdownButton<int>(
+                          value: range,
+                          items: const [
+                            DropdownMenuItem(value: 1, child: Text('Ngày này')),
+                            DropdownMenuItem(value: 2, child: Text('Tháng này')),
+                            DropdownMenuItem(value: 3, child: Text('Năm này')),
+                          ],
+                          onChanged: (v) {
+                            if (v == null) return;
+                            setDialogState(() => range = v);
+                            load(dialogContext, setDialogState);
+                          },
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 8),
+                    Expanded(
+                      child: loading
+                          ? const Center(child: CircularProgressIndicator())
+                          : error != null
+                              ? Center(child: Text(error!, style: const TextStyle(color: Colors.red)))
+                              : orders.isEmpty
+                                  ? const Center(child: Text('Chưa có đơn giao phù hợp'))
+                                  : ListView.builder(
+                                      itemCount: orders.length,
+                                      itemBuilder: (_, i) {
+                                        final o = orders[i];
+                                        return Container(
+                                          margin: const EdgeInsets.only(bottom: 8),
+                                          padding: const EdgeInsets.all(10),
+                                          decoration: BoxDecoration(
+                                            borderRadius: BorderRadius.circular(10),
+                                            border: Border.all(color: kBorder),
+                                            color: Colors.white,
+                                          ),
+                                          child: ExpansionTile(
+                                            tilePadding: EdgeInsets.zero,
+                                            childrenPadding: EdgeInsets.zero,
+                                            title: Text('Đơn #${o.id} • ${o.customerName}', style: const TextStyle(fontWeight: FontWeight.w700)),
+                                            subtitle: Column(
+                                              crossAxisAlignment: CrossAxisAlignment.start,
+                                              children: [
+                                                Text('Giao lúc: ${o.deliveredAt.isEmpty ? '-' : o.deliveredAt}', style: const TextStyle(color: kTextSecondary, fontSize: 12)),
+                                                Text('SL ${o.totalQty} • ${formatCurrency(o.totalAmount)} k', style: const TextStyle(color: kTextSecondary, fontSize: 12)),
+                                              ],
+                                            ),
+                                            children: [
+                                              const SizedBox(height: 6),
+                                              _buildOrderItemsExcelTable(o),
+                                              if (o.deliveryPhotoPath.isNotEmpty || o.deliveryPhotoPaths.isNotEmpty)
+                                                Padding(
+                                                  padding: const EdgeInsets.only(top: 8),
+                                                  child: Align(
+                                                    alignment: Alignment.centerLeft,
+                                                    child: OutlinedButton.icon(
+                                                      onPressed: () => _openDeliveryPhoto(o),
+                                                      icon: const Icon(Icons.image_outlined, size: 16, color: kPrimary),
+                                                      label: Text(
+                                                        o.deliveryPhotoPaths.length > 1 ? 'Xem ảnh (${o.deliveryPhotoPaths.length})' : 'Xem ảnh xác nhận',
+                                                        style: const TextStyle(color: kPrimary),
+                                                      ),
+                                                    ),
+                                                  ),
+                                                ),
+                                            ],
+                                          ),
+                                        );
+                                      },
+                                    ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          );
+        },
+      ),
+    );
   }
 
   Future<void> _deleteEmployee(Employee e) async {
@@ -510,6 +803,17 @@ class _PendingApprovalScreenState extends State<PendingApprovalScreen> {
           return status.toUpperCase();
       }
     }
+
+    final filteredEmployees = _employees.where((e) {
+      final q = _employeeSearch.trim().toLowerCase();
+      final roleOk = _employeeRoleFilter == 'all' ? true : e.role == _employeeRoleFilter;
+      if (!roleOk) return false;
+      if (q.isEmpty) return true;
+      return e.name.toLowerCase().contains(q) ||
+          e.phone.toLowerCase().contains(q) ||
+          e.pin.toLowerCase().contains(q) ||
+          e.email.toLowerCase().contains(q);
+    }).toList();
 
     return Container(
       color: const Color(0xFFF3F6FB),
@@ -591,6 +895,11 @@ class _PendingApprovalScreenState extends State<PendingApprovalScreen> {
                                         Text('Đơn #${o.id} • ${o.customerName}', style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 15)),
                                         const SizedBox(height: 4),
                                         Text('${formatDate(o.createdAt)} • SL ${o.totalQty} • ${formatCurrency(o.totalAmount)} k', style: const TextStyle(color: kTextSecondary)),
+                                         if (o.createdByEmployeeName.trim().isNotEmpty)
+                                           Padding(
+                                             padding: const EdgeInsets.only(top: 2),
+                                             child: Text('Người gửi: ${o.createdByEmployeeName}', style: const TextStyle(fontSize: 12, color: kTextSecondary)),
+                                           ),
                                         const SizedBox(height: 8),
                                         _buildOrderItemsExcelTable(o),
                                         const SizedBox(height: 8),
@@ -758,42 +1067,119 @@ class _PendingApprovalScreenState extends State<PendingApprovalScreen> {
                         : Column(
                             children: [
                               Padding(
-                                padding: const EdgeInsets.fromLTRB(12, 6, 12, 0),
-                                child: Align(
-                                  alignment: Alignment.centerRight,
-                                  child: MouseRegion(
-                                    cursor: SystemMouseCursors.click,
-                                    child: ElevatedButton.icon(onPressed: _createEmployee, icon: const Icon(Icons.add, size: 16), label: const Text('Thêm NV')),
-                                  ),
+                                padding: const EdgeInsets.fromLTRB(12, 8, 12, 0),
+                                child: Row(
+                                  children: [
+                                    Expanded(
+                                      child: TextField(
+                                        decoration: const InputDecoration(
+                                          hintText: 'Tìm tên / SĐT / email / PIN',
+                                          isDense: true,
+                                          prefixIcon: Icon(Icons.search),
+                                        ),
+                                        onChanged: (v) => setState(() => _employeeSearch = v),
+                                      ),
+                                    ),
+                                    const SizedBox(width: 8),
+                                    DropdownButton<String>(
+                                      value: _employeeRoleFilter,
+                                      items: const [
+                                        DropdownMenuItem(value: 'all', child: Text('Tất cả')),
+                                        DropdownMenuItem(value: 'orderer', child: Text('Orderer')),
+                                        DropdownMenuItem(value: 'picker', child: Text('Picker')),
+                                        DropdownMenuItem(value: 'manager', child: Text('Manager')),
+                                      ],
+                                      onChanged: (v) => setState(() => _employeeRoleFilter = v ?? 'all'),
+                                    ),
+                                    const SizedBox(width: 8),
+                                    MouseRegion(
+                                      cursor: SystemMouseCursors.click,
+                                      child: ElevatedButton.icon(
+                                        onPressed: _createEmployee,
+                                        icon: const Icon(Icons.add, size: 16),
+                                        label: const Text('Thêm NV'),
+                                      ),
+                                    ),
+                                  ],
                                 ),
                               ),
                               Expanded(
-                                child: ListView.builder(
-                                  padding: const EdgeInsets.all(12),
-                                  itemCount: _employees.length,
-                                  itemBuilder: (_, i) {
-                                    final e = _employees[i];
-                                    return Container(
-                                      margin: const EdgeInsets.only(bottom: 8),
-                                      decoration: BoxDecoration(
-                                        border: Border.all(color: kBorder),
-                                        borderRadius: BorderRadius.circular(10),
-                                        color: const Color(0xFFFCFDFF),
+                                child: filteredEmployees.isEmpty
+                                    ? const Center(child: Text('Không có nhân viên phù hợp'))
+                                    : ListView.builder(
+                                        padding: const EdgeInsets.all(12),
+                                        itemCount: filteredEmployees.length,
+                                        itemBuilder: (_, i) {
+                                          final e = filteredEmployees[i];
+                                          return Container(
+                                            margin: const EdgeInsets.only(bottom: 8),
+                                            padding: const EdgeInsets.fromLTRB(12, 10, 12, 10),
+                                            decoration: BoxDecoration(
+                                              border: Border.all(color: kBorder),
+                                              borderRadius: BorderRadius.circular(10),
+                                              color: const Color(0xFFFCFDFF),
+                                            ),
+                                            child: Column(
+                                              crossAxisAlignment: CrossAxisAlignment.start,
+                                              children: [
+                                                Row(
+                                                  children: [
+                                                    Expanded(
+                                                      child: Text(e.name, style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 15)),
+                                                    ),
+                                                    Container(
+                                                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                                                      decoration: BoxDecoration(
+                                                        color: e.isActive ? const Color(0xFFE8F5E9) : const Color(0xFFFFEBEE),
+                                                        borderRadius: BorderRadius.circular(999),
+                                                      ),
+                                                      child: Text(
+                                                        e.isActive ? 'Đang hoạt động' : 'Đang khóa',
+                                                        style: TextStyle(
+                                                          fontSize: 11,
+                                                          fontWeight: FontWeight.w700,
+                                                          color: e.isActive ? kSuccess : Colors.red,
+                                                        ),
+                                                      ),
+                                                    ),
+                                                    PopupMenuButton<String>(
+                                                      onSelected: (v) => v == 'edit' ? _editEmployee(e) : _deleteEmployee(e),
+                                                      itemBuilder: (_) => const [
+                                                        PopupMenuItem(value: 'edit', child: Text('Sửa thông tin')),
+                                                        PopupMenuItem(value: 'delete', child: Text('Xóa nhân viên')),
+                                                      ],
+                                                    ),
+                                                  ],
+                                                ),
+                                                const SizedBox(height: 4),
+                                                Text('${_roleLabel(e.role)} • PIN: ${e.pin}'),
+                                                Text('SĐT: ${e.phone.isEmpty ? '-' : e.phone} • Email: ${e.email.isEmpty ? '-' : e.email}'),
+                                                if (e.address.trim().isNotEmpty) Text('Địa chỉ: ${e.address.trim()}'),
+                                                if (e.notes.trim().isNotEmpty) Text('Ghi chú: ${e.notes.trim()}'),
+                                                const SizedBox(height: 6),
+                                                Row(
+                                                  children: [
+                                                    Expanded(
+                                                      child: Text(
+                                                        'Đã giao: ${e.deliveredCount} đơn${e.lastDeliveredAt.isNotEmpty ? ' • Gần nhất: ${e.lastDeliveredAt}' : ''}',
+                                                        style: const TextStyle(fontSize: 12, color: kTextSecondary),
+                                                      ),
+                                                    ),
+                                                    MouseRegion(
+                                                      cursor: SystemMouseCursors.click,
+                                                      child: OutlinedButton.icon(
+                                                        onPressed: () => _openEmployeeDeliveryHistory(e),
+                                                        icon: const Icon(Icons.history, size: 16),
+                                                        label: const Text('Lịch sử giao'),
+                                                      ),
+                                                    ),
+                                                  ],
+                                                ),
+                                              ],
+                                            ),
+                                          );
+                                        },
                                       ),
-                                      child: ListTile(
-                                        title: Text(e.name, style: const TextStyle(fontWeight: FontWeight.w600)),
-                                        subtitle: Text('${e.role.toUpperCase()} • ${e.phone.isEmpty ? '-' : e.phone} • PIN: ${e.pin}'),
-                                        trailing: PopupMenuButton<String>(
-                                          onSelected: (v) => v == 'edit' ? _editEmployee(e) : _deleteEmployee(e),
-                                          itemBuilder: (_) => const [
-                                            PopupMenuItem(value: 'edit', child: Text('Sửa')),
-                                            PopupMenuItem(value: 'delete', child: Text('Xóa')),
-                                          ],
-                                        ),
-                                      ),
-                                    );
-                                  },
-                                ),
                               ),
                             ],
                           ),

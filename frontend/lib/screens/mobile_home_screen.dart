@@ -1,4 +1,5 @@
 ﻿import 'dart:async';
+import 'dart:io';
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -285,6 +286,7 @@ class _OrdererScreenState extends State<_OrdererScreen> with _NotificationMixin 
   Timer? _pollTimer;
   final GlobalKey<_CreateOrderScreenState> _createOrderKey = GlobalKey<_CreateOrderScreenState>();
   final GlobalKey<_OrdererDebtScreenState> _debtKey = GlobalKey<_OrdererDebtScreenState>();
+  final GlobalKey<_MyActivityHistoryScreenState> _activityKey = GlobalKey<_MyActivityHistoryScreenState>();
   final Map<int, String> _trackedOrders = {};
   final Map<int, int> _statusMissCount = {};
   int _tabIndex = 0;
@@ -365,15 +367,17 @@ class _OrdererScreenState extends State<_OrdererScreen> with _NotificationMixin 
       appBar: AppBar(
         backgroundColor: kSidebar,
         foregroundColor: Colors.white,
-        title: Text(_tabIndex == 0 ? 'Order' : 'Công nợ khách hàng'),
+        title: Text(_tabIndex == 0 ? 'Order' : (_tabIndex == 1 ? 'Công nợ khách hàng' : 'Lịch sử giao dịch')),
         actions: [
           buildNotificationIcon(),
           IconButton(
             onPressed: () {
               if (_tabIndex == 0) {
                 _createOrderKey.currentState?.reloadProducts();
-              } else {
+              } else if (_tabIndex == 1) {
                 _debtKey.currentState?.reload();
+              } else {
+                _activityKey.currentState?.reload();
               }
             },
             icon: const Icon(Icons.refresh),
@@ -397,14 +401,20 @@ class _OrdererScreenState extends State<_OrdererScreen> with _NotificationMixin 
         children: [
           _CreateOrderScreen(key: _createOrderKey, onDraftCreated: _onDraftCreated),
           _OrdererDebtScreen(key: _debtKey),
+          _MyActivityHistoryScreen(key: _activityKey),
         ],
       ),
       bottomNavigationBar: BottomNavigationBar(
         currentIndex: _tabIndex,
         onTap: (index) => setState(() => _tabIndex = index),
+        type: BottomNavigationBarType.fixed,
+        backgroundColor: Colors.white,
+        selectedItemColor: kPrimary,
+        unselectedItemColor: kTextSecondary,
         items: const [
           BottomNavigationBarItem(icon: Icon(Icons.note_add_outlined), label: 'Soạn đơn'),
           BottomNavigationBarItem(icon: Icon(Icons.people_outline), label: 'Công nợ'),
+          BottomNavigationBarItem(icon: Icon(Icons.history_outlined), label: 'Lịch sử'),
         ],
       ),
     );
@@ -422,11 +432,18 @@ class _OrdererDebtScreenState extends State<_OrdererDebtScreen> {
   bool _loading = true;
   String _search = '';
   List<Customer> _customers = [];
+  final TextEditingController _searchCtrl = TextEditingController();
 
   @override
   void initState() {
     super.initState();
     reload();
+  }
+
+  @override
+  void dispose() {
+    _searchCtrl.dispose();
+    super.dispose();
   }
 
   Future<void> reload() async {
@@ -468,46 +485,63 @@ class _OrdererDebtScreenState extends State<_OrdererDebtScreen> {
 
   @override
   Widget build(BuildContext context) {
-    return Column(
-      children: [
-        Padding(
-          padding: const EdgeInsets.all(12),
-          child: TextField(
-            decoration: const InputDecoration(hintText: 'Tìm tên khách/SĐT...', prefixIcon: Icon(Icons.search)),
-            onChanged: (v) => setState(() => _search = v),
+    return GestureDetector(
+      behavior: HitTestBehavior.translucent,
+      onTap: () => FocusScope.of(context).unfocus(),
+      child: Column(
+        children: [
+          Padding(
+            padding: const EdgeInsets.all(12),
+            child: TextField(
+              controller: _searchCtrl,
+              decoration: InputDecoration(
+                hintText: 'Tìm tên khách/SĐT...',
+                prefixIcon: const Icon(Icons.search),
+                suffixIcon: _searchCtrl.text.isEmpty
+                    ? null
+                    : IconButton(
+                        icon: const Icon(Icons.clear),
+                        onPressed: () {
+                          _searchCtrl.clear();
+                          setState(() => _search = '');
+                        },
+                      ),
+              ),
+              onChanged: (v) => setState(() => _search = v),
+            ),
           ),
-        ),
-        Expanded(
-          child: _loading
-              ? const Center(child: CircularProgressIndicator())
-              : RefreshIndicator(
-                  onRefresh: reload,
-                  child: ListView.builder(
-                    physics: const AlwaysScrollableScrollPhysics(),
-                    itemCount: _filtered.length,
-                    itemBuilder: (_, i) {
-                      final c = _filtered[i];
-                      return Card(
-                        margin: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
-                        child: ListTile(
-                          onTap: () => _openCustomerHistory(c),
-                          title: Text(c.name, style: const TextStyle(fontWeight: FontWeight.w600)),
-                          subtitle: Text('${c.phone.isEmpty ? '-' : c.phone} • ${c.areaName.isEmpty ? 'Chưa rõ khu vực' : c.areaName}'),
-                          trailing: Row(
-                            mainAxisSize: MainAxisSize.min,
-                            children: [
-                              Text('${formatCurrency(c.debt)} k', style: const TextStyle(color: kDanger, fontWeight: FontWeight.bold)),
-                              const SizedBox(width: 6),
-                              const Icon(Icons.chevron_right_rounded, color: kTextSecondary),
-                            ],
+          Expanded(
+            child: _loading
+                ? const Center(child: CircularProgressIndicator())
+                : RefreshIndicator(
+                    onRefresh: reload,
+                    child: ListView.builder(
+                      physics: const AlwaysScrollableScrollPhysics(),
+                      itemCount: _filtered.length,
+                      itemBuilder: (_, i) {
+                        final c = _filtered[i];
+                        return Card(
+                          margin: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+                          child: ListTile(
+                            onTap: () => _openCustomerHistory(c),
+                            title: Text(c.name, style: const TextStyle(fontWeight: FontWeight.w600)),
+                            subtitle: Text('${c.phone.isEmpty ? '-' : c.phone} • ${c.areaName.isEmpty ? 'Chưa rõ khu vực' : c.areaName}'),
+                            trailing: Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                Text('${formatCurrency(c.debt)} k', style: const TextStyle(color: kDanger, fontWeight: FontWeight.bold)),
+                                const SizedBox(width: 6),
+                                const Icon(Icons.chevron_right_rounded, color: kTextSecondary),
+                              ],
+                            ),
                           ),
-                        ),
-                      );
-                    },
+                        );
+                      },
+                    ),
                   ),
-                ),
-        ),
-      ],
+          ),
+        ],
+      ),
     );
   }
 
@@ -579,7 +613,13 @@ class _OrdererCustomerHistorySheetState extends State<_OrdererCustomerHistoryShe
     final amount = int.tryParse(amountCtrl.text.trim()) ?? 0;
     if (amount <= 0) return;
     try {
-      await ApiService.createDebtLog(widget.customer.id, changeAmount: -amount, note: noteCtrl.text.trim().isEmpty ? 'Trả tiền' : noteCtrl.text.trim());
+      await ApiService.createDebtLog(
+        widget.customer.id,
+        changeAmount: -amount,
+        note: noteCtrl.text.trim().isEmpty ? 'Trả tiền' : noteCtrl.text.trim(),
+        actorEmployeeId: AppModeManager.employeeId,
+      );
+
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(content: Text('Đã thu tiền thành công'), backgroundColor: Colors.green),
@@ -680,6 +720,332 @@ class _OrdererCustomerHistorySheetState extends State<_OrdererCustomerHistoryShe
   }
 }
 
+class _MyActivityHistoryScreen extends StatefulWidget {
+  const _MyActivityHistoryScreen({super.key});
+
+  @override
+  State<_MyActivityHistoryScreen> createState() => _MyActivityHistoryScreenState();
+}
+
+class _MyActivityHistoryScreenState extends State<_MyActivityHistoryScreen> {
+  final TextEditingController _searchCtrl = TextEditingController();
+  Timer? _searchDebounce;
+  bool _loading = true;
+  String _search = '';
+  int _range = 1; // 1=day, 2=month, 3=year
+  List<Map<String, dynamic>> _items = [];
+
+  int get _days {
+    final now = DateTime.now();
+    if (_range == 1) return 1;
+    if (_range == 2) return now.day;
+    return now.difference(DateTime(now.year, 1, 1)).inDays + 1;
+  }
+
+  @override
+  void initState() {
+    super.initState();
+    _load();
+  }
+
+  @override
+  void dispose() {
+    _searchDebounce?.cancel();
+    _searchCtrl.dispose();
+    super.dispose();
+  }
+
+  Future<void> reload() => _load();
+
+  Future<void> _load({bool silent = false}) async {
+    final employeeId = AppModeManager.employeeId;
+    if (employeeId == null) return;
+    if (!silent) setState(() => _loading = true);
+    try {
+      final rows = await ApiService.getEmployeeActivities(employeeId, search: _search, days: _days, limit: 400);
+      if (mounted) {
+        setState(() => _items = rows);
+      }
+    } catch (e) {
+      if (mounted && !silent) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Lỗi tải lịch sử giao dịch: $e'), backgroundColor: Colors.red),
+        );
+      }
+    }
+    if (mounted && !silent) setState(() => _loading = false);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final orderCount = _items.where((e) => (e['type'] ?? '') == 'ORDER').length;
+    final collectCount = _items.where((e) => (e['type'] ?? '') == 'DEBT_LOG').length;
+    return GestureDetector(
+      behavior: HitTestBehavior.translucent,
+      onTap: () => FocusScope.of(context).unfocus(),
+      child: Column(
+        children: [
+          Container(
+          margin: const EdgeInsets.fromLTRB(12, 10, 12, 8),
+          padding: const EdgeInsets.all(10),
+          decoration: BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.circular(12),
+            border: Border.all(color: kBorder),
+          ),
+          child: Column(
+            children: [
+              Row(
+                children: [
+                  Expanded(
+                    child: TextField(
+                      controller: _searchCtrl,
+                      decoration: InputDecoration(
+                        hintText: 'Tìm mã đơn / khách / ghi chú',
+                        prefixIcon: const Icon(Icons.search),
+                        isDense: true,
+                        suffixIcon: _searchCtrl.text.isEmpty
+                            ? null
+                            : IconButton(
+                                icon: const Icon(Icons.clear),
+                                onPressed: () {
+                                  _searchCtrl.clear();
+                                  setState(() => _search = '');
+                                  _load(silent: true);
+                                },
+                              ),
+                      ),
+                      onChanged: (v) {
+                        setState(() => _search = v);
+                        _searchDebounce?.cancel();
+                        _searchDebounce = Timer(const Duration(milliseconds: 250), () => _load(silent: true));
+                      },
+                      onSubmitted: (_) => _load(),
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                  DropdownButton<int>(
+                    value: _range,
+                    items: const [
+                      DropdownMenuItem(value: 1, child: Text('Ngày')),
+                      DropdownMenuItem(value: 2, child: Text('Tháng')),
+                      DropdownMenuItem(value: 3, child: Text('Năm')),
+                    ],
+                    onChanged: (v) {
+                      if (v == null) return;
+                      setState(() => _range = v);
+                      _load();
+                    },
+                  ),
+                ],
+              ),
+              const SizedBox(height: 8),
+              Row(
+                children: [
+                  _miniStat('Đơn đã tạo', '$orderCount', const Color(0xFFEFF6FF), const Color(0xFF1D4ED8)),
+                  const SizedBox(width: 8),
+                  _miniStat('Thu tiền/điều chỉnh', '$collectCount', const Color(0xFFF0FDF4), const Color(0xFF15803D)),
+                ],
+              ),
+            ],
+          ),
+        ),
+        Expanded(
+          child: _loading
+              ? const Center(child: CircularProgressIndicator())
+              : RefreshIndicator(
+                  onRefresh: () => _load(silent: true),
+                  child: _items.isEmpty
+                      ? ListView(
+                          physics: const AlwaysScrollableScrollPhysics(),
+                          children: const [
+                            SizedBox(height: 120),
+                            Center(child: Text('Chưa có giao dịch cá nhân trong khoảng lọc')),
+                          ],
+                        )
+                      : ListView.separated(
+                          padding: const EdgeInsets.fromLTRB(12, 0, 12, 12),
+                          itemCount: _items.length,
+                          separatorBuilder: (_, __) => const SizedBox(height: 8),
+                          itemBuilder: (_, i) {
+                            final row = _items[i];
+                            final type = (row['type'] ?? '').toString();
+                            final amount = (row['amount'] as num?)?.toInt() ?? 0;
+                            final isOrder = type == 'ORDER';
+                            final typeBg = isOrder ? const Color(0xFFEFF6FF) : const Color(0xFFF0FDF4);
+                            final typeColor = isOrder ? const Color(0xFF1D4ED8) : const Color(0xFF15803D);
+                            final orderJson = isOrder ? (row['order'] as Map<String, dynamic>?) : null;
+                            final status = (orderJson?['status'] ?? '').toString().toLowerCase();
+                            Color statusBg = const Color(0xFFE5E7EB);
+                            Color statusFg = const Color(0xFF374151);
+                            String statusLabel = '';
+                            if (status == 'pending') {
+                              statusLabel = 'Đợi duyệt';
+                              statusBg = const Color(0xFFFFF7ED);
+                              statusFg = const Color(0xFFEA580C);
+                            } else if (status == 'approved') {
+                              statusLabel = 'Đã duyệt';
+                              statusBg = const Color(0xFFEFF6FF);
+                              statusFg = const Color(0xFF1D4ED8);
+                            } else if (status == 'assigned' || status == 'accepted') {
+                              statusLabel = 'Đã nhận';
+                              statusBg = const Color(0xFFEEF2FF);
+                              statusFg = const Color(0xFF4F46E5);
+                            } else if (status == 'completed') {
+                              statusLabel = 'Hoàn thành';
+                              statusBg = const Color(0xFFF0FDF4);
+                              statusFg = const Color(0xFF15803D);
+                            }
+                            return Container(
+                              padding: const EdgeInsets.all(12),
+                              decoration: BoxDecoration(
+                                color: Colors.white,
+                                borderRadius: BorderRadius.circular(12),
+                                border: Border.all(color: kBorder),
+                              ),
+                              child: ExpansionTile(
+                                tilePadding: EdgeInsets.zero,
+                                childrenPadding: EdgeInsets.zero,
+                                title: Row(
+                                  children: [
+                                    Container(
+                                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                                      decoration: BoxDecoration(color: typeBg, borderRadius: BorderRadius.circular(999)),
+                                      child: Text(isOrder ? 'ĐƠN HÀNG' : 'CÔNG NỢ', style: TextStyle(fontSize: 10, fontWeight: FontWeight.w700, color: typeColor)),
+                                    ),
+                                    const SizedBox(width: 8),
+                                    Expanded(
+                                      child: Text((row['title'] ?? '').toString(), style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 15)),
+                                    ),
+                                  ],
+                                ),
+                                subtitle: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    if (isOrder && statusLabel.isNotEmpty)
+                                      Padding(
+                                        padding: const EdgeInsets.only(top: 2, bottom: 2),
+                                        child: Container(
+                                          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                                          decoration: BoxDecoration(color: statusBg, borderRadius: BorderRadius.circular(999)),
+                                          child: Text(statusLabel, style: TextStyle(fontSize: 11, fontWeight: FontWeight.w700, color: statusFg)),
+                                        ),
+                                      ),
+                                    if ((row['subtitle'] ?? '').toString().trim().isNotEmpty)
+                                      Padding(
+                                        padding: const EdgeInsets.only(top: 2),
+                                        child: Text(
+                                          (row['subtitle'] ?? '').toString(),
+                                          style: const TextStyle(color: kTextSecondary),
+                                        ),
+                                      ),
+                                    const SizedBox(height: 3),
+                                    Row(
+                                      children: [
+                                        Expanded(
+                                          child: Text((row['date'] ?? '').toString(), style: const TextStyle(fontSize: 12, color: kTextSecondary)),
+                                        ),
+                                        Text(
+                                          '${amount >= 0 ? '+' : ''}${formatCurrency(amount)} k',
+                                          style: TextStyle(fontWeight: FontWeight.w700, color: amount < 0 ? kSuccess : kPrimary),
+                                        ),
+                                      ],
+                                    ),
+                                  ],
+                                ),
+                                children: [
+                                  if (isOrder && orderJson != null)
+                                    _buildMobileOrderDetailsTable(orderJson)
+                                  else
+                                    Align(
+                                      alignment: Alignment.centerLeft,
+                                      child: Padding(
+                                        padding: const EdgeInsets.only(top: 8, bottom: 2),
+                                        child: Text((row['subtitle'] ?? '').toString(), style: const TextStyle(fontSize: 12, color: kTextSecondary)),
+                                      ),
+                                    ),
+                                ],
+                              ),
+                            );
+                          },
+                        ),
+                ),
+        ),
+        ],
+      ),
+    );
+  }
+
+  Widget _miniStat(String label, String value, Color bg, Color fg) {
+    return Expanded(
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+        decoration: BoxDecoration(color: bg, borderRadius: BorderRadius.circular(10)),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(label, style: const TextStyle(fontSize: 11, color: kTextSecondary)),
+            const SizedBox(height: 2),
+            Text(value, style: TextStyle(fontSize: 16, fontWeight: FontWeight.w700, color: fg)),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildMobileOrderDetailsTable(Map<String, dynamic> order) {
+    final items = (order['items'] as List? ?? const []).whereType<Map>().map((e) => e.cast<String, dynamic>()).toList();
+    if (items.isEmpty) return const SizedBox.shrink();
+
+    final rows = <Map<String, dynamic>>[];
+    for (final item in items) {
+      final pair = _splitVariantInfo((item['variant_info'] ?? '').toString());
+      rows.add({
+        'product': (item['product_name'] ?? '').toString(),
+        'color': pair.color,
+        'qty': ((item['quantity'] ?? 0) as num).toInt(),
+        'money': (((item['price'] ?? 0) as num).toInt()) * (((item['quantity'] ?? 0) as num).toInt()),
+      });
+    }
+
+    return Container(
+      width: double.infinity,
+      margin: const EdgeInsets.only(top: 8),
+      decoration: BoxDecoration(
+        color: const Color(0xFFF8FAFC),
+        borderRadius: BorderRadius.circular(10),
+        border: Border.all(color: kBorder),
+      ),
+      child: Table(
+        border: TableBorder.all(color: kBorder),
+        columnWidths: const {
+          0: FlexColumnWidth(2.4),
+          1: FlexColumnWidth(1.5),
+          2: FlexColumnWidth(0.9),
+          3: FlexColumnWidth(1.2),
+        },
+        children: [
+          const TableRow(
+            decoration: BoxDecoration(color: Color(0xFFF1F5F9)),
+            children: [
+              Padding(padding: EdgeInsets.all(6), child: Text('Mẫu', style: TextStyle(fontWeight: FontWeight.w700, fontSize: 12))),
+              Padding(padding: EdgeInsets.all(6), child: Text('Màu', style: TextStyle(fontWeight: FontWeight.w700, fontSize: 12))),
+              Padding(padding: EdgeInsets.all(6), child: Text('SL', style: TextStyle(fontWeight: FontWeight.w700, fontSize: 12))),
+              Padding(padding: EdgeInsets.all(6), child: Text('Tiền', style: TextStyle(fontWeight: FontWeight.w700, fontSize: 12))),
+            ],
+          ),
+          ...rows.map((r) => TableRow(children: [
+                Padding(padding: const EdgeInsets.all(6), child: Text(r['product'].toString(), style: const TextStyle(fontSize: 12))),
+                Padding(padding: const EdgeInsets.all(6), child: Text(r['color'].toString(), style: const TextStyle(fontSize: 12))),
+                Padding(padding: const EdgeInsets.all(6), child: Text('${r['qty']}', style: const TextStyle(fontSize: 12))),
+                Padding(padding: const EdgeInsets.all(6), child: Text('${formatCurrency((r['money'] as int))} k', style: const TextStyle(fontSize: 12))),
+              ])),
+        ],
+      ),
+    );
+  }
+}
+
 class _PickerScreen extends StatefulWidget {
   final VoidCallback onRoleChanged;
   const _PickerScreen({required this.onRoleChanged});
@@ -695,6 +1061,7 @@ class _PickerScreenState extends State<_PickerScreen> with _NotificationMixin {
   final GlobalKey<_ApprovedOrdersScreenState> _approvedKey = GlobalKey<_ApprovedOrdersScreenState>();
   final GlobalKey<_AcceptedOrdersScreenState> _assignedKey = GlobalKey<_AcceptedOrdersScreenState>();
   final GlobalKey<_PickerInventoryScreenState> _inventoryKey = GlobalKey<_PickerInventoryScreenState>();
+  final GlobalKey<_MyDeliveryHistoryScreenState> _myHistoryKey = GlobalKey<_MyDeliveryHistoryScreenState>();
   int _tabIndex = 0;
 
   @override
@@ -766,7 +1133,11 @@ class _PickerScreenState extends State<_PickerScreen> with _NotificationMixin {
       appBar: AppBar(
         backgroundColor: kSuccess,
         foregroundColor: Colors.white,
-        title: Text(_tabIndex == 0 ? 'Nhận đơn' : (_tabIndex == 1 ? 'Giao đơn' : 'Kho hàng')),
+        title: Text(
+          _tabIndex == 0
+              ? 'Nhận đơn'
+              : (_tabIndex == 1 ? 'Giao đơn' : (_tabIndex == 2 ? 'Kho hàng' : 'Lịch sử giao')),
+        ),
         actions: [
           buildNotificationIcon(),
           IconButton(
@@ -776,7 +1147,11 @@ class _PickerScreenState extends State<_PickerScreen> with _NotificationMixin {
               } else if (_tabIndex == 1) {
                 _assignedKey.currentState?.reloadOrders();
               } else {
-                _inventoryKey.currentState?.reloadProducts();
+                if (_tabIndex == 2) {
+                  _inventoryKey.currentState?.reloadProducts();
+                } else {
+                  _myHistoryKey.currentState?.reload();
+                }
               }
             },
             icon: const Icon(Icons.refresh),
@@ -821,15 +1196,26 @@ class _PickerScreenState extends State<_PickerScreen> with _NotificationMixin {
             onOpenItem: _jumpToInventoryItem,
           ),
           _PickerInventoryScreen(key: _inventoryKey),
+          _MyDeliveryHistoryScreen(key: _myHistoryKey),
         ],
       ),
       bottomNavigationBar: BottomNavigationBar(
         currentIndex: _tabIndex,
-        onTap: (index) => setState(() => _tabIndex = index),
+        onTap: (index) {
+          setState(() => _tabIndex = index);
+          if (index == 3) {
+            _myHistoryKey.currentState?.reload();
+          }
+        },
+        type: BottomNavigationBarType.fixed,
+        backgroundColor: Colors.white,
+        selectedItemColor: kPrimary,
+        unselectedItemColor: kTextSecondary,
         items: const [
           BottomNavigationBarItem(icon: Icon(Icons.assignment_turned_in_outlined), label: 'Nhận đơn'),
           BottomNavigationBarItem(icon: Icon(Icons.local_shipping_outlined), label: 'Giao đơn'),
           BottomNavigationBarItem(icon: Icon(Icons.inventory_2_outlined), label: 'Kho hàng'),
+          BottomNavigationBarItem(icon: Icon(Icons.history_outlined), label: 'Lịch sử'),
         ],
       ),
     );
@@ -854,7 +1240,9 @@ class _CreateOrderScreenState extends State<_CreateOrderScreen> {
   final List<CartItem> _cart = [];
   Timer? _refreshTimer;
   Timer? _searchDebounce;
+  final TextEditingController _productSearchCtrl = TextEditingController();
   List<String> _customerNameSuggestions = const [];
+  final Map<String, String> _customerPhoneByName = {};
 
   int get _total => _cart.fold<int>(0, (s, e) => s + e.price * e.quantity);
 
@@ -870,6 +1258,7 @@ class _CreateOrderScreenState extends State<_CreateOrderScreen> {
   void dispose() {
     _refreshTimer?.cancel();
     _searchDebounce?.cancel();
+    _productSearchCtrl.dispose();
     _nameCtrl.dispose();
     _phoneCtrl.dispose();
     super.dispose();
@@ -880,10 +1269,29 @@ class _CreateOrderScreenState extends State<_CreateOrderScreen> {
       final customers = await ApiService.getCustomers();
       final names = customers.map((e) => e.name.trim()).where((e) => e.isNotEmpty).toSet().toList()
         ..sort((a, b) => a.toLowerCase().compareTo(b.toLowerCase()));
+      final phones = <String, String>{};
+      for (final c in customers) {
+        final key = c.name.trim().toLowerCase();
+        if (key.isNotEmpty) {
+          phones[key] = c.phone.trim();
+        }
+      }
       if (mounted) {
-        setState(() => _customerNameSuggestions = names);
+        setState(() {
+          _customerNameSuggestions = names;
+          _customerPhoneByName
+            ..clear()
+            ..addAll(phones);
+        });
       }
     } catch (_) {}
+  }
+
+  void _applyCustomerPhoneByName(String name) {
+    final phone = _customerPhoneByName[name.trim().toLowerCase()];
+    if (phone != null) {
+      _phoneCtrl.text = phone;
+    }
   }
 
   Future<void> reloadProducts() => _load();
@@ -1490,11 +1898,13 @@ class _CreateOrderScreenState extends State<_CreateOrderScreen> {
           ? await ApiService.checkoutDesktopDispatch(
               customerName: _nameCtrl.text.trim(),
               customerPhone: _phoneCtrl.text.trim(),
+              employeeId: AppModeManager.employeeId,
               cart: _cart,
             )
           : await ApiService.checkoutDraft(
               customerName: _nameCtrl.text.trim(),
               customerPhone: _phoneCtrl.text.trim(),
+              employeeId: AppModeManager.employeeId,
               cart: _cart,
             );
       final orderId = (res['order_id'] ?? 0) as int;
@@ -1516,11 +1926,14 @@ class _CreateOrderScreenState extends State<_CreateOrderScreen> {
 
   @override
   Widget build(BuildContext context) {
-    return Column(
-      children: [
-        Padding(
-          padding: const EdgeInsets.all(12),
-          child: Column(
+    return GestureDetector(
+      behavior: HitTestBehavior.translucent,
+      onTap: () => FocusScope.of(context).unfocus(),
+      child: Column(
+        children: [
+          Padding(
+            padding: const EdgeInsets.all(12),
+            child: Column(
             children: [
               Autocomplete<String>(
                 optionsBuilder: (textEditingValue) {
@@ -1530,6 +1943,8 @@ class _CreateOrderScreenState extends State<_CreateOrderScreen> {
                 },
                 onSelected: (value) {
                   _nameCtrl.text = value;
+                  _applyCustomerPhoneByName(value);
+                  FocusScope.of(context).unfocus();
                 },
                 fieldViewBuilder: (context, textCtrl, focusNode, onFieldSubmitted) {
                   if (textCtrl.text != _nameCtrl.text) {
@@ -1542,8 +1957,12 @@ class _CreateOrderScreenState extends State<_CreateOrderScreen> {
                     controller: textCtrl,
                     focusNode: focusNode,
                     decoration: const InputDecoration(hintText: 'Tên khách hàng'),
-                    onChanged: (v) => _nameCtrl.text = v,
+                    onChanged: (v) {
+                      _nameCtrl.text = v;
+                      _applyCustomerPhoneByName(v);
+                    },
                     onTap: () {
+                      _loadCustomerNameSuggestions();
                       textCtrl.value = textCtrl.value.copyWith(
                         text: textCtrl.text,
                         selection: TextSelection.collapsed(offset: textCtrl.text.length),
@@ -1561,12 +1980,23 @@ class _CreateOrderScreenState extends State<_CreateOrderScreen> {
               ),
               const SizedBox(height: 8),
               TextField(
-                decoration: const InputDecoration(
+                controller: _productSearchCtrl,
+                decoration: InputDecoration(
                   hintText: 'Tìm sản phẩm...',
-                  prefixIcon: Icon(Icons.search),
+                  prefixIcon: const Icon(Icons.search),
+                  suffixIcon: _productSearchCtrl.text.isEmpty
+                      ? null
+                      : IconButton(
+                          icon: const Icon(Icons.clear),
+                          onPressed: () {
+                            _productSearchCtrl.clear();
+                            setState(() => _search = '');
+                            _load(silent: true);
+                          },
+                        ),
                 ),
                 onChanged: (v) {
-                  _search = v;
+                  setState(() => _search = v);
                   _searchDebounce?.cancel();
                   _searchDebounce = Timer(const Duration(milliseconds: 250), () => _load(silent: true));
                 },
@@ -1676,7 +2106,7 @@ class _CreateOrderScreenState extends State<_CreateOrderScreen> {
           ),
         ),
       ],
-    );
+    ));
   }
 }
 
@@ -1954,6 +2384,138 @@ class _AcceptedOrdersScreenState extends State<_AcceptedOrdersScreen> {
     return x?.path.trim().isNotEmpty == true ? [x!.path] : [];
   }
 
+  Future<List<String>?> _reviewDeliveryPhotos(List<String> initial) async {
+    final selected = [...initial];
+    return showModalBottomSheet<List<String>>(
+      context: context,
+      isScrollControlled: true,
+      showDragHandle: true,
+      builder: (dialogContext) {
+        return StatefulBuilder(
+          builder: (dialogContext, setDialogState) {
+            Future<void> addMore() async {
+              final more = await _pickDeliveryPhotoPaths();
+              if (more.isEmpty) return;
+              setDialogState(() {
+                for (final path in more) {
+                  final trimmed = path.trim();
+                  if (trimmed.isNotEmpty && !selected.contains(trimmed)) {
+                    selected.add(trimmed);
+                  }
+                }
+              });
+            }
+
+            return FractionallySizedBox(
+              heightFactor: 0.65,
+              child: SafeArea(
+                top: false,
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Padding(
+                      padding: const EdgeInsets.fromLTRB(16, 8, 8, 6),
+                      child: Row(
+                        children: [
+                          const Expanded(
+                            child: Text('Ảnh giao hàng', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600)),
+                          ),
+                          IconButton(
+                            onPressed: () => Navigator.pop(dialogContext),
+                            icon: const Icon(Icons.close),
+                          ),
+                        ],
+                      ),
+                    ),
+                    Padding(
+                      padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
+                      child: Text(
+                        selected.isEmpty ? 'Chưa có ảnh nào' : 'Đã chọn ${selected.length} ảnh',
+                        style: const TextStyle(color: kTextSecondary, fontSize: 12),
+                      ),
+                    ),
+                    Expanded(
+                      child: selected.isEmpty
+                          ? const Center(child: Text('Vui lòng chọn ảnh giao hàng'))
+                          : GridView.builder(
+                              padding: const EdgeInsets.fromLTRB(16, 4, 16, 12),
+                              gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+                                crossAxisCount: 3,
+                                crossAxisSpacing: 8,
+                                mainAxisSpacing: 8,
+                              ),
+                              itemCount: selected.length,
+                              itemBuilder: (_, i) {
+                                final path = selected[i];
+                                return Stack(
+                                  children: [
+                                    Positioned.fill(
+                                      child: ClipRRect(
+                                        borderRadius: BorderRadius.circular(8),
+                                        child: Image.file(
+                                          File(path),
+                                          fit: BoxFit.cover,
+                                          errorBuilder: (_, __, ___) => const ColoredBox(
+                                            color: Color(0xFFE5E7EB),
+                                            child: Center(child: Icon(Icons.broken_image_outlined)),
+                                          ),
+                                        ),
+                                      ),
+                                    ),
+                                    Positioned(
+                                      top: 4,
+                                      right: 4,
+                                      child: InkWell(
+                                        onTap: () => setDialogState(() => selected.removeAt(i)),
+                                        child: Container(
+                                          padding: const EdgeInsets.all(4),
+                                          decoration: const BoxDecoration(
+                                            color: Colors.black54,
+                                            shape: BoxShape.circle,
+                                          ),
+                                          child: const Icon(Icons.close, size: 14, color: Colors.white),
+                                        ),
+                                      ),
+                                    ),
+                                  ],
+                                );
+                              },
+                            ),
+                    ),
+                    Padding(
+                      padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
+                      child: Row(
+                        children: [
+                          Expanded(
+                            child: OutlinedButton.icon(
+                              onPressed: addMore,
+                              icon: const Icon(Icons.add_photo_alternate_outlined),
+                              label: const Text('Thêm ảnh'),
+                            ),
+                          ),
+                          const SizedBox(width: 10),
+                          Expanded(
+                            child: ElevatedButton.icon(
+                              onPressed: selected.isEmpty
+                                  ? null
+                                  : () => Navigator.pop(dialogContext, List<String>.from(selected)),
+                              icon: const Icon(Icons.check_circle_outline),
+                              label: const Text('Gửi xác nhận'),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            );
+          },
+        );
+      },
+    );
+  }
+
   Future<void> _confirmWithPicked(Order order, Map<int, int> pickedByKey, {String pickerNote = ''}) async {
     setState(() => _confirming.add(order.id));
     try {
@@ -1970,7 +2532,16 @@ class _AcceptedOrdersScreenState extends State<_AcceptedOrdersScreen> {
         });
       }
 
-      final photoPaths = await _pickDeliveryPhotoPaths();
+      final initialPhotos = await _pickDeliveryPhotoPaths();
+      if (initialPhotos.isEmpty) {
+        throw Exception('Bắt buộc có ảnh xác nhận giao hàng');
+      }
+
+      final photoPaths = await _reviewDeliveryPhotos(initialPhotos);
+      if (photoPaths == null) {
+        if (mounted) setState(() => _confirming.remove(order.id));
+        return;
+      }
       if (photoPaths.isEmpty) {
         throw Exception('Bắt buộc có ảnh xác nhận giao hàng');
       }
@@ -2330,6 +2901,218 @@ class _AcceptedOrdersScreenState extends State<_AcceptedOrdersScreen> {
   }
 }
 
+class _MyDeliveryHistoryScreen extends StatefulWidget {
+  const _MyDeliveryHistoryScreen({super.key});
+
+  @override
+  State<_MyDeliveryHistoryScreen> createState() => _MyDeliveryHistoryScreenState();
+}
+
+class _MyDeliveryHistoryScreenState extends State<_MyDeliveryHistoryScreen> {
+  final TextEditingController _searchCtrl = TextEditingController();
+  Timer? _searchDebounce;
+  bool _loading = true;
+  String _search = '';
+  int _range = 1; // 1=day, 2=month, 3=year
+  List<Order> _orders = [];
+
+  int get _days {
+    final now = DateTime.now();
+    if (_range == 1) return 1;
+    if (_range == 2) return now.day;
+    return now.difference(DateTime(now.year, 1, 1)).inDays + 1;
+  }
+
+  @override
+  void initState() {
+    super.initState();
+    _load();
+  }
+
+  @override
+  void dispose() {
+    _searchDebounce?.cancel();
+    _searchCtrl.dispose();
+    super.dispose();
+  }
+
+  Future<void> reload() => _load();
+
+  Future<void> _load({bool silent = false}) async {
+    final employeeId = AppModeManager.employeeId;
+    if (employeeId == null) return;
+    if (!silent) setState(() => _loading = true);
+    try {
+      final rows = await ApiService.getEmployeeDeliveries(employeeId, search: _search, days: _days, limit: 300);
+      if (mounted) setState(() => _orders = rows);
+    } catch (e) {
+      if (mounted && !silent) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Lỗi tải lịch sử giao: $e'), backgroundColor: Colors.red),
+        );
+      }
+    }
+    if (mounted && !silent) setState(() => _loading = false);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      behavior: HitTestBehavior.translucent,
+      onTap: () => FocusScope.of(context).unfocus(),
+      child: Column(
+        children: [
+          Container(
+          margin: const EdgeInsets.fromLTRB(12, 10, 12, 8),
+          padding: const EdgeInsets.all(10),
+          decoration: BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.circular(12),
+            border: Border.all(color: kBorder),
+          ),
+          child: Row(
+            children: [
+              Expanded(
+                child: TextField(
+                  controller: _searchCtrl,
+                  decoration: InputDecoration(
+                    hintText: 'Tìm mã đơn / khách hàng',
+                    isDense: true,
+                    prefixIcon: const Icon(Icons.search),
+                    suffixIcon: _searchCtrl.text.isEmpty
+                        ? null
+                        : IconButton(
+                            icon: const Icon(Icons.clear),
+                            onPressed: () {
+                              _searchCtrl.clear();
+                              setState(() => _search = '');
+                              _load(silent: true);
+                            },
+                          ),
+                  ),
+                  onChanged: (v) {
+                    setState(() => _search = v);
+                    _searchDebounce?.cancel();
+                    _searchDebounce = Timer(const Duration(milliseconds: 250), () => _load(silent: true));
+                  },
+                  onSubmitted: (_) => _load(),
+                ),
+              ),
+              const SizedBox(width: 8),
+              DropdownButton<int>(
+                value: _range,
+                items: const [
+                  DropdownMenuItem(value: 1, child: Text('Ngày')),
+                  DropdownMenuItem(value: 2, child: Text('Tháng')),
+                  DropdownMenuItem(value: 3, child: Text('Năm')),
+                ],
+                onChanged: (v) {
+                  if (v == null) return;
+                  setState(() => _range = v);
+                  _load();
+                },
+              ),
+            ],
+          ),
+        ),
+        Expanded(
+          child: _loading
+              ? const Center(child: CircularProgressIndicator())
+              : RefreshIndicator(
+                  onRefresh: () => _load(silent: true),
+                  child: _orders.isEmpty
+                      ? ListView(
+                          physics: const AlwaysScrollableScrollPhysics(),
+                          children: const [
+                            SizedBox(height: 120),
+                            Center(child: Text('Chưa có lịch sử giao hàng')),
+                          ],
+                        )
+                      : ListView.separated(
+                          padding: const EdgeInsets.all(12),
+                          itemCount: _orders.length,
+                          separatorBuilder: (_, __) => const SizedBox(height: 8),
+                          itemBuilder: (_, i) {
+                            final o = _orders[i];
+                            return Container(
+                              padding: const EdgeInsets.all(12),
+                              decoration: BoxDecoration(
+                                color: Colors.white,
+                                borderRadius: BorderRadius.circular(12),
+                                border: Border.all(color: kBorder),
+                              ),
+                              child: ExpansionTile(
+                                tilePadding: EdgeInsets.zero,
+                                childrenPadding: EdgeInsets.zero,
+                                title: Text('Đơn #${o.id} • ${o.customerName}', style: const TextStyle(fontWeight: FontWeight.w700)),
+                                subtitle: Text(
+                                  '${o.deliveredAt.isEmpty ? formatDate(o.createdAt) : formatDate(o.deliveredAt)}\n'
+                                  'SL ${o.totalQty} • ${formatCurrency(o.totalAmount)} k',
+                                ),
+                                children: [
+                                  _buildMobileOrderDetailsFromOrder(o),
+                                ],
+                              ),
+                            );
+                          },
+                        ),
+                ),
+        ),
+      ],
+    ));
+  }
+
+  Widget _buildMobileOrderDetailsFromOrder(Order o) {
+    final rows = <Map<String, dynamic>>[];
+    for (final item in o.items) {
+      final pair = _splitVariantInfo(item.variantInfo);
+      rows.add({
+        'product': item.productName,
+        'color': pair.color,
+        'qty': item.quantity,
+        'money': item.quantity * item.price,
+      });
+    }
+    if (rows.isEmpty) return const SizedBox.shrink();
+
+    return Container(
+      width: double.infinity,
+      margin: const EdgeInsets.only(top: 8),
+      decoration: BoxDecoration(
+        color: const Color(0xFFF8FAFC),
+        borderRadius: BorderRadius.circular(10),
+        border: Border.all(color: kBorder),
+      ),
+      child: Table(
+        border: TableBorder.all(color: kBorder),
+        columnWidths: const {
+          0: FlexColumnWidth(2.3),
+          1: FlexColumnWidth(1.4),
+          2: FlexColumnWidth(0.9),
+          3: FlexColumnWidth(1.2),
+        },
+        children: [
+          const TableRow(
+            decoration: BoxDecoration(color: Color(0xFFF1F5F9)),
+            children: [
+              Padding(padding: EdgeInsets.all(6), child: Text('Mẫu', style: TextStyle(fontWeight: FontWeight.w700, fontSize: 12))),
+              Padding(padding: EdgeInsets.all(6), child: Text('Màu', style: TextStyle(fontWeight: FontWeight.w700, fontSize: 12))),
+              Padding(padding: EdgeInsets.all(6), child: Text('SL', style: TextStyle(fontWeight: FontWeight.w700, fontSize: 12))),
+              Padding(padding: EdgeInsets.all(6), child: Text('Tiền', style: TextStyle(fontWeight: FontWeight.w700, fontSize: 12))),
+            ],
+          ),
+          ...rows.map((r) => TableRow(children: [
+                Padding(padding: const EdgeInsets.all(6), child: Text(r['product'].toString(), style: const TextStyle(fontSize: 12))),
+                Padding(padding: const EdgeInsets.all(6), child: Text(r['color'].toString(), style: const TextStyle(fontSize: 12))),
+                Padding(padding: const EdgeInsets.all(6), child: Text('${r['qty']}', style: const TextStyle(fontSize: 12))),
+                Padding(padding: const EdgeInsets.all(6), child: Text('${formatCurrency((r['money'] as int))} k', style: const TextStyle(fontSize: 12))),
+              ])),
+        ],
+      ),
+    );
+  }
+}
+
 class _PickerInventoryScreen extends StatefulWidget {
   const _PickerInventoryScreen({super.key});
 
@@ -2562,38 +3345,41 @@ class _PickerInventoryScreenState extends State<_PickerInventoryScreen> {
 
   @override
   Widget build(BuildContext context) {
-    return Column(
-      children: [
-        Padding(
-          padding: const EdgeInsets.all(12),
-          child: TextField(
-            controller: _searchCtrl,
-            decoration: InputDecoration(
-              hintText: 'Tìm sản phẩm trong kho...',
-              prefixIcon: const Icon(Icons.search),
-              suffixIcon: _searchCtrl.text.isEmpty
-                  ? null
-                  : IconButton(
-                      icon: const Icon(Icons.clear),
-                      onPressed: () {
-                        _searchCtrl.clear();
-                        setState(() {
-                          _search = '';
-                          _highlightProductId = null;
-                        });
-                        _load();
-                      },
-                    ),
+    return GestureDetector(
+      behavior: HitTestBehavior.translucent,
+      onTap: () => FocusScope.of(context).unfocus(),
+      child: Column(
+        children: [
+          Padding(
+            padding: const EdgeInsets.all(12),
+            child: TextField(
+              controller: _searchCtrl,
+              decoration: InputDecoration(
+                hintText: 'Tìm sản phẩm trong kho...',
+                prefixIcon: const Icon(Icons.search),
+                suffixIcon: _searchCtrl.text.isEmpty
+                    ? null
+                    : IconButton(
+                        icon: const Icon(Icons.clear),
+                        onPressed: () {
+                          _searchCtrl.clear();
+                          setState(() {
+                            _search = '';
+                            _highlightProductId = null;
+                          });
+                          _load();
+                        },
+                      ),
+              ),
+              onChanged: (v) {
+                setState(() => _search = v);
+                _searchDebounce?.cancel();
+                _searchDebounce = Timer(const Duration(milliseconds: 250), () => _load(silent: true));
+              },
+              onSubmitted: (_) => _load(),
             ),
-            onChanged: (v) {
-              setState(() => _search = v);
-              _searchDebounce?.cancel();
-              _searchDebounce = Timer(const Duration(milliseconds: 250), () => _load(silent: true));
-            },
-            onSubmitted: (_) => _load(),
           ),
-        ),
-        Expanded(
+          Expanded(
           child: _loading
               ? const Center(child: CircularProgressIndicator())
               : RefreshIndicator(
@@ -2635,7 +3421,7 @@ class _PickerInventoryScreenState extends State<_PickerInventoryScreen> {
                 ),
         ),
       ],
-    );
+    ));
   }
 }
 

@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'dart:io';
 import '../models/customer.dart';
 import '../services/api_service.dart';
 import '../theme.dart';
@@ -659,6 +660,87 @@ class _CustomerHistoryPanelState extends State<_CustomerHistoryPanel> {
     return (color: raw.trim(), size: '');
   }
 
+  String _deliveryPhotoUrl(String pathOrUrl) => ApiService.resolveApiUrl(pathOrUrl);
+  File? _deliveryPhotoFile(String pathOrUrl) => resolveLocalDeliveryProofFile(pathOrUrl);
+
+  Future<void> _openDeliveryPhotoFromHistory(HistoryItem h) async {
+    final data = h.data;
+    if (data == null) return;
+    final rawPaths = (data['delivery_photo_paths'] as List? ?? const [])
+        .map((e) => e.toString().trim())
+        .where((e) => e.isNotEmpty)
+        .toList();
+    final fallback = (data['delivery_photo_path'] ?? '').toString().trim();
+    final paths = rawPaths.isNotEmpty ? rawPaths : (fallback.isEmpty ? <String>[] : [fallback]);
+    if (paths.isEmpty) return;
+
+    final assets = paths.map((p) => (file: _deliveryPhotoFile(p), url: _deliveryPhotoUrl(p))).toList();
+    final pageController = PageController();
+    var currentIndex = 0;
+
+    await showDialog<void>(
+      context: context,
+      builder: (dialogContext) => StatefulBuilder(
+        builder: (dialogContext, setDialogState) => Dialog(
+          child: ConstrainedBox(
+            constraints: const BoxConstraints(maxWidth: 980, maxHeight: 760),
+            child: Padding(
+              padding: const EdgeInsets.all(12),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    children: [
+                      Expanded(child: Text('Ảnh giao hàng • Đơn #${data['id']}', style: const TextStyle(fontWeight: FontWeight.w700))),
+                      if (assets.length > 1)
+                        Padding(
+                          padding: const EdgeInsets.only(right: 8),
+                          child: Text('Ảnh ${currentIndex + 1}/${assets.length}', style: const TextStyle(color: kTextSecondary)),
+                        ),
+                      IconButton(onPressed: () => Navigator.pop(dialogContext), icon: const Icon(Icons.close)),
+                    ],
+                  ),
+                  const SizedBox(height: 8),
+                  Expanded(
+                    child: Container(
+                      width: double.infinity,
+                      decoration: BoxDecoration(
+                        color: const Color(0xFFF8FAFC),
+                        border: Border.all(color: kBorder),
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                      child: InteractiveViewer(
+                        minScale: 0.6,
+                        maxScale: 4,
+                        child: PageView.builder(
+                          controller: pageController,
+                          itemCount: assets.length,
+                          onPageChanged: (i) => setDialogState(() => currentIndex = i),
+                          itemBuilder: (_, i) {
+                            final file = assets[i].file;
+                            if (file != null) {
+                              return Image.file(file, fit: BoxFit.contain);
+                            }
+                            return Image.network(
+                              assets[i].url,
+                              fit: BoxFit.contain,
+                              loadingBuilder: (context, child, progress) => progress == null ? child : const Center(child: CircularProgressIndicator()),
+                              errorBuilder: (_, __, ___) => const Center(child: Text('Không tải được ảnh giao hàng', style: TextStyle(color: kTextSecondary))),
+                            );
+                          },
+                        ),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
   Widget _buildDetail(HistoryItem h) {
     final isOrder = h.type == 'ORDER';
     final d = h.data;
@@ -679,6 +761,18 @@ class _CustomerHistoryPanelState extends State<_CustomerHistoryPanel> {
           Text('Số tiền: ${formatSignedCurrency(h.amount)} k', style: const TextStyle(color: kTextSecondary)),
           if (isOrder) ...[
             const SizedBox(height: 8),
+            if (((d?['delivery_photo_paths'] as List?)?.isNotEmpty ?? false) || ((d?['delivery_photo_path'] ?? '').toString().trim().isNotEmpty))
+              Padding(
+                padding: const EdgeInsets.only(bottom: 8),
+                child: Align(
+                  alignment: Alignment.centerLeft,
+                  child: OutlinedButton.icon(
+                    onPressed: () => _openDeliveryPhotoFromHistory(h),
+                    icon: const Icon(Icons.image_outlined, size: 16),
+                    label: const Text('Xem ảnh xác nhận'),
+                  ),
+                ),
+              ),
             if (orderItems.isEmpty)
               const Text('- Không có chi tiết mặt hàng', style: TextStyle(color: kTextSecondary))
             else ...() {

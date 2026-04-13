@@ -34,6 +34,43 @@ File? resolveLocalProductImageFile(String imagePath) {
   return null;
 }
 
+File? resolveLocalDeliveryProofFile(String pathOrUrl) {
+  final raw = pathOrUrl.trim();
+  if (raw.isEmpty) return null;
+
+  String relative;
+  if (raw.startsWith('local://')) {
+    relative = raw.substring('local://'.length);
+  } else if (raw.startsWith('delivery_proofs/')) {
+    relative = raw;
+  } else {
+    return null;
+  }
+
+  final rel = relative.replaceAll('/', Platform.pathSeparator);
+  final candidates = <String>[];
+  try {
+    candidates.add(Directory.current.path);
+  } catch (_) {}
+  try {
+    final exeDir = File(Platform.resolvedExecutable).parent.path;
+    candidates.add(exeDir);
+    var cursor = Directory(exeDir);
+    for (var i = 0; i < 6; i++) {
+      final parent = cursor.parent;
+      if (parent.path == cursor.path) break;
+      candidates.add(parent.path);
+      cursor = parent;
+    }
+  } catch (_) {}
+
+  for (final base in candidates.toSet()) {
+    final f = File('$base${Platform.pathSeparator}$rel');
+    if (f.existsSync()) return f;
+  }
+  return null;
+}
+
 String formatCurrency(num value) {
   final isNeg = value < 0;
   final str = value.abs().toInt().toString();

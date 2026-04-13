@@ -163,8 +163,25 @@ class _SalesScreenState extends State<SalesScreen> {
     _recalcRow(r);
   }
 
+  int? _maxStockForRow(_SaleRow r) {
+    final p = _findProductExact(r.codeCtrl.text);
+    final v = _findVariantExact(p, r.colorCtrl.text, r.sizeCtrl.text);
+    return v?.stock;
+  }
+
   void _recalcRow(_SaleRow r) {
-    final q = int.tryParse(r.qtyCtrl.text.trim()) ?? 0;
+    var q = int.tryParse(r.qtyCtrl.text.trim()) ?? 0;
+    final maxStock = _maxStockForRow(r);
+    if (maxStock != null) {
+      q = q.clamp(0, maxStock);
+      final fixedText = q == 0 ? '' : '$q';
+      if (r.qtyCtrl.text.trim() != fixedText) {
+        r.qtyCtrl.value = TextEditingValue(
+          text: fixedText,
+          selection: TextSelection.collapsed(offset: fixedText.length),
+        );
+      }
+    }
     r.amount = q * r.price;
     setState(() {});
   }
@@ -176,8 +193,10 @@ class _SalesScreenState extends State<SalesScreen> {
     for (final r in _rows) {
       final p = _findProductExact(r.codeCtrl.text);
       final v = _findVariantExact(p, r.colorCtrl.text, r.sizeCtrl.text);
-      final qty = int.tryParse(r.qtyCtrl.text.trim()) ?? 0;
+      var qty = int.tryParse(r.qtyCtrl.text.trim()) ?? 0;
       if (p == null || v == null || v.id == null || qty <= 0) continue;
+      qty = qty.clamp(0, v.stock);
+      if (qty <= 0) continue;
       cart.add(CartItem(
         variantId: v.id!,
         productName: p.name,
@@ -400,6 +419,7 @@ class _SalesScreenState extends State<SalesScreen> {
             width: 70,
             child: _QtyInputField(
               controller: r.qtyCtrl,
+              maxQuantity: _maxStockForRow(r),
               onValueChanged: (_) => _recalcRow(r),
             ),
           ),
@@ -519,10 +539,12 @@ class _SaleRow {
 
 class _QtyInputField extends StatefulWidget {
   final TextEditingController controller;
+  final int? maxQuantity;
   final ValueChanged<int> onValueChanged;
 
   const _QtyInputField({
     required this.controller,
+    this.maxQuantity,
     required this.onValueChanged,
   });
 
@@ -540,7 +562,8 @@ class _QtyInputFieldState extends State<_QtyInputField> {
   }
 
   void _apply(int value) {
-    final next = value.clamp(0, 999999999);
+    final max = widget.maxQuantity;
+    final next = max == null ? value.clamp(0, 999999999) : value.clamp(0, max);
     final text = next == 0 ? '' : '$next';
     widget.controller.value = TextEditingValue(
       text: text,
@@ -567,7 +590,7 @@ class _QtyInputFieldState extends State<_QtyInputField> {
         controller: widget.controller,
         focusNode: _focusNode,
         keyboardType: TextInputType.number,
-        onChanged: (v) => widget.onValueChanged(int.tryParse(v.trim()) ?? 0),
+        onChanged: (v) => _apply(int.tryParse(v.trim()) ?? 0),
       ),
     );
   }

@@ -38,6 +38,7 @@
 - **Add a top-right back button in the revenue screen detail panel for quick reverse drill navigation (day→week→month→year).**
 - In mobile picker confirm popup, place picker note input at the top (right below date and quantity summary).
 - In desktop management page, hide raw image URL text and keep a cleaner modern layout with the same information structure.
+- **Revenue date picker UI preference**: display day in standard calendar view only, removing custom month/year selector UI; keep a clean single-calendar layout and harmonious bottom date input styling (not oversized).
 
 ## Desktop UI Guidelines
 - Interactive buttons in the desktop Flutter UI should show `SystemMouseCursors.click` cursor feedback (not `grab`).
@@ -46,3 +47,6 @@
 - Debt page should open add-customer via popup and show selected customer's history inline on the right instead of a popup. Debt history should expand inline per record with order item details shown in dropdown.
 - Pending approval screen preference: modernized card layout with clearer status/summary and more direct action controls.
 - Orders screen preference: keep compact left-focused layout unchanged and only remove the `Xem` action button.
+
+## Cronjob Repository
+- For the cronjob repo, `requirements.txt` should contain only `requests==2.32.3`.

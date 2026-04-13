@@ -9,6 +9,7 @@ import os
 import uuid
 import json
 import requests
+import threading
 try:
     from backend import database as _db
 except ModuleNotFoundError:
@@ -37,14 +38,26 @@ def _now_vn_ts() -> int:
     return int(datetime.now(VN_TZ).timestamp() * 1000)
 
 
+def _period_start_vn(days: int) -> Optional[datetime]:
+    if days <= 0:
+        return None
+    now = _now_vn()
+    day_start = now.replace(hour=0, minute=0, second=0, microsecond=0)
+    return day_start - timedelta(days=max(0, days - 1))
+
+
 if Employee is None:
     class Employee(Base):
         __tablename__ = "employees"
         id = Column(Integer, primary_key=True, index=True)
         name = Column(String, index=True)
         phone = Column(String, default="")
+        email = Column(String, default="")
+        address = Column(String, default="")
+        notes = Column(String, default="")
         role = Column(String, index=True)
         pin = Column(String, unique=True, index=True)
+        is_active = Column(Integer, default=1)
         created_at = Column(DateTime, default=_now_vn)
 from sqlalchemy import text
 
@@ -53,6 +66,7 @@ class DebtLogCreate(BaseModel):
     change_amount: int
     note: str = ""
     created_at: Optional[str] = None  # format: YYYY-MM-DD HH:MM
+    actor_employee_id: Optional[int] = None
 
 class DebtLogUpdate(BaseModel):
     change_amount: int
@@ -61,6 +75,11 @@ class DebtLogUpdate(BaseModel):
 
 class OrderDateUpdate(BaseModel):
     created_at: str  # YYYY-MM-DD HH:MM
+
+
+class DeliveryProofAckRequest(BaseModel):
+    order_id: int
+    local_file_names: List[str] = []
 
 app = FastAPI()
 
@@ -316,11 +335,29 @@ def ensure_employee_schema_and_seed():
                         id INTEGER PRIMARY KEY,
                         name VARCHAR,
                         phone VARCHAR,
+                        email VARCHAR DEFAULT '',
+                        address VARCHAR DEFAULT '',
+                        notes VARCHAR DEFAULT '',
                         role VARCHAR,
                         pin VARCHAR UNIQUE,
+                        is_active INTEGER DEFAULT 1,
                         created_at DATETIME
                     )
                 """))
+                info = conn.execute(text("PRAGMA table_info('employees')")).fetchall()
+                existing = [r[1] for r in info]
+                if 'email' not in existing:
+                    conn.execute(text("ALTER TABLE employees ADD COLUMN email VARCHAR DEFAULT ''"))
+                if 'address' not in existing:
+                    conn.execute(text("ALTER TABLE employees ADD COLUMN address VARCHAR DEFAULT ''"))
+                if 'notes' not in existing:
+                    conn.execute(text("ALTER TABLE employees ADD COLUMN notes VARCHAR DEFAULT ''"))
+                if 'is_active' not in existing:
+                    conn.execute(text("ALTER TABLE employees ADD COLUMN is_active INTEGER DEFAULT 1"))
+                conn.execute(text("UPDATE employees SET email = '' WHERE email IS NULL"))
+                conn.execute(text("UPDATE employees SET address = '' WHERE address IS NULL"))
+                conn.execute(text("UPDATE employees SET notes = '' WHERE notes IS NULL"))
+                conn.execute(text("UPDATE employees SET is_active = 1 WHERE is_active IS NULL"))
                 conn.execute(text("CREATE UNIQUE INDEX IF NOT EXISTS ix_employees_pin ON employees(pin)"))
                 conn.execute(text("CREATE INDEX IF NOT EXISTS ix_employees_role ON employees(role)"))
                 conn.execute(text("INSERT OR IGNORE INTO employees (name, phone, role, pin, created_at) VALUES ('Orderer mặc định', '', 'orderer', '0000', CURRENT_TIMESTAMP)"))
@@ -332,11 +369,23 @@ def ensure_employee_schema_and_seed():
                         id SERIAL PRIMARY KEY,
                         name VARCHAR,
                         phone VARCHAR,
+                        email VARCHAR DEFAULT '',
+                        address VARCHAR DEFAULT '',
+                        notes VARCHAR DEFAULT '',
                         role VARCHAR,
                         pin VARCHAR UNIQUE,
+                        is_active INTEGER DEFAULT 1,
                         created_at TIMESTAMP DEFAULT NOW()
                     )
                 """))
+                conn.execute(text("ALTER TABLE employees ADD COLUMN IF NOT EXISTS email VARCHAR DEFAULT ''"))
+                conn.execute(text("ALTER TABLE employees ADD COLUMN IF NOT EXISTS address VARCHAR DEFAULT ''"))
+                conn.execute(text("ALTER TABLE employees ADD COLUMN IF NOT EXISTS notes VARCHAR DEFAULT ''"))
+                conn.execute(text("ALTER TABLE employees ADD COLUMN IF NOT EXISTS is_active INTEGER DEFAULT 1"))
+                conn.execute(text("UPDATE employees SET email = '' WHERE email IS NULL"))
+                conn.execute(text("UPDATE employees SET address = '' WHERE address IS NULL"))
+                conn.execute(text("UPDATE employees SET notes = '' WHERE notes IS NULL"))
+                conn.execute(text("UPDATE employees SET is_active = 1 WHERE is_active IS NULL"))
                 conn.execute(text("CREATE INDEX IF NOT EXISTS ix_employees_role ON employees(role)"))
                 conn.execute(text("INSERT INTO employees (name, phone, role, pin) VALUES ('Orderer mặc định', '', 'orderer', '0000') ON CONFLICT (pin) DO NOTHING"))
                 conn.execute(text("INSERT INTO employees (name, phone, role, pin) VALUES ('Picker mặc định', '', 'picker', '1111') ON CONFLICT (pin) DO NOTHING"))
@@ -346,6 +395,7 @@ def ensure_employee_schema_and_seed():
 
 def ensure_order_flow_columns():
     cols = {
+        'created_by_employee_id': 'INTEGER',
         'assigned_picker_id': 'INTEGER',
         'assigned_at': 'TIMESTAMP',
         'delivered_by_id': 'INTEGER',
@@ -370,19 +420,44 @@ def ensure_order_flow_columns():
     except Exception as e:
         print("Warning: ensure_order_flow_columns failed:", e)
 
+
+def ensure_activity_tracking_columns():
+    try:
+        with engine.connect() as conn:
+            if is_sqlite:
+                info = conn.execute(text("PRAGMA table_info('debt_logs')")).fetchall()
+                existing = [r[1] for r in info]
+                if 'actor_employee_id' not in existing:
+                    conn.execute(text("ALTER TABLE debt_logs ADD COLUMN actor_employee_id INTEGER"))
+                conn.commit()
+            else:
+                conn.execute(text("ALTER TABLE debt_logs ADD COLUMN IF NOT EXISTS actor_employee_id INTEGER"))
+                conn.commit()
+    except Exception as e:
+        print("Warning: ensure_activity_tracking_columns failed:", e)
+
 ensure_status_column()
 ensure_picker_note_column()
 ensure_telegram_columns()
 ensure_area_schema_and_seed()
 ensure_employee_schema_and_seed()
 ensure_order_flow_columns()
+ensure_activity_tracking_columns()
+
+
+def _get_telegram_config():
+    token = os.environ.get('TELEGRAM_DB_BOT_TOKEN') or os.environ.get('TELEGRAM_BOT_TOKEN')
+    chat_id = os.environ.get('TELEGRAM_DB_CHAT_ID') or os.environ.get('TELEGRAM_CHAT_ID')
+    if not token or not chat_id:
+        return None
+    return token, chat_id
 
 
 def _send_photo_to_telegram(photo_path: str, caption: str) -> dict:
-    token = os.environ.get('TELEGRAM_BOT_TOKEN')
-    chat_id = os.environ.get('TELEGRAM_CHAT_ID')
-    if not token or not chat_id:
+    config = _get_telegram_config()
+    if not config:
         return {}
+    token, chat_id = config
     url = f"https://api.telegram.org/bot{token}/sendPhoto"
     try:
         with open(photo_path, 'rb') as f:
@@ -395,6 +470,62 @@ def _send_photo_to_telegram(photo_path: str, caption: str) -> dict:
     except Exception as e:
         print("Warning: telegram send failed:", e)
     return {}
+
+
+def _send_photos_to_telegram(photo_paths: list, caption: str) -> list:
+    config = _get_telegram_config()
+    if not config:
+        return []
+    token, chat_id = config
+    paths = [p for p in photo_paths if p]
+    if not paths:
+        return []
+    if len(paths) == 1:
+        result = _send_photo_to_telegram(paths[0], caption)
+        return [result] if result else []
+
+    url = f"https://api.telegram.org/bot{token}/sendMediaGroup"
+    files = {}
+    media = []
+    opened_files = []
+    try:
+        for i, path in enumerate(paths):
+            key = f'file{i}'
+            f = open(path, 'rb')
+            opened_files.append(f)
+            files[key] = f
+            payload = {'type': 'photo', 'media': f'attach://{key}'}
+            if i == 0 and caption:
+                payload['caption'] = caption
+            media.append(payload)
+
+        data = {'chat_id': chat_id, 'media': json.dumps(media, ensure_ascii=False)}
+        r = requests.post(url, files=files, data=data, timeout=60)
+        if r.status_code == 200:
+            result = r.json().get('result')
+            return result if isinstance(result, list) else []
+        print("Warning: telegram sendMediaGroup failed:", r.status_code, r.text)
+        fallback_results = []
+        for i, p in enumerate(paths):
+            msg = _send_photo_to_telegram(p, caption if i == 0 else '')
+            if msg:
+                fallback_results.append(msg)
+        return fallback_results
+    except Exception as e:
+        print("Warning: telegram sendMediaGroup failed:", e)
+        fallback_results = []
+        for i, p in enumerate(paths):
+            msg = _send_photo_to_telegram(p, caption if i == 0 else '')
+            if msg:
+                fallback_results.append(msg)
+        return fallback_results
+    finally:
+        for f in opened_files:
+            try:
+                f.close()
+            except Exception:
+                pass
+    return []
 
 
 def _send_product_image_to_telegram(photo_path: str, caption: str) -> None:
@@ -422,6 +553,43 @@ def _send_product_image_to_telegram(photo_path: str, caption: str) -> None:
         print("Warning: telegram send failed:", e)
     return {}
 
+
+def _order_status_label_vi(status: str) -> str:
+    s = (status or '').strip().lower()
+    if s == 'pending':
+        return 'Đợi duyệt'
+    if s == 'approved':
+        return 'Đã duyệt'
+    if s in ('assigned', 'accepted'):
+        return 'Đã nhận'
+    if s == 'completed':
+        return 'Hoàn thành'
+    return (status or '').upper()
+
+
+def _send_delivery_backup_async(order_id: int, abs_photo_paths: list, caption: str):
+    try:
+        telegram_results = _send_photos_to_telegram(abs_photo_paths, caption)
+        if not telegram_results:
+            return
+        db = SessionLocal()
+        try:
+            order = db.query(Order).filter(Order.id == order_id).first()
+            if not order:
+                return
+            for telegram_result in telegram_results:
+                if not telegram_result:
+                    continue
+                photos = telegram_result.get('photo') or []
+                if photos:
+                    order.telegram_file_id = photos[-1].get('file_id', '') or ''
+                order.telegram_message_id = str(telegram_result.get('message_id') or '')
+            db.commit()
+        finally:
+            db.close()
+    except Exception as e:
+        print('Warning: telegram backup failed:', e)
+
 def _get_default_area_id(db: Session):
     area = db.query(Area).filter(Area.name == "Chợ hàn").first()
     if area:
@@ -437,6 +605,39 @@ def _generate_unique_pin(db: Session):
         if not existed:
             return pin
     raise HTTPException(status_code=500, detail="Không tạo được PIN duy nhất")
+
+
+def _normalize_employee_pin(raw_pin: str) -> str:
+    pin = (raw_pin or '').strip()
+    if not pin:
+        raise HTTPException(status_code=400, detail='PIN không được để trống')
+    if not pin.isdigit():
+        raise HTTPException(status_code=400, detail='PIN chỉ được chứa chữ số')
+    if len(pin) < 4 or len(pin) > 8:
+        raise HTTPException(status_code=400, detail='PIN phải có 4-8 chữ số')
+    return pin
+
+
+def _serialize_employee(e: Employee, delivered_count: int = 0):
+    last_delivered = None
+    if getattr(e, 'delivered_orders', None):
+        delivered_dates = [o.delivered_at for o in e.delivered_orders if getattr(o, 'delivered_at', None) is not None]
+        if delivered_dates:
+            last_delivered = max(delivered_dates)
+    return {
+        'id': e.id,
+        'name': e.name,
+        'phone': e.phone,
+        'email': (getattr(e, 'email', '') or ''),
+        'address': (getattr(e, 'address', '') or ''),
+        'notes': (getattr(e, 'notes', '') or ''),
+        'role': e.role,
+        'pin': e.pin,
+        'is_active': int(getattr(e, 'is_active', 1) or 0),
+        'created_at': e.created_at.strftime('%Y-%m-%d %H:%M') if e.created_at else '',
+        'delivered_count': int(delivered_count or 0),
+        'last_delivered_at': last_delivered.strftime('%Y-%m-%d %H:%M') if last_delivered else '',
+    }
 
 def _serialize_order(o: Order):
     items_list = []
@@ -465,6 +666,8 @@ def _serialize_order(o: Order):
         "total_qty": calc_qty,
         "status": o.status,
         "picker_note": (o.picker_note or ""),
+        "created_by_employee_id": o.created_by_employee_id,
+        "created_by_employee_name": (o.created_by_employee.name if getattr(o, 'created_by_employee', None) else ""),
         "assigned_picker_id": o.assigned_picker_id,
         "assigned_picker_name": (o.assigned_picker.name if o.assigned_picker else ""),
         "assigned_at": o.assigned_at.strftime("%Y-%m-%d %H:%M") if o.assigned_at else "",
@@ -528,6 +731,7 @@ class CartItem(BaseModel):
 class CheckoutRequest(BaseModel):
     customer_name: str
     customer_phone: str = ""
+    employee_id: Optional[int] = None
     cart: List[CartItem]
 
 class PickerConfirmItem(BaseModel):
@@ -547,12 +751,20 @@ class CustomerUpdate(BaseModel):
 class EmployeeCreate(BaseModel):
     name: str
     phone: str = ""
+    email: str = ""
+    address: str = ""
+    notes: str = ""
     role: str
 
 class EmployeeUpdate(BaseModel):
     name: str
     phone: str = ""
+    email: str = ""
+    address: str = ""
+    notes: str = ""
     role: str
+    pin: Optional[str] = None
+    is_active: int = 1
 
 class PinLoginRequest(BaseModel):
     pin: str
@@ -589,7 +801,8 @@ def _deliver_order_internal(order_id: int, picker_id: int, photo_paths, items: L
             raise HTTPException(status_code=400, detail='Ứng dụng mobile cũ chưa hỗ trợ upload ảnh. Vui lòng cập nhật app mobile mới nhất')
 
     picker = db.query(Employee).filter(Employee.id == picker_id).first()
-    if not picker or picker.role != 'picker':
+    picker_role = (picker.role.strip().lower() if picker and picker.role else '')
+    if not picker or picker_role not in ('picker', 'manager'):
         raise HTTPException(status_code=400, detail='Picker không hợp lệ')
 
     order = db.query(Order).filter(Order.id == order_id).first()
@@ -611,25 +824,19 @@ def _deliver_order_internal(order_id: int, picker_id: int, photo_paths, items: L
     db.commit()
 
     if abs_photo_paths:
-        try:
-            caption_parts = [
-                f"Đơn #{order.id} • {order.customer_name or 'Khách lẻ'}",
-                f"Picker: {picker.name}",
-                order.delivered_at.strftime('%Y-%m-%d %H:%M') if order.delivered_at else '',
-            ]
-            if order.picker_note:
-                caption_parts.append(f"Ghi chú: {order.picker_note}")
-            caption = "\n".join([p for p in caption_parts if p])
-            for idx, abs_photo_path in enumerate(abs_photo_paths):
-                telegram_result = _send_photo_to_telegram(abs_photo_path, caption if idx == 0 else '')
-                if telegram_result:
-                    photos = telegram_result.get('photo') or []
-                    if photos:
-                        order.telegram_file_id = photos[-1].get('file_id', '') or ''
-                    order.telegram_message_id = str(telegram_result.get('message_id') or '')
-            db.commit()
-        except Exception as e:
-            print("Warning: telegram backup failed:", e)
+        caption_parts = [
+            f"Đơn #{order.id} • {order.customer_name or 'Khách lẻ'}",
+            f"Picker: {picker.name}",
+            order.delivered_at.strftime('%Y-%m-%d %H:%M') if order.delivered_at else '',
+        ]
+        if order.picker_note:
+            caption_parts.append(f"Ghi chú: {order.picker_note}")
+        caption = "\n".join([p for p in caption_parts if p])
+        threading.Thread(
+            target=_send_delivery_backup_async,
+            args=(order.id, abs_photo_paths, caption),
+            daemon=True,
+        ).start()
     return confirm_result
 
 # --- API NHÂN VIÊN / PHÂN QUYỀN ---
@@ -641,6 +848,8 @@ def pin_login(data: PinLoginRequest, db: Session = Depends(get_db)):
     emp = db.query(Employee).filter(Employee.pin == data.pin.strip()).first()
     if not emp:
         raise HTTPException(status_code=401, detail='PIN không đúng')
+    if int(getattr(emp, 'is_active', 1) or 0) != 1:
+        raise HTTPException(status_code=403, detail='Tài khoản nhân viên đang bị khóa')
     if emp.role != req_role:
         raise HTTPException(status_code=403, detail='PIN không thuộc vai trò này')
     return {
@@ -653,13 +862,13 @@ def pin_login(data: PinLoginRequest, db: Session = Depends(get_db)):
 @app.get('/employees')
 def get_employees(db: Session = Depends(get_db)):
     emps = db.query(Employee).order_by(desc(Employee.id)).all()
-    return [{
-        'id': e.id,
-        'name': e.name,
-        'phone': e.phone,
-        'role': e.role,
-        'pin': e.pin,
-    } for e in emps]
+    delivered_stats = dict(
+        db.query(Order.delivered_by_id, func.count(Order.id))
+        .filter(Order.delivered_by_id.isnot(None), Order.status == 'completed')
+        .group_by(Order.delivered_by_id)
+        .all()
+    )
+    return [_serialize_employee(e, delivered_count=delivered_stats.get(e.id, 0)) for e in emps]
 
 @app.post('/employees')
 def create_employee(data: EmployeeCreate, db: Session = Depends(get_db)):
@@ -667,11 +876,20 @@ def create_employee(data: EmployeeCreate, db: Session = Depends(get_db)):
     if role not in ('orderer', 'picker', 'manager'):
         raise HTTPException(status_code=400, detail='Vai trò không hợp lệ')
     pin = _generate_unique_pin(db)
-    emp = Employee(name=data.name.strip(), phone=data.phone.strip(), role=role, pin=pin)
+    emp = Employee(
+        name=data.name.strip(),
+        phone=data.phone.strip(),
+        email=data.email.strip(),
+        address=data.address.strip(),
+        notes=data.notes.strip(),
+        role=role,
+        pin=pin,
+        is_active=1,
+    )
     db.add(emp)
     db.commit()
     db.refresh(emp)
-    return {'status': 'created', 'id': emp.id, 'pin': emp.pin}
+    return {'status': 'created', 'id': emp.id, 'pin': emp.pin, 'employee': _serialize_employee(emp)}
 
 @app.put('/employees/{emp_id}')
 def update_employee(emp_id: int, data: EmployeeUpdate, db: Session = Depends(get_db)):
@@ -683,9 +901,20 @@ def update_employee(emp_id: int, data: EmployeeUpdate, db: Session = Depends(get
         raise HTTPException(status_code=400, detail='Vai trò không hợp lệ')
     emp.name = data.name.strip()
     emp.phone = data.phone.strip()
+    emp.email = data.email.strip()
+    emp.address = data.address.strip()
+    emp.notes = data.notes.strip()
     emp.role = role
+    emp.is_active = 1 if int(data.is_active or 0) == 1 else 0
+    if data.pin is not None:
+        normalized_pin = _normalize_employee_pin(data.pin)
+        existed = db.query(Employee).filter(Employee.pin == normalized_pin, Employee.id != emp_id).first()
+        if existed:
+            raise HTTPException(status_code=400, detail='PIN đã tồn tại, vui lòng chọn PIN khác')
+        emp.pin = normalized_pin
     db.commit()
-    return {'status': 'updated'}
+    db.refresh(emp)
+    return {'status': 'updated', 'employee': _serialize_employee(emp)}
 
 @app.delete('/employees/{emp_id}')
 def delete_employee(emp_id: int, db: Session = Depends(get_db)):
@@ -695,6 +924,109 @@ def delete_employee(emp_id: int, db: Session = Depends(get_db)):
     db.delete(emp)
     db.commit()
     return {'status': 'deleted'}
+
+
+@app.get('/employees/{emp_id}/deliveries')
+def get_employee_deliveries(emp_id: int, q: str = '', days: int = 0, limit: int = 200, db: Session = Depends(get_db)):
+    emp = db.query(Employee).filter(Employee.id == emp_id).first()
+    if not emp:
+        raise HTTPException(status_code=404, detail='Nhân viên không tồn tại')
+
+    lim = 200 if limit <= 0 else min(limit, 500)
+    query = db.query(Order).filter(
+        Order.delivered_by_id == emp_id,
+        Order.status == 'completed',
+    )
+
+    keyword = q.strip()
+    if keyword:
+        if keyword.isdigit():
+            query = query.filter((Order.id == int(keyword)) | (Order.customer_name.ilike(f"%{keyword}%")))
+        else:
+            query = query.filter(Order.customer_name.ilike(f"%{keyword}%"))
+
+    period_start = _period_start_vn(days)
+    if period_start is not None:
+        query = query.filter(Order.delivered_at.isnot(None), Order.delivered_at >= period_start)
+
+    orders = query.order_by(desc(Order.delivered_at), desc(Order.id)).limit(lim).all()
+    return {
+        'employee': _serialize_employee(emp),
+        'data': [_serialize_order(o) for o in orders],
+        'count': len(orders),
+    }
+
+
+@app.get('/employees/{emp_id}/activities')
+def get_employee_activities(emp_id: int, q: str = '', days: int = 0, limit: int = 300, db: Session = Depends(get_db)):
+    emp = db.query(Employee).filter(Employee.id == emp_id).first()
+    if not emp:
+        raise HTTPException(status_code=404, detail='Nhân viên không tồn tại')
+
+    lim = 300 if limit <= 0 else min(limit, 1000)
+    period_start = _period_start_vn(days)
+    keyword = q.strip().lower()
+
+    order_query = db.query(Order).filter(Order.created_by_employee_id == emp_id)
+    if period_start is not None:
+        order_query = order_query.filter(Order.created_at >= period_start)
+    if keyword:
+        if keyword.isdigit():
+            order_query = order_query.filter((Order.id == int(keyword)) | (Order.customer_name.ilike(f"%{keyword}%")))
+        else:
+            order_query = order_query.filter(Order.customer_name.ilike(f"%{keyword}%"))
+    orders = order_query.order_by(desc(Order.created_ts), desc(Order.id)).limit(lim).all()
+
+    log_query = db.query(DebtLog, Customer.name).outerjoin(Customer, Customer.id == DebtLog.customer_id).filter(DebtLog.actor_employee_id == emp_id)
+    if period_start is not None:
+        log_query = log_query.filter(DebtLog.created_at >= period_start)
+    if keyword:
+        if keyword.isdigit():
+            log_query = log_query.filter((DebtLog.id == int(keyword)) | (Customer.name.ilike(f"%{keyword}%")) | (DebtLog.note.ilike(f"%{keyword}%")))
+        else:
+            log_query = log_query.filter((Customer.name.ilike(f"%{keyword}%")) | (DebtLog.note.ilike(f"%{keyword}%")))
+    logs = log_query.order_by(desc(DebtLog.created_ts), desc(DebtLog.id)).limit(lim).all()
+
+    activities = []
+    for o in orders:
+        ts = int(o.created_ts or 0)
+        if ts <= 0 and o.created_at:
+            ts = int(o.created_at.timestamp() * 1000)
+        activities.append({
+            'type': 'ORDER',
+            'sort_ts': ts,
+            'date': o.created_at.strftime('%Y-%m-%d %H:%M') if o.created_at else '',
+            'title': f"Đơn #{o.id} • {o.customer_name or 'Khách lẻ'}",
+            'subtitle': f"{_order_status_label_vi(o.status)} • SL {sum((i.quantity or 0) for i in (o.items or []))}",
+            'amount': int(o.total_amount or 0),
+            'order': _serialize_order(o),
+        })
+
+    for row in logs:
+        log, customer_name = row
+        ts = int(log.created_ts or 0)
+        if ts <= 0 and log.created_at:
+            ts = int(log.created_at.timestamp() * 1000)
+        change = int(log.change_amount or 0)
+        is_collect = change < 0
+        activities.append({
+            'type': 'DEBT_LOG',
+            'sort_ts': ts,
+            'date': log.created_at.strftime('%Y-%m-%d %H:%M') if log.created_at else '',
+            'title': ('Thu tiền' if is_collect else 'Điều chỉnh công nợ') + f" • {customer_name or 'Khách'}",
+            'subtitle': (log.note or '').strip(),
+            'amount': change,
+            'log_id': log.id,
+            'customer_id': log.customer_id,
+        })
+
+    activities.sort(key=lambda x: int(x.get('sort_ts') or 0), reverse=True)
+    activities = activities[:lim]
+    return {
+        'employee': _serialize_employee(emp),
+        'data': activities,
+        'count': len(activities),
+    }
 
 # --- API SẢN PHẨM ---
 @app.get("/products")
@@ -1093,6 +1425,8 @@ def get_customer_history(cid: int, db: Session = Depends(get_db)):
                 "date": o.created_at.strftime("%d/%m %H:%M"),
                 "total_money": o.total_amount,
                 "total_qty": sum(i.quantity for i in o.items),
+                "delivery_photo_path": (o.delivery_photo_path or ""),
+                "delivery_photo_paths": _parse_delivery_photo_paths(o.delivery_photo_path),
                 "items": items_detail # Danh sách item đầy đủ ID
             }
         })
@@ -1121,6 +1455,11 @@ def create_debt_log(cid: int, data: DebtLogCreate, db: Session = Depends(get_db)
     try:
         amt = data.change_amount
         now = _now_vn()
+        actor_id = data.actor_employee_id
+        if actor_id is not None:
+            actor = db.query(Employee).filter(Employee.id == actor_id).first()
+            if not actor:
+                raise HTTPException(status_code=400, detail="Nhân viên thực hiện không tồn tại")
 
         display_dt = now
         if data.created_at:
@@ -1135,6 +1474,7 @@ def create_debt_log(cid: int, data: DebtLogCreate, db: Session = Depends(get_db)
         
         db.add(DebtLog(
             customer_id=cust.id, 
+            actor_employee_id=actor_id,
             change_amount=amt, 
             new_balance=cust.debt, 
             note=data.note, 
@@ -1242,7 +1582,8 @@ def checkout(data: CheckoutRequest, db: Session = Depends(get_db)):
             customer_name=customer.name if customer else "Khách lẻ",
             customer_id=customer.id if customer else None,
             is_draft=0,
-            status='completed'
+            status='completed',
+            created_by_employee_id=data.employee_id,
         )
         # set high-resolution timestamp
         new_order.created_ts = _now_vn_ts()
@@ -1421,7 +1762,8 @@ def checkout_draft(data: CheckoutRequest, db: Session = Depends(get_db)):
             customer_name=customer.name if customer else "Khách lẻ",
             customer_id=customer.id if customer else None,
             is_draft=1,
-            status='pending'
+            status='pending',
+            created_by_employee_id=data.employee_id,
         )
         new_order.created_ts = _now_vn_ts()
         db.add(new_order)
@@ -1490,6 +1832,8 @@ def get_pending_orders(db: Session = Depends(get_db)):
                 "total_qty": calc_qty,
                 "status": o.status,
                 "picker_note": (o.picker_note or ""),
+                "created_by_employee_id": o.created_by_employee_id,
+                "created_by_employee_name": (o.created_by_employee.name if o.created_by_employee else ""),
                 "has_stock_conflict": has_stock_conflict,
                 "items": items_list
             })
@@ -1517,7 +1861,8 @@ def receive_order(order_id: int, data: ReceiveOrderRequest, db: Session = Depend
         if order.status != 'approved':
             raise HTTPException(status_code=400, detail='Chỉ nhận đơn ở trạng thái đã duyệt')
         picker = db.query(Employee).filter(Employee.id == data.picker_id).first()
-        if not picker or picker.role != 'picker':
+        picker_role = (picker.role.strip().lower() if picker and picker.role else '')
+        if not picker or picker_role not in ('picker', 'manager'):
             raise HTTPException(status_code=400, detail='Picker không hợp lệ')
         order.status = 'assigned'
         order.assigned_picker_id = picker.id
@@ -1590,6 +1935,9 @@ def list_pending_delivery_proofs(since_order_id: int = 0, limit: int = 200, db: 
     data = []
     for o in orders:
         rels = _parse_delivery_photo_paths(o.delivery_photo_path)
+        rels = [r for r in rels if r and not r.startswith('local://')]
+        if not rels:
+            continue
         rel = (rels[0] if rels else '').strip()
         file_name = os.path.basename(rel)
         download_urls = []
@@ -1610,6 +1958,48 @@ def list_pending_delivery_proofs(since_order_id: int = 0, limit: int = 200, db: 
             'download_urls': download_urls,
         })
     return {'data': data, 'count': len(data)}
+
+
+@app.post('/delivery-proofs/ack-local')
+def ack_delivery_proof_local(data: DeliveryProofAckRequest, db: Session = Depends(get_db)):
+    order = db.query(Order).filter(Order.id == data.order_id).first()
+    if not order:
+        raise HTTPException(status_code=404, detail='Đơn hàng không tồn tại')
+
+    current_paths = _parse_delivery_photo_paths(order.delivery_photo_path)
+    if not current_paths:
+        return {'status': 'noop', 'message': 'Không có path ảnh để đồng bộ'}
+
+    local_names = [os.path.basename(str(x).strip()) for x in (data.local_file_names or []) if str(x).strip()]
+    if not local_names:
+        local_names = [os.path.basename(p) for p in current_paths if str(p).strip()]
+
+    local_paths = [f'local://delivery_proofs/{name}' for name in local_names if name]
+    if local_paths:
+        order.delivery_photo_path = json.dumps(local_paths, ensure_ascii=False) if len(local_paths) > 1 else local_paths[0]
+
+    removed = 0
+    for p in current_paths:
+        raw = str(p).strip()
+        if not raw or raw.startswith('local://'):
+            continue
+        if raw.startswith('http://') or raw.startswith('https://'):
+            continue
+        abs_path = os.path.join(_delivery_upload_dir, os.path.basename(raw))
+        if os.path.exists(abs_path):
+            try:
+                os.remove(abs_path)
+                removed += 1
+            except Exception:
+                pass
+
+    db.commit()
+    return {
+        'status': 'ok',
+        'order_id': order.id,
+        'removed_remote_files': removed,
+        'local_paths': local_paths,
+    }
 
 
 @app.get('/delivery-proofs/{file_name}')

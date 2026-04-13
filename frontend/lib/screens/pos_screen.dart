@@ -1,5 +1,4 @@
-﻿import 'dart:io';
-import 'dart:math' as math;
+﻿import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
 import '../models/product.dart';
@@ -37,7 +36,17 @@ class PosScreenState extends State<PosScreen> {
   final _custNameCtrl = TextEditingController();
   final _custPhoneCtrl = TextEditingController();
   List<String> _suggestions = [];
+  final Map<String, String> _customerPhoneByName = {};
   int _acKey = 0;
+
+  int? _stockForVariantId(int variantId) {
+    for (final p in _allProducts) {
+      for (final v in p.variants) {
+        if (v.id == variantId) return v.stock;
+      }
+    }
+    return null;
+  }
 
   @override
   void initState() {
@@ -92,9 +101,27 @@ class PosScreenState extends State<PosScreen> {
 
   Future<void> _loadSuggestions() async {
     try {
-      final c = await ApiService.getCustomers();
-      if (mounted) setState(() => _suggestions = c.map((e) => e.name).toList());
+      final customers = await ApiService.getCustomers();
+      if (!mounted) return;
+      final phones = <String, String>{};
+      for (final c in customers) {
+        final key = c.name.trim().toLowerCase();
+        if (key.isNotEmpty) phones[key] = c.phone.trim();
+      }
+      setState(() {
+        _suggestions = customers.map((e) => e.name).toList();
+        _customerPhoneByName
+          ..clear()
+          ..addAll(phones);
+      });
     } catch (_) {}
+  }
+
+  void _applyCustomerPhoneFromName(String name) {
+    final phone = _customerPhoneByName[name.trim().toLowerCase()];
+    if (phone != null) {
+      _custPhoneCtrl.text = phone;
+    }
   }
 
   void _snack(String msg, Color bg) {
@@ -109,10 +136,10 @@ class PosScreenState extends State<PosScreen> {
     final remoteUrl = ApiService.resolveApiUrl(image);
     final localFile = resolveLocalProductImageFile(image);
     if (localFile != null) {
-      return Image.file(localFile, fit: BoxFit.cover, errorBuilder: (_, __, ___) => _imageFallback());
+      return Image.file(localFile, fit: BoxFit.cover, alignment: Alignment.center, errorBuilder: (_, __, ___) => _imageFallback());
     }
     if (remoteUrl.isNotEmpty) {
-      return Image.network(remoteUrl, fit: BoxFit.cover, errorBuilder: (_, __, ___) => _imageFallback());
+      return Image.network(remoteUrl, fit: BoxFit.cover, alignment: Alignment.center, errorBuilder: (_, __, ___) => _imageFallback());
     }
     return _imageFallback();
   }
@@ -500,11 +527,15 @@ class PosScreenState extends State<PosScreen> {
             Expanded(
               flex: 3,
               child: Stack(children: [
-                ClipRRect(
-                  borderRadius: const BorderRadius.vertical(top: Radius.circular(7)),
-                  child: AspectRatio(
-                    aspectRatio: kProductImageAspect,
-                    child: _buildProductImage(p),
+                Positioned.fill(
+                  child: ClipRRect(
+                    borderRadius: const BorderRadius.vertical(top: Radius.circular(7)),
+                    child: Center(
+                      child: AspectRatio(
+                        aspectRatio: kProductImageAspect,
+                        child: _buildProductImage(p),
+                      ),
+                    ),
                   ),
                 ),
                 if (badgeBg != null)
@@ -520,16 +551,33 @@ class PosScreenState extends State<PosScreen> {
               ]),
             ),
             Padding(
-              padding: const EdgeInsets.all(7),
+              padding: const EdgeInsets.fromLTRB(8, 7, 8, 8),
               child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
                 Text(p.name, maxLines: 2, overflow: TextOverflow.ellipsis,
-                    style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w500)),
-                const SizedBox(height: 2),
+                    style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: kTextPrimary)),
+                const SizedBox(height: 3),
                 Text('Mã: ${p.code.isEmpty ? p.name : p.code}', maxLines: 1, overflow: TextOverflow.ellipsis,
-                    style: const TextStyle(fontSize: 10, color: Colors.grey)),
-                const SizedBox(height: 2),
-                Text('${p.priceRange} k',
-                    style: const TextStyle(fontSize: 11, color: kPrimary, fontWeight: FontWeight.w600)),
+                    style: const TextStyle(fontSize: 10, color: kTextSecondary)),
+                const SizedBox(height: 3),
+                Row(
+                  children: [
+                    Expanded(
+                      child: Text('${p.priceRange} k',
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: const TextStyle(fontSize: 11, color: kPrimary, fontWeight: FontWeight.w700)),
+                    ),
+                    const SizedBox(width: 6),
+                    Text(
+                      'Tồn $totalStock',
+                      style: TextStyle(
+                        fontSize: 10,
+                        fontWeight: FontWeight.w600,
+                        color: totalStock <= 0 ? kDanger : (hasLow ? kWarning : kTextSecondary),
+                      ),
+                    ),
+                  ],
+                ),
               ]),
             ),
           ]),
@@ -543,11 +591,16 @@ class PosScreenState extends State<PosScreen> {
     if (result == null || result.isEmpty) return;
     setState(() {
       for (final add in result) {
+        final maxStock = _stockForVariantId(add.variantId);
         final idx = _cart.indexWhere((e) => e.variantId == add.variantId);
         if (idx >= 0) {
-          _cart[idx].quantity += add.quantity;
+          final nextQty = _cart[idx].quantity + add.quantity;
+          _cart[idx].quantity = maxStock == null ? nextQty : nextQty.clamp(0, maxStock);
         } else {
-          _cart.add(add);
+          add.quantity = maxStock == null ? add.quantity : add.quantity.clamp(0, maxStock);
+          if (add.quantity > 0) {
+            _cart.add(add);
+          }
         }
       }
     });
@@ -590,13 +643,19 @@ class PosScreenState extends State<PosScreen> {
           optionsBuilder: (v) => v.text.isEmpty
               ? _suggestions
               : _suggestions.where((s) => s.toLowerCase().contains(v.text.toLowerCase())),
-          onSelected: (s) => _custNameCtrl.text = s,
+          onSelected: (s) {
+            _custNameCtrl.text = s;
+            _applyCustomerPhoneFromName(s);
+          },
           fieldViewBuilder: (ctx, ctrl, fn, onSub) {
             return TextField(
               controller: ctrl, focusNode: fn,
               decoration: const InputDecoration(
                   hintText: 'Tên khách hàng', prefixIcon: Icon(Icons.person_outline, size: 18)),
-              onChanged: (v) => _custNameCtrl.text = v,
+              onChanged: (v) {
+                _custNameCtrl.text = v;
+                _applyCustomerPhoneFromName(v);
+              },
             );
           },
         ),
@@ -749,11 +808,30 @@ class PosScreenState extends State<PosScreen> {
                       ),
                       _QtyEditor(
                         quantity: it.quantity,
+                        maxQuantity: _stockForVariantId(it.variantId),
                         onChanged: (q) {
-                          if (q <= 0) return;
-                          setState(() => it.quantity = q);
+                          final maxStock = _stockForVariantId(it.variantId);
+                          final fixed = maxStock == null ? q : (maxStock <= 0 ? 0 : q.clamp(1, maxStock));
+                          setState(() {
+                            if (fixed <= 0) {
+                              _cart.removeAt(idx);
+                            } else {
+                              it.quantity = fixed;
+                            }
+                          });
                         },
-                        onIncrement: () => setState(() => it.quantity += 1),
+                        onIncrement: () {
+                          final maxStock = _stockForVariantId(it.variantId);
+                          setState(() {
+                            final next = it.quantity + 1;
+                            final fixed = maxStock == null ? next : (maxStock <= 0 ? 0 : next.clamp(1, maxStock));
+                            if (fixed <= 0) {
+                              _cart.removeAt(idx);
+                            } else {
+                              it.quantity = fixed;
+                            }
+                          });
+                        },
                         onDecrement: () {
                           if (it.quantity <= 1) return;
                           setState(() => it.quantity -= 1);
@@ -781,12 +859,14 @@ class PosScreenState extends State<PosScreen> {
 
 class _QtyEditor extends StatefulWidget {
   final int quantity;
+  final int? maxQuantity;
   final ValueChanged<int> onChanged;
   final VoidCallback onIncrement;
   final VoidCallback onDecrement;
 
   const _QtyEditor({
     required this.quantity,
+    this.maxQuantity,
     required this.onChanged,
     required this.onIncrement,
     required this.onDecrement,
@@ -819,6 +899,21 @@ class _QtyEditorState extends State<_QtyEditor> {
     _focusNode.dispose();
     _controller.dispose();
     super.dispose();
+  }
+
+  void _applyInput(String raw) {
+    final parsed = int.tryParse(raw.trim());
+    if (parsed == null) return;
+    final max = widget.maxQuantity;
+    final fixed = max == null ? parsed : (max <= 0 ? 0 : parsed.clamp(1, max));
+    final fixedText = '$fixed';
+    if (_controller.text != fixedText) {
+      _controller.value = TextEditingValue(
+        text: fixedText,
+        selection: TextSelection.collapsed(offset: fixedText.length),
+      );
+    }
+    widget.onChanged(fixed);
   }
 
   @override
@@ -854,14 +949,13 @@ class _QtyEditorState extends State<_QtyEditor> {
                 isCollapsed: true,
                 contentPadding: EdgeInsets.symmetric(vertical: 4),
               ),
-              onChanged: (v) {
-                final q = int.tryParse(v);
-                if (q != null && q > 0) widget.onChanged(q);
-              },
+              onChanged: _applyInput,
               onEditingComplete: () {
                 final q = int.tryParse(_controller.text);
                 if (q == null || q <= 0) {
                   _controller.text = '${widget.quantity}';
+                } else {
+                  _applyInput(_controller.text);
                 }
                 _focusNode.unfocus();
               },

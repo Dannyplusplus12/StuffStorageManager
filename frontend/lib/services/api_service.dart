@@ -18,7 +18,12 @@ class ApiService {
     if (raw.isEmpty) return '';
     if (raw.startsWith('http://') || raw.startsWith('https://')) return raw;
     final base = _b.endsWith('/') ? _b.substring(0, _b.length - 1) : _b;
-    final path = raw.startsWith('/') ? raw : '/$raw';
+    final normalized = raw.replaceAll('\\', '/');
+    if (normalized.startsWith('assets/images/')) {
+      final fileName = normalized.split('/').last;
+      return '$base/product-images/$fileName';
+    }
+    final path = normalized.startsWith('/') ? normalized : '/$normalized';
     return '$base$path';
   }
 
@@ -107,9 +112,16 @@ class ApiService {
     throw Exception('Lỗi tải lịch sử');
   }
 
-  static Future<void> createDebtLog(int cid, {required int changeAmount, required String note, String? createdAt}) async {
+  static Future<void> createDebtLog(
+    int cid, {
+    required int changeAmount,
+    required String note,
+    String? createdAt,
+    int? actorEmployeeId,
+  }) async {
     final payload = <String, dynamic>{'change_amount': changeAmount, 'note': note};
     if (createdAt != null) payload['created_at'] = createdAt;
+    if (actorEmployeeId != null) payload['actor_employee_id'] = actorEmployeeId;
     final r = await http.post(Uri.parse('$_b/customers/$cid/history'), headers: _headers, body: jsonEncode(payload));
     if (r.statusCode != 200) throw Exception(jsonDecode(utf8.decode(r.bodyBytes))['detail'] ?? 'Lỗi');
   }
@@ -192,6 +204,7 @@ class ApiService {
     required String customerName,
     String customerPhone = '',
     required List<CartItem> cart,
+    int? employeeId,
   }) async {
     final r = await http.post(
       Uri.parse('$_b/checkout/draft'),
@@ -199,6 +212,7 @@ class ApiService {
       body: jsonEncode({
         'customer_name': customerName,
         'customer_phone': customerPhone,
+        'employee_id': employeeId,
         'cart': cart.map((e) => e.toJson()).toList(),
       }),
     );
@@ -216,6 +230,7 @@ class ApiService {
     required String customerName,
     String customerPhone = '',
     required List<CartItem> cart,
+    int? employeeId,
   }) async {
     final r = await http.post(
       Uri.parse('$_b/checkout/desktop-dispatch'),
@@ -223,6 +238,7 @@ class ApiService {
       body: jsonEncode({
         'customer_name': customerName,
         'customer_phone': customerPhone,
+        'employee_id': employeeId,
         'cart': cart.map((e) => e.toJson()).toList(),
       }),
     );
@@ -337,11 +353,14 @@ class ApiService {
     req.fields['picker_id'] = '$pickerId';
     req.fields['items_json'] = jsonEncode(items ?? const []);
     req.fields['picker_note'] = pickerNote.trim();
+    if (paths.isNotEmpty) {
+      req.files.add(await http.MultipartFile.fromPath('photo', paths.first));
+    }
     for (final path in paths) {
       req.files.add(await http.MultipartFile.fromPath('photos', path));
     }
 
-    final streamed = await req.send().timeout(const Duration(seconds: 45));
+    final streamed = await req.send().timeout(const Duration(seconds: 120));
     final r = await http.Response.fromStream(streamed);
     if (r.statusCode == 200) return jsonDecode(utf8.decode(r.bodyBytes));
     final body = r.bodyBytes.isNotEmpty ? jsonDecode(utf8.decode(r.bodyBytes)) : null;
@@ -375,23 +394,94 @@ class ApiService {
     throw Exception('Lỗi tải nhân viên');
   }
 
-  static Future<Map<String, dynamic>> createEmployee({required String name, required String phone, required String role}) async {
+  static Future<Map<String, dynamic>> createEmployee({
+    required String name,
+    required String phone,
+    required String role,
+    String email = '',
+    String address = '',
+    String notes = '',
+  }) async {
     final r = await http.post(
       Uri.parse('$_b/employees'),
       headers: _headers,
-      body: jsonEncode({'name': name, 'phone': phone, 'role': role}),
+      body: jsonEncode({
+        'name': name,
+        'phone': phone,
+        'email': email,
+        'address': address,
+        'notes': notes,
+        'role': role,
+      }),
     );
     if (r.statusCode == 200) return jsonDecode(utf8.decode(r.bodyBytes));
     throw Exception(jsonDecode(utf8.decode(r.bodyBytes))['detail'] ?? 'Lỗi tạo nhân viên');
   }
 
-  static Future<void> updateEmployee(int id, {required String name, required String phone, required String role}) async {
+  static Future<void> updateEmployee(
+    int id, {
+    required String name,
+    required String phone,
+    required String role,
+    String email = '',
+    String address = '',
+    String notes = '',
+    String? pin,
+    bool isActive = true,
+  }) async {
     final r = await http.put(
       Uri.parse('$_b/employees/$id'),
       headers: _headers,
-      body: jsonEncode({'name': name, 'phone': phone, 'role': role}),
+      body: jsonEncode({
+        'name': name,
+        'phone': phone,
+        'email': email,
+        'address': address,
+        'notes': notes,
+        'role': role,
+        'pin': pin,
+        'is_active': isActive ? 1 : 0,
+      }),
     );
     if (r.statusCode != 200) throw Exception(jsonDecode(utf8.decode(r.bodyBytes))['detail'] ?? 'Lỗi cập nhật nhân viên');
+  }
+
+  static Future<List<Order>> getEmployeeDeliveries(
+    int employeeId, {
+    String search = '',
+    int days = 0,
+    int limit = 200,
+  }) async {
+    final uri = Uri.parse('$_b/employees/$employeeId/deliveries').replace(queryParameters: {
+      'q': search.trim(),
+      'days': '$days',
+      'limit': '$limit',
+    });
+    final r = await http.get(uri).timeout(_timeout);
+    if (r.statusCode == 200) {
+      final data = jsonDecode(utf8.decode(r.bodyBytes)) as Map<String, dynamic>;
+      return (data['data'] as List? ?? const []).map((e) => Order.fromJson(e)).toList();
+    }
+    throw Exception(jsonDecode(utf8.decode(r.bodyBytes))['detail'] ?? 'Lỗi tải lịch sử giao hàng');
+  }
+
+  static Future<List<Map<String, dynamic>>> getEmployeeActivities(
+    int employeeId, {
+    String search = '',
+    int days = 0,
+    int limit = 300,
+  }) async {
+    final uri = Uri.parse('$_b/employees/$employeeId/activities').replace(queryParameters: {
+      'q': search.trim(),
+      'days': '$days',
+      'limit': '$limit',
+    });
+    final r = await http.get(uri).timeout(_timeout);
+    if (r.statusCode == 200) {
+      final data = jsonDecode(utf8.decode(r.bodyBytes)) as Map<String, dynamic>;
+      return (data['data'] as List? ?? const []).whereType<Map>().map((e) => e.cast<String, dynamic>()).toList();
+    }
+    throw Exception(jsonDecode(utf8.decode(r.bodyBytes))['detail'] ?? 'Lỗi tải lịch sử giao dịch cá nhân');
   }
 
   static Future<void> deleteEmployee(int id) async {

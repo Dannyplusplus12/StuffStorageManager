@@ -56,6 +56,7 @@ class DeliveryProofSyncService {
       var maxSeen = lastOrderId;
       var downloaded = 0;
       var missing = 0;
+      final syncedByOrder = <int, Set<String>>{};
 
       for (final row in rows) {
         if (row is! Map<String, dynamic>) continue;
@@ -86,7 +87,9 @@ class DeliveryProofSyncService {
               : fileName;
           if (url.trim().isEmpty || name.trim().isEmpty) continue;
 
-          final target = File('${outDir.path}${Platform.pathSeparator}order_${orderId}_$name');
+          final localName = 'order_${orderId}_$name';
+          final target = File('${outDir.path}${Platform.pathSeparator}$localName');
+          syncedByOrder.putIfAbsent(orderId, () => <String>{}).add(localName);
           if (await target.exists() && await target.length() > 0) continue;
 
           final resolved = ApiService.resolveApiUrl(url);
@@ -108,6 +111,21 @@ class DeliveryProofSyncService {
           await target.writeAsBytes(photoResp.bodyBytes, flush: true);
           downloaded += 1;
         }
+      }
+
+      for (final entry in syncedByOrder.entries) {
+        final orderId = entry.key;
+        final names = entry.value.toList();
+        var hasAll = names.isNotEmpty;
+        for (final name in names) {
+          final f = File('${outDir.path}${Platform.pathSeparator}$name');
+          if (!await f.exists() || await f.length() <= 0) {
+            hasAll = false;
+            break;
+          }
+        }
+        if (!hasAll) continue;
+        await _ackLocalProof(orderId: orderId, fileNames: names);
       }
 
       if (maxSeen > lastOrderId) {
@@ -155,5 +173,27 @@ class DeliveryProofSyncService {
   static Future<void> _saveState(File file, int lastOrderId) async {
     final payload = jsonEncode({'last_order_id': lastOrderId});
     await file.writeAsString(payload, flush: true);
+  }
+
+  static Future<void> _ackLocalProof({required int orderId, required List<String> fileNames}) async {
+    try {
+      final uri = Uri.parse('${ApiService.baseUrl}/delivery-proofs/ack-local');
+      final resp = await http
+          .post(
+            uri,
+            headers: const {'Content-Type': 'application/json'},
+            body: jsonEncode({'order_id': orderId, 'local_file_names': fileNames}),
+          )
+          .timeout(const Duration(seconds: 20));
+      if (resp.statusCode == 404) {
+        developer.log('Ack endpoint not available yet on server', name: 'DeliveryProofSyncService');
+        return;
+      }
+      if (resp.statusCode != 200) {
+        developer.log('Ack local proof failed #$orderId (${resp.statusCode})', name: 'DeliveryProofSyncService');
+      }
+    } catch (e) {
+      developer.log('Ack local proof error #$orderId: $e', name: 'DeliveryProofSyncService');
+    }
   }
 }

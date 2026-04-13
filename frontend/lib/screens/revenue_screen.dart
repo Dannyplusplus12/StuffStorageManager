@@ -250,175 +250,22 @@ class _RevenueScreenState extends State<RevenueScreen> {
   }
 
   Future<void> _pickAnchorDate() async {
-    var selected = DateTime(_anchorDate.year, _anchorDate.month, _anchorDate.day);
-    final inputCtrl = TextEditingController(
-      text: '${selected.day.toString().padLeft(2, '0')}/${selected.month.toString().padLeft(2, '0')}/${selected.year}',
-    );
-
-    String dateText(DateTime dt) => '${dt.day.toString().padLeft(2, '0')}/${dt.month.toString().padLeft(2, '0')}/${dt.year}';
-
-    DateTime safeDate(int year, int month, int day) {
-      final maxDay = DateTime(year, month + 1, 0).day;
-      final d = day > maxDay ? maxDay : day;
-      return DateTime(year, month, d < 1 ? 1 : d);
-    }
-
-    await showDialog<void>(
+    final picked = await showDatePicker(
       context: context,
-      builder: (dialogContext) => StatefulBuilder(
-        builder: (dialogContext, setDialogState) {
-          final firstDay = DateTime(selected.year, selected.month, 1);
-          final daysInMonth = DateTime(selected.year, selected.month + 1, 0).day;
-          final leading = (firstDay.weekday + 6) % 7;
-
-          final cells = <Widget>[];
-          for (var i = 0; i < leading; i++) {
-            cells.add(const SizedBox.shrink());
-          }
-          for (var day = 1; day <= daysInMonth; day++) {
-            final d = DateTime(selected.year, selected.month, day);
-            final active = d.year == selected.year && d.month == selected.month && d.day == selected.day;
-            cells.add(
-              InkWell(
-                borderRadius: BorderRadius.circular(20),
-                onTap: () {
-                  setDialogState(() {
-                    selected = d;
-                    inputCtrl.text = dateText(selected);
-                  });
-                },
-                child: Center(
-                  child: Container(
-                    width: 38,
-                    height: 38,
-                    alignment: Alignment.center,
-                    decoration: BoxDecoration(
-                      color: active ? kPrimary : Colors.transparent,
-                      shape: BoxShape.circle,
-                    ),
-                    child: Text(
-                      '$day',
-                      style: TextStyle(
-                        color: active ? Colors.white : kTextPrimary,
-                        fontWeight: active ? FontWeight.w700 : FontWeight.w400,
-                      ),
-                    ),
-                  ),
-                ),
-              ),
-            );
-          }
-
-          return Dialog(
-            child: ConstrainedBox(
-              constraints: const BoxConstraints(maxWidth: 700, maxHeight: 480),
-              child: Padding(
-                padding: const EdgeInsets.all(12),
-                child: Column(
-                  children: [
-                    const Align(
-                      alignment: Alignment.centerLeft,
-                      child: Text('Chọn mốc thời gian', style: TextStyle(fontSize: 18, fontWeight: FontWeight.w700)),
-                    ),
-                    const SizedBox(height: 8),
-                    SizedBox(
-                      height: 320,
-                      child: Column(
-                        children: [
-                          Row(
-                            children: [
-                              Expanded(
-                                child: Text('Tháng ${selected.month} năm ${selected.year}', style: const TextStyle(fontSize: 22, fontWeight: FontWeight.w500)),
-                              ),
-                              IconButton(
-                                onPressed: () => setDialogState(() {
-                                  final p = DateTime(selected.year, selected.month - 1, 1);
-                                  selected = safeDate(p.year, p.month, selected.day);
-                                  inputCtrl.text = dateText(selected);
-                                }),
-                                icon: const Icon(Icons.chevron_left),
-                              ),
-                              IconButton(
-                                onPressed: () => setDialogState(() {
-                                  final n = DateTime(selected.year, selected.month + 1, 1);
-                                  selected = safeDate(n.year, n.month, selected.day);
-                                  inputCtrl.text = dateText(selected);
-                                }),
-                                icon: const Icon(Icons.chevron_right),
-                              ),
-                            ],
-                          ),
-                          const SizedBox(height: 8),
-                          const Row(
-                            children: [
-                              Expanded(child: Center(child: Text('T2'))),
-                              Expanded(child: Center(child: Text('T3'))),
-                              Expanded(child: Center(child: Text('T4'))),
-                              Expanded(child: Center(child: Text('T5'))),
-                              Expanded(child: Center(child: Text('T6'))),
-                              Expanded(child: Center(child: Text('T7'))),
-                              Expanded(child: Center(child: Text('CN'))),
-                            ],
-                          ),
-                          const SizedBox(height: 2),
-                          Expanded(
-                            child: GridView.count(
-                              crossAxisCount: 7,
-                              physics: const NeverScrollableScrollPhysics(),
-                              childAspectRatio: 1.45,
-                              children: cells,
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                    Row(
-                      children: [
-                        const Text('Đã chọn:', style: TextStyle(color: kTextSecondary, fontSize: 13)),
-                        const SizedBox(width: 10),
-                        SizedBox(
-                          width: 190,
-                          child: TextField(
-                            controller: inputCtrl,
-                            decoration: const InputDecoration(hintText: 'dd/mm/yyyy', isDense: true),
-                            style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w600, color: kTextPrimary),
-                            onChanged: (v) {
-                              final m = RegExp(r'^(\d{1,2})\/(\d{1,2})\/(\d{4})$').firstMatch(v.trim());
-                              if (m == null) return;
-                              final dd = int.tryParse(m.group(1) ?? '');
-                              final mm = int.tryParse(m.group(2) ?? '');
-                              final yy = int.tryParse(m.group(3) ?? '');
-                              if (dd == null || mm == null || yy == null || mm < 1 || mm > 12) return;
-                              final maxDay = DateTime(yy, mm + 1, 0).day;
-                              if (dd < 1 || dd > maxDay) return;
-                              setDialogState(() => selected = DateTime(yy, mm, dd));
-                            },
-                          ),
-                        ),
-                        const Spacer(),
-                        TextButton(onPressed: () => Navigator.pop(dialogContext), child: const Text('Hủy')),
-                        const SizedBox(width: 8),
-                        ElevatedButton(
-                          onPressed: () {
-                            final picked = _period == _RevenuePeriod.day
-                                ? DateTime(selected.year, selected.month, selected.day)
-                                : (_period == _RevenuePeriod.month ? DateTime(selected.year, selected.month, 1) : DateTime(selected.year, 1, 1));
-                            setState(() => _anchorDate = picked);
-                            Navigator.pop(dialogContext);
-                          },
-                          child: const Text('Chọn'),
-                        ),
-                      ],
-                    ),
-                  ],
-                ),
-              ),
-            ),
-          );
-        },
-      ),
+      initialDate: _anchorDate,
+      firstDate: DateTime(2020, 1, 1),
+      lastDate: DateTime(2100, 12, 31),
+      locale: const Locale('vi', 'VN'),
+      helpText: 'Chọn mốc thời gian',
+      cancelText: 'Hủy',
+      confirmText: 'Chọn',
     );
-    inputCtrl.dispose();
+    if (picked == null) return;
+    setState(() {
+      _anchorDate = _period == _RevenuePeriod.day
+          ? DateTime(picked.year, picked.month, picked.day)
+          : (_period == _RevenuePeriod.month ? DateTime(picked.year, picked.month, 1) : DateTime(picked.year, 1, 1));
+    });
   }
 
   List<_TopCustomerRevenue> get _topCustomers {

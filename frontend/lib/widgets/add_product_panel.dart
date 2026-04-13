@@ -355,7 +355,9 @@ class _AddProductPanelState extends State<AddProductPanel> {
 
   @override
   Widget build(BuildContext context) {
-    final panelHeight = (MediaQuery.of(context).size.height - 120).clamp(580.0, 1200.0);
+    final panelHeight = (MediaQuery.of(context).size.height - 120).clamp(480.0, 1200.0);
+    final panelWidth = MediaQuery.of(context).size.width;
+    final leftPanelWidth = (panelWidth * 0.26).clamp(240.0, 300.0);
     final colorCount = _groups.where((g) => g.color.trim().isNotEmpty).length;
     final variantCount = _groups.fold<int>(0, (s, g) => s + g.rows.where((r) => r.size.trim().isNotEmpty).length);
 
@@ -371,42 +373,49 @@ class _AddProductPanelState extends State<AddProductPanel> {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 SizedBox(
-                  width: 320,
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.stretch,
-                    children: [
-                      Container(
-                        padding: const EdgeInsets.all(12),
-                        decoration: BoxDecoration(color: const Color(0xFFF8FAFC), border: Border.all(color: const Color(0xFFE2E8F0)), borderRadius: BorderRadius.circular(10)),
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.stretch,
-                          children: [
-                            const Text('Ảnh sản phẩm', style: TextStyle(fontWeight: FontWeight.w700, color: kTextPrimary)),
-                            const SizedBox(height: 8),
-                            AspectRatio(
-                              aspectRatio: kProductImageAspect,
-                              child: Container(
-                                decoration: BoxDecoration(color: const Color(0xFFF8FAFC), border: Border.all(color: const Color(0xFFE2E8F0)), borderRadius: BorderRadius.circular(8)),
-                                child: _previewImagePath == null
-                                    ? const Center(child: Text('Chưa chọn ảnh', style: TextStyle(color: Colors.grey)))
-                                    : ClipRRect(
-                                        borderRadius: BorderRadius.circular(8),
-                                        child: Image.file(
-                                          File(_previewImagePath!),
-                                          fit: BoxFit.cover,
-                                          errorBuilder: (_, __, ___) => const Center(child: Text('Không tải được ảnh', style: TextStyle(color: Colors.grey))),
-                                        ),
-                                      ),
-                              ),
+                  width: leftPanelWidth,
+                  child: LayoutBuilder(
+                    builder: (context, constraints) {
+                      final previewHeight = (constraints.maxHeight * 0.28).clamp(140.0, 220.0);
+                      return Column(
+                        crossAxisAlignment: CrossAxisAlignment.stretch,
+                        children: [
+                          Container(
+                            padding: const EdgeInsets.all(12),
+                            decoration: BoxDecoration(color: const Color(0xFFF8FAFC), border: Border.all(color: const Color(0xFFE2E8F0)), borderRadius: BorderRadius.circular(10)),
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.stretch,
+                              children: [
+                                const Text('Ảnh sản phẩm', style: TextStyle(fontWeight: FontWeight.w700, color: kTextPrimary)),
+                                const SizedBox(height: 8),
+                                SizedBox(
+                                  height: previewHeight,
+                                  child: AspectRatio(
+                                    aspectRatio: kProductImageAspect,
+                                    child: Container(
+                                      decoration: BoxDecoration(color: const Color(0xFFF8FAFC), border: Border.all(color: const Color(0xFFE2E8F0)), borderRadius: BorderRadius.circular(8)),
+                                      child: _previewImagePath == null
+                                          ? const Center(child: Text('Chưa chọn ảnh', style: TextStyle(color: Colors.grey)))
+                                          : ClipRRect(
+                                              borderRadius: BorderRadius.circular(8),
+                                              child: Image.file(
+                                                File(_previewImagePath!),
+                                                fit: BoxFit.cover,
+                                                alignment: Alignment.center,
+                                                errorBuilder: (_, __, ___) => const Center(child: Text('Không tải được ảnh', style: TextStyle(color: Colors.grey))),
+                                              ),
+                                            ),
+                                    ),
+                                  ),
+                                ),
+                                const SizedBox(height: 10),
+                                MouseRegion(
+                                  cursor: SystemMouseCursors.click,
+                                  child: ElevatedButton.icon(onPressed: _pickImageFile, icon: const Icon(Icons.upload_file, size: 16), label: const Text('Tải ảnh')),
+                                ),
+                              ],
                             ),
-                            const SizedBox(height: 10),
-                            MouseRegion(
-                              cursor: SystemMouseCursors.click,
-                              child: ElevatedButton.icon(onPressed: _pickImageFile, icon: const Icon(Icons.upload_file, size: 16), label: const Text('Tải ảnh')),
-                            ),
-                          ],
-                        ),
-                      ),
+                          ),
                       const SizedBox(height: 10),
                       Container(
                         padding: const EdgeInsets.all(12),
@@ -434,7 +443,9 @@ class _AddProductPanelState extends State<AddProductPanel> {
                           ),
                         ),
                       ),
-                    ],
+                        ],
+                      );
+                    },
                   ),
                 ),
                 const SizedBox(width: 14),

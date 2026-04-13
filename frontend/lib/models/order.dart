@@ -42,6 +42,8 @@ class Order {
   final int totalQty;
   final String status;  // 'pending' | 'approved' | 'assigned' | 'completed'
   final String pickerNote;
+  final int? createdByEmployeeId;
+  final String createdByEmployeeName;
   final int? assignedPickerId;
   final String assignedPickerName;
   final String assignedAt;
@@ -61,6 +63,8 @@ class Order {
     required this.totalQty,
     required this.status,
     this.pickerNote = '',
+    this.createdByEmployeeId,
+    this.createdByEmployeeName = '',
     this.assignedPickerId,
     this.assignedPickerName = '',
     this.assignedAt = '',
@@ -81,6 +85,8 @@ class Order {
         totalQty: (j['total_qty'] ?? 0) as int,
         status: j['status'] ?? (j['is_draft'] == 1 ? 'pending' : 'completed'),
         pickerNote: (j['picker_note'] ?? '').toString(),
+        createdByEmployeeId: j['created_by_employee_id'],
+        createdByEmployeeName: (j['created_by_employee_name'] ?? '').toString(),
         assignedPickerId: j['assigned_picker_id'],
         assignedPickerName: (j['assigned_picker_name'] ?? '').toString(),
         assignedAt: (j['assigned_at'] ?? '').toString(),
@@ -122,6 +128,8 @@ class Order {
         'total_qty': totalQty,
         'status': status,
         'picker_note': pickerNote,
+        'created_by_employee_id': createdByEmployeeId,
+        'created_by_employee_name': createdByEmployeeName,
         'assigned_picker_id': assignedPickerId,
         'assigned_picker_name': assignedPickerName,
         'assigned_at': assignedAt,
