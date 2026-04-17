@@ -331,6 +331,8 @@ class _RevenueScreenState extends State<RevenueScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final textPrimary = appTextPrimary(context);
+    final textSecondary = appTextSecondary(context);
     return Padding(
       padding: const EdgeInsets.all(12),
       child: Center(
@@ -341,11 +343,11 @@ class _RevenueScreenState extends State<RevenueScreen> {
               : Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    const Text('Doanh thu', style: TextStyle(fontSize: 24, fontWeight: FontWeight.bold, color: kTextPrimary)),
+                    Text('Doanh thu', style: TextStyle(fontSize: 24, fontWeight: FontWeight.bold, color: textPrimary)),
                     const SizedBox(height: 2),
-                    const Text('Theo dõi doanh thu theo thời gian, khu vực và khách hàng', style: TextStyle(color: kTextSecondary)),
+                    Text('Theo dõi doanh thu theo thời gian, khu vực và khách hàng', style: TextStyle(color: textSecondary)),
                     const SizedBox(height: 2),
-                    Text('Đang xem: $_selectedTimeLabel', style: const TextStyle(color: kTextSecondary, fontSize: 13)),
+                    Text('Đang xem: $_selectedTimeLabel', style: TextStyle(color: textSecondary, fontSize: 13)),
                     const SizedBox(height: 10),
                     _filterPanel(),
                     const SizedBox(height: 10),
@@ -376,8 +378,8 @@ class _RevenueScreenState extends State<RevenueScreen> {
       width: double.infinity,
       padding: const EdgeInsets.all(12),
       decoration: BoxDecoration(
-        color: Colors.white,
-        border: Border.all(color: kBorder),
+        color: appPanelBg(context),
+        border: Border.all(color: appBorderColor(context)),
         borderRadius: BorderRadius.circular(10),
       ),
       child: Row(
@@ -508,8 +510,8 @@ class _RevenueScreenState extends State<RevenueScreen> {
     return Container(
       padding: const EdgeInsets.all(12),
       decoration: BoxDecoration(
-        color: Colors.white,
-        border: Border.all(color: kBorder),
+        color: appPanelBg(context),
+        border: Border.all(color: appBorderColor(context)),
         borderRadius: BorderRadius.circular(10),
       ),
       child: Row(
@@ -528,9 +530,9 @@ class _RevenueScreenState extends State<RevenueScreen> {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(title, style: const TextStyle(color: kTextSecondary, fontSize: 12)),
+                Text(title, style: TextStyle(color: appTextSecondary(context), fontSize: 12)),
                 const SizedBox(height: 2),
-                Text(value, style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w700, color: kTextPrimary)),
+                Text(value, style: TextStyle(fontSize: 18, fontWeight: FontWeight.w700, color: appTextPrimary(context))),
               ],
             ),
           ),
@@ -550,8 +552,8 @@ class _RevenueScreenState extends State<RevenueScreen> {
     return Container(
       padding: const EdgeInsets.all(12),
       decoration: BoxDecoration(
-        color: Colors.white,
-        border: Border.all(color: kBorder),
+        color: appPanelBg(context),
+        border: Border.all(color: appBorderColor(context)),
         borderRadius: BorderRadius.circular(10),
       ),
       child: Column(
@@ -560,7 +562,7 @@ class _RevenueScreenState extends State<RevenueScreen> {
           Row(
             children: [
               Expanded(
-                child: Text('Chi tiết theo ${_periodLabel(_period).toLowerCase()}', style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w700, color: kTextPrimary)),
+                  child: Text('Chi tiết theo ${_periodLabel(_period).toLowerCase()}', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w700, color: appTextPrimary(context))),
               ),
               if (_backTarget != null)
                 MouseRegion(
@@ -574,14 +576,14 @@ class _RevenueScreenState extends State<RevenueScreen> {
             ],
           ),
           const SizedBox(height: 2),
-          Text(_selectedTimeLabel, style: const TextStyle(fontSize: 12, color: kTextSecondary)),
+          Text(_selectedTimeLabel, style: TextStyle(fontSize: 12, color: appTextSecondary(context))),
           const SizedBox(height: 2),
           if (_period != _RevenuePeriod.day)
-            const Text('Bấm vào từng dòng để xem cấp chi tiết tiếp theo', style: TextStyle(fontSize: 12, color: kTextSecondary)),
+            Text('Bấm vào từng dòng để xem cấp chi tiết tiếp theo', style: TextStyle(fontSize: 12, color: appTextSecondary(context))),
           const SizedBox(height: 8),
           Expanded(
             child: buckets.isEmpty
-                ? const Center(child: Text('Chưa có dữ liệu doanh thu', style: TextStyle(color: kTextSecondary)))
+                ? Center(child: Text('Chưa có dữ liệu doanh thu', style: TextStyle(color: appTextSecondary(context))))
                 : ListView.separated(
                     itemCount: buckets.length,
                     separatorBuilder: (_, __) => const SizedBox(height: 8),
@@ -598,8 +600,8 @@ class _RevenueScreenState extends State<RevenueScreen> {
                           child: Container(
                             padding: const EdgeInsets.all(10),
                             decoration: BoxDecoration(
-                              color: const Color(0xFFF8FAFC),
-                              border: Border.all(color: kBorder),
+                              color: appPanelSoftBg(context),
+                              border: Border.all(color: appBorderColor(context)),
                               borderRadius: BorderRadius.circular(8),
                             ),
                             child: Column(
@@ -608,14 +610,14 @@ class _RevenueScreenState extends State<RevenueScreen> {
                                 Row(
                                   children: [
                                     Expanded(
-                                      child: Text(b.label, style: const TextStyle(fontWeight: FontWeight.w600, color: kTextPrimary)),
+                                      child: Text(b.label, style: TextStyle(fontWeight: FontWeight.w600, color: appTextPrimary(context))),
                                     ),
                                     if (canDrilldown)
-                                      const Padding(
+                                      Padding(
                                         padding: EdgeInsets.only(right: 6),
-                                        child: Icon(Icons.subdirectory_arrow_right, size: 16, color: kTextSecondary),
+                                       child: Icon(Icons.subdirectory_arrow_right, size: 16, color: appTextSecondary(context)),
                                       ),
-                                    Text('${formatCurrency(b.amount)} k', style: const TextStyle(fontWeight: FontWeight.w700, color: kTextPrimary)),
+                                    Text('${formatCurrency(b.amount)} k', style: TextStyle(fontWeight: FontWeight.w700, color: appTextPrimary(context))),
                                   ],
                                 ),
                                 const SizedBox(height: 6),
@@ -624,12 +626,12 @@ class _RevenueScreenState extends State<RevenueScreen> {
                                   child: LinearProgressIndicator(
                                     minHeight: 9,
                                     value: ratio,
-                                    backgroundColor: const Color(0xFFE2E8F0),
+                                    backgroundColor: Theme.of(context).brightness == Brightness.dark ? const Color(0xFF263449) : const Color(0xFFE2E8F0),
                                     color: kPrimary,
                                   ),
                                 ),
                                 const SizedBox(height: 4),
-                                Text('${b.orderCount} đơn', style: const TextStyle(fontSize: 12, color: kTextSecondary)),
+                                Text('${b.orderCount} đơn', style: TextStyle(fontSize: 12, color: appTextSecondary(context))),
                               ],
                             ),
                           ),
@@ -648,18 +650,18 @@ class _RevenueScreenState extends State<RevenueScreen> {
     return Container(
       padding: const EdgeInsets.all(12),
       decoration: BoxDecoration(
-        color: Colors.white,
-        border: Border.all(color: kBorder),
+        color: appPanelBg(context),
+        border: Border.all(color: appBorderColor(context)),
         borderRadius: BorderRadius.circular(10),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          const Text('Top khách hàng', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w700, color: kTextPrimary)),
+          Text('Top khách hàng', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w700, color: appTextPrimary(context))),
           const SizedBox(height: 8),
           Expanded(
             child: list.isEmpty
-                ? const Center(child: Text('Chưa có dữ liệu', style: TextStyle(color: kTextSecondary)))
+                ? Center(child: Text('Chưa có dữ liệu', style: TextStyle(color: appTextSecondary(context))))
                 : ListView.separated(
                     itemCount: list.length,
                     separatorBuilder: (_, __) => const SizedBox(height: 8),
@@ -668,8 +670,8 @@ class _RevenueScreenState extends State<RevenueScreen> {
                       return Container(
                         padding: const EdgeInsets.all(10),
                         decoration: BoxDecoration(
-                          color: const Color(0xFFF8FAFC),
-                          border: Border.all(color: kBorder),
+                          color: appPanelSoftBg(context),
+                          border: Border.all(color: appBorderColor(context)),
                           borderRadius: BorderRadius.circular(8),
                         ),
                         child: Row(
@@ -680,19 +682,19 @@ class _RevenueScreenState extends State<RevenueScreen> {
                               height: 24,
                               alignment: Alignment.center,
                               decoration: BoxDecoration(
-                                color: const Color(0xFFE2E8F0),
+                                  color: Theme.of(context).brightness == Brightness.dark ? const Color(0xFF263449) : const Color(0xFFE2E8F0),
                                 borderRadius: BorderRadius.circular(6),
                               ),
-                              child: Text('${i + 1}', style: const TextStyle(fontWeight: FontWeight.w700, color: kTextPrimary)),
+                               child: Text('${i + 1}', style: TextStyle(fontWeight: FontWeight.w700, color: appTextPrimary(context))),
                             ),
                             const SizedBox(width: 8),
                             Expanded(
                               child: Column(
                                 crossAxisAlignment: CrossAxisAlignment.start,
                                 children: [
-                                  Text(t.customerName, style: const TextStyle(fontWeight: FontWeight.w600, color: kTextPrimary)),
+                                   Text(t.customerName, style: TextStyle(fontWeight: FontWeight.w600, color: appTextPrimary(context))),
                                   if (t.areaName.trim().isNotEmpty)
-                                    Text(t.areaName, style: const TextStyle(fontSize: 12, color: kTextSecondary)),
+                                     Text(t.areaName, style: TextStyle(fontSize: 12, color: appTextSecondary(context))),
                                 ],
                               ),
                             ),
@@ -715,8 +717,8 @@ class _RevenueScreenState extends State<RevenueScreen> {
     return Container(
       padding: const EdgeInsets.all(12),
       decoration: BoxDecoration(
-        color: Colors.white,
-        border: Border.all(color: kBorder),
+        color: appPanelBg(context),
+        border: Border.all(color: appBorderColor(context)),
         borderRadius: BorderRadius.circular(10),
       ),
       child: Column(
@@ -724,8 +726,8 @@ class _RevenueScreenState extends State<RevenueScreen> {
         children: [
           Row(
             children: [
-              const Expanded(
-                child: Text('Chi tiết hóa đơn theo ngày', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w700, color: kTextPrimary)),
+              Expanded(
+                child: Text('Chi tiết hóa đơn theo ngày', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w700, color: appTextPrimary(context))),
               ),
               if (_backTarget != null)
                 MouseRegion(
@@ -739,11 +741,11 @@ class _RevenueScreenState extends State<RevenueScreen> {
             ],
           ),
           const SizedBox(height: 2),
-          Text(_selectedTimeLabel, style: const TextStyle(fontSize: 12, color: kTextSecondary)),
+          Text(_selectedTimeLabel, style: TextStyle(fontSize: 12, color: appTextSecondary(context))),
           const SizedBox(height: 8),
           Expanded(
             child: orders.isEmpty
-                ? const Center(child: Text('Không có hóa đơn trong ngày đã chọn', style: TextStyle(color: kTextSecondary)))
+                ? Center(child: Text('Không có hóa đơn trong ngày đã chọn', style: TextStyle(color: appTextSecondary(context))))
                 : ListView.separated(
                     itemCount: orders.length,
                     separatorBuilder: (_, __) => const SizedBox(height: 8),
@@ -751,8 +753,8 @@ class _RevenueScreenState extends State<RevenueScreen> {
                       final o = orders[i];
                       return Container(
                         decoration: BoxDecoration(
-                          color: const Color(0xFFF8FAFC),
-                          border: Border.all(color: kBorder),
+                          color: appPanelSoftBg(context),
+                          border: Border.all(color: appBorderColor(context)),
                           borderRadius: BorderRadius.circular(8),
                         ),
                         child: Theme(
@@ -765,22 +767,22 @@ class _RevenueScreenState extends State<RevenueScreen> {
                                 Expanded(
                                   child: Text(
                                     '#${o.id} · ${o.customerName.isEmpty ? 'Khách lẻ' : o.customerName}',
-                                    style: const TextStyle(fontWeight: FontWeight.w600, color: kTextPrimary),
+                                     style: TextStyle(fontWeight: FontWeight.w600, color: appTextPrimary(context)),
                                     overflow: TextOverflow.ellipsis,
                                   ),
                                 ),
-                                Text('${formatCurrency(o.totalAmount)} k', style: const TextStyle(fontWeight: FontWeight.w700, color: kTextPrimary)),
+                                Text('${formatCurrency(o.totalAmount)} k', style: TextStyle(fontWeight: FontWeight.w700, color: appTextPrimary(context))),
                               ],
                             ),
                             subtitle: Padding(
                               padding: const EdgeInsets.only(top: 2),
                               child: Row(
                                 children: [
-                                  Text('Giờ ${_timeOnly(o.createdAt)}', style: const TextStyle(color: kTextSecondary, fontSize: 12)),
+                                  Text('Giờ ${_timeOnly(o.createdAt)}', style: TextStyle(color: appTextSecondary(context), fontSize: 12)),
                                   const SizedBox(width: 10),
-                                  Text('SL ${o.totalQty}', style: const TextStyle(color: kTextSecondary, fontSize: 12)),
+                                  Text('SL ${o.totalQty}', style: TextStyle(color: appTextSecondary(context), fontSize: 12)),
                                   const SizedBox(width: 10),
-                                  Text('Mục hàng ${o.items.length}', style: const TextStyle(color: kTextSecondary, fontSize: 12)),
+                                  Text('Mục hàng ${o.items.length}', style: TextStyle(color: appTextSecondary(context), fontSize: 12)),
                                 ],
                               ),
                             ),
@@ -789,7 +791,7 @@ class _RevenueScreenState extends State<RevenueScreen> {
                                 decoration: BoxDecoration(
                                   border: Border.all(color: kBorder),
                                   borderRadius: BorderRadius.circular(6),
-                                  color: Colors.white,
+                                   color: appPanelBg(context),
                                 ),
                                 child: Table(
                                   columnWidths: const {
@@ -800,10 +802,10 @@ class _RevenueScreenState extends State<RevenueScreen> {
                                     4: FlexColumnWidth(1.2),
                                     5: FlexColumnWidth(1.3),
                                   },
-                                  border: const TableBorder.symmetric(inside: BorderSide(color: kBorder)),
+                                   border: TableBorder.symmetric(inside: BorderSide(color: appBorderColor(context))),
                                   children: [
-                                    const TableRow(
-                                      decoration: BoxDecoration(color: Color(0xFFEFF3F8)),
+                                     TableRow(
+                                       decoration: BoxDecoration(color: appPanelSoftBg(context)),
                                       children: [
                                         Padding(padding: EdgeInsets.all(6), child: Text('Mẫu', style: TextStyle(fontWeight: FontWeight.bold))),
                                         Padding(padding: EdgeInsets.all(6), child: Text('Màu', style: TextStyle(fontWeight: FontWeight.bold))),

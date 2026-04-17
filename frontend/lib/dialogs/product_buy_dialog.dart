@@ -18,6 +18,12 @@ class _ProductBuyDialogState extends State<ProductBuyDialog> {
 
   @override
   Widget build(BuildContext context) {
+    final panelBg = appPanelBg(context);
+    final panelSoftBg = appPanelSoftBg(context);
+    final borderColor = appBorderColor(context);
+    final textPrimary = appTextPrimary(context);
+    final textSecondary = appTextSecondary(context);
+    final isDark = Theme.of(context).brightness == Brightness.dark;
     final p = widget.product;
     final byColor = <String, List<Variant>>{};
     for (final v in p.variants) {
@@ -32,9 +38,9 @@ class _ProductBuyDialogState extends State<ProductBuyDialog> {
         constraints: const BoxConstraints(maxWidth: 620, maxHeight: 720),
         child: Container(
           decoration: BoxDecoration(
-            color: Colors.white,
+            color: panelBg,
             borderRadius: BorderRadius.circular(16),
-            border: Border.all(color: kBorder),
+            border: Border.all(color: borderColor),
           ),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
@@ -52,7 +58,7 @@ class _ProductBuyDialogState extends State<ProductBuyDialog> {
                             p.name,
                             maxLines: 2,
                             overflow: TextOverflow.ellipsis,
-                            style: const TextStyle(fontSize: 24, fontWeight: FontWeight.w700, color: kTextPrimary),
+                            style: TextStyle(fontSize: 24, fontWeight: FontWeight.w700, color: textPrimary),
                           ),
                           const SizedBox(height: 4),
                           Text(
@@ -65,13 +71,13 @@ class _ProductBuyDialogState extends State<ProductBuyDialog> {
                     IconButton(
                       onPressed: () => Navigator.pop(context),
                       icon: const Icon(Icons.close),
-                      color: kTextSecondary,
+                      color: textSecondary,
                       mouseCursor: SystemMouseCursors.click,
                     )
                   ],
                 ),
               ),
-              const Divider(height: 1),
+              Divider(height: 1, color: borderColor),
               Expanded(
                 child: ListView.separated(
                   padding: const EdgeInsets.fromLTRB(14, 12, 14, 10),
@@ -82,9 +88,9 @@ class _ProductBuyDialogState extends State<ProductBuyDialog> {
                     return Container(
                       padding: const EdgeInsets.all(10),
                       decoration: BoxDecoration(
-                        color: Colors.white,
+                        color: panelSoftBg,
                         borderRadius: BorderRadius.circular(10),
-                        border: Border.all(color: kBorder),
+                        border: Border.all(color: borderColor),
                       ),
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
@@ -92,13 +98,13 @@ class _ProductBuyDialogState extends State<ProductBuyDialog> {
                           Container(
                             padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
                             decoration: BoxDecoration(
-                              color: kPrimaryLight,
+                              color: isDark ? const Color(0xFF1F2F4A) : kPrimaryLight,
                               borderRadius: BorderRadius.circular(999),
-                              border: Border.all(color: const Color(0xFFFFD9D1)),
+                              border: Border.all(color: isDark ? const Color(0xFF35507A) : const Color(0xFFFFD9D1)),
                             ),
                             child: Text(
                               e.key.toUpperCase(),
-                              style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 12, color: kPrimaryDark),
+                              style: TextStyle(fontWeight: FontWeight.w700, fontSize: 12, color: isDark ? const Color(0xFF93C5FD) : kPrimaryDark),
                             ),
                           ),
                           const SizedBox(height: 8),
@@ -109,11 +115,15 @@ class _ProductBuyDialogState extends State<ProductBuyDialog> {
                               margin: const EdgeInsets.only(bottom: 8),
                               padding: const EdgeInsets.all(10),
                               decoration: BoxDecoration(
-                                color: outOfStock
-                                    ? const Color(0xFFFFF1F2)
-                                    : (lowStock ? const Color(0xFFFFFBEB) : const Color(0xFFF8FAFC)),
+                                color: isDark
+                                    ? (outOfStock
+                                        ? const Color(0xFF3A1F27)
+                                        : (lowStock ? const Color(0xFF3B311C) : const Color(0xFF1A2A44)))
+                                    : (outOfStock
+                                        ? const Color(0xFFFFF1F2)
+                                        : (lowStock ? const Color(0xFFFFFBEB) : const Color(0xFFF8FAFC))),
                                 borderRadius: BorderRadius.circular(8),
-                                border: Border.all(color: kBorder),
+                                border: Border.all(color: borderColor),
                               ),
                               child: Row(
                                 children: [
@@ -121,12 +131,12 @@ class _ProductBuyDialogState extends State<ProductBuyDialog> {
                                     child: Column(
                                       crossAxisAlignment: CrossAxisAlignment.start,
                                       children: [
-                                        Text('Size ${v.size}', style: const TextStyle(fontWeight: FontWeight.w600)),
+                                         Text('Size ${v.size}', style: TextStyle(fontWeight: FontWeight.w600, color: textPrimary)),
                                         const SizedBox(height: 2),
-                                        Text('${formatCurrency(v.price)}k', style: const TextStyle(color: kTextSecondary)),
+                                         Text('${formatCurrency(v.price)}k', style: TextStyle(color: textSecondary)),
                                         Text('Kho: ${v.stock}${outOfStock ? ' (HẾT)' : ''}',
                                             style: TextStyle(
-                                              color: outOfStock ? kDanger : kTextSecondary,
+                                              color: outOfStock ? kDanger : textSecondary,
                                               fontSize: 12,
                                             )),
                                       ],
@@ -166,9 +176,9 @@ class _ProductBuyDialogState extends State<ProductBuyDialog> {
               ),
               Container(
                 padding: const EdgeInsets.fromLTRB(14, 10, 14, 14),
-                decoration: const BoxDecoration(
-                  border: Border(top: BorderSide(color: kBorder)),
-                  color: Colors.white,
+                decoration: BoxDecoration(
+                  border: Border(top: BorderSide(color: borderColor)),
+                  color: panelBg,
                 ),
                 child: SafeArea(
                   top: false,
@@ -301,9 +311,9 @@ class _QuantityStepperState extends State<_QuantityStepper> {
       child: Container(
         height: 40,
         decoration: BoxDecoration(
-          border: Border.all(color: kBorder),
+          border: Border.all(color: appBorderColor(context)),
           borderRadius: BorderRadius.circular(6),
-          color: Colors.white,
+          color: appPanelBg(context),
         ),
         child: Row(
           children: [

@@ -252,9 +252,9 @@ class _PendingApprovalScreenState extends State<PendingApprovalScreen> {
       padding: const EdgeInsets.fromLTRB(10, 0, 10, 10),
       child: Container(
         decoration: BoxDecoration(
-          border: Border.all(color: kBorder),
+          border: Border.all(color: appBorderColor(context)),
           borderRadius: BorderRadius.circular(6),
-          color: const Color(0xFFF8FAFC),
+          color: appPanelSoftBg(context),
         ),
         child: Table(
           columnWidths: const {
@@ -263,10 +263,10 @@ class _PendingApprovalScreenState extends State<PendingApprovalScreen> {
             2: FlexColumnWidth(1),
             3: FlexColumnWidth(1.5),
           },
-          border: const TableBorder.symmetric(inside: BorderSide(color: kBorder)),
+          border: TableBorder.symmetric(inside: BorderSide(color: appBorderColor(context))),
           children: [
-            const TableRow(
-              decoration: BoxDecoration(color: Color(0xFFEFF3F8)),
+            TableRow(
+              decoration: BoxDecoration(color: appPanelBg(context)),
               children: [
                 Padding(padding: EdgeInsets.all(6), child: Text('Mẫu', style: TextStyle(fontWeight: FontWeight.bold))),
                 Padding(padding: EdgeInsets.all(6), child: Text('Màu', style: TextStyle(fontWeight: FontWeight.bold))),
@@ -774,6 +774,12 @@ class _PendingApprovalScreenState extends State<PendingApprovalScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final panelBg = appPanelBg(context);
+    final panelSoftBg = appPanelSoftBg(context);
+    final borderColor = appBorderColor(context);
+    final textPrimary = appTextPrimary(context);
+    final textSecondary = appTextSecondary(context);
+
     Color statusColor(String status) {
       switch (status) {
         case 'completed':
@@ -816,7 +822,7 @@ class _PendingApprovalScreenState extends State<PendingApprovalScreen> {
     }).toList();
 
     return Container(
-      color: const Color(0xFFF3F6FB),
+      color: Theme.of(context).scaffoldBackgroundColor,
       padding: const EdgeInsets.all(14),
       child: Row(
         children: [
@@ -827,16 +833,16 @@ class _PendingApprovalScreenState extends State<PendingApprovalScreen> {
               children: [
                 Row(
                   children: [
-                    const Text('Quản lý', style: TextStyle(fontSize: 26, fontWeight: FontWeight.w700, color: kTextPrimary)),
+                    Text('Quản lý', style: TextStyle(fontSize: 26, fontWeight: FontWeight.w700, color: textPrimary)),
                     const SizedBox(width: 10),
                     Container(
                       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
                       decoration: BoxDecoration(
-                        color: Colors.white,
+                        color: panelBg,
                         borderRadius: BorderRadius.circular(999),
-                        border: Border.all(color: kBorder),
+                        border: Border.all(color: borderColor),
                       ),
-                      child: Text('${_orders.length} chờ duyệt', style: const TextStyle(color: kTextSecondary, fontSize: 12, fontWeight: FontWeight.w600)),
+                      child: Text('${_orders.length} chờ duyệt', style: TextStyle(color: textSecondary, fontSize: 12, fontWeight: FontWeight.w600)),
                     ),
                     const Spacer(),
                     MouseRegion(
@@ -846,8 +852,8 @@ class _PendingApprovalScreenState extends State<PendingApprovalScreen> {
                         icon: const Icon(Icons.refresh, size: 16),
                         label: const Text('Làm mới'),
                         style: OutlinedButton.styleFrom(
-                          backgroundColor: Colors.white,
-                          side: const BorderSide(color: kBorder),
+                          backgroundColor: panelBg,
+                          side: BorderSide(color: borderColor),
                           shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
                         ),
                       ),
@@ -858,21 +864,20 @@ class _PendingApprovalScreenState extends State<PendingApprovalScreen> {
                 Expanded(
                   child: Container(
                     decoration: BoxDecoration(
-                      color: Colors.white,
+                      color: panelBg,
                       borderRadius: BorderRadius.circular(14),
-                      border: Border.all(color: kBorder),
-                      boxShadow: const [BoxShadow(color: Color(0x11000000), blurRadius: 10, offset: Offset(0, 3))],
+                      border: Border.all(color: borderColor),
                     ),
                     child: _loading
                         ? const Center(child: CircularProgressIndicator())
                         : _orders.isEmpty
-                            ? const Center(
+                            ? Center(
                                 child: Column(
                                   mainAxisSize: MainAxisSize.min,
                                   children: [
-                                    Icon(Icons.inbox_outlined, size: 44, color: kTextSecondary),
-                                    SizedBox(height: 8),
-                                    Text('Không có hóa đơn chờ duyệt', style: TextStyle(color: kTextSecondary)),
+                                    Icon(Icons.inbox_outlined, size: 44, color: textSecondary),
+                                    const SizedBox(height: 8),
+                                    Text('Không có hóa đơn chờ duyệt', style: TextStyle(color: textSecondary)),
                                   ],
                                 ),
                               )
@@ -885,20 +890,20 @@ class _PendingApprovalScreenState extends State<PendingApprovalScreen> {
                                   return Container(
                                     padding: const EdgeInsets.all(12),
                                     decoration: BoxDecoration(
-                                      color: const Color(0xFFFBFDFF),
+                                      color: panelSoftBg,
                                       borderRadius: BorderRadius.circular(12),
-                                      border: Border.all(color: kBorder),
+                                      border: Border.all(color: borderColor),
                                     ),
                                     child: Column(
                                       crossAxisAlignment: CrossAxisAlignment.start,
                                       children: [
-                                        Text('Đơn #${o.id} • ${o.customerName}', style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 15)),
+                                        Text('Đơn #${o.id} • ${o.customerName}', style: TextStyle(fontWeight: FontWeight.w700, fontSize: 15, color: textPrimary)),
                                         const SizedBox(height: 4),
-                                        Text('${formatDate(o.createdAt)} • SL ${o.totalQty} • ${formatCurrency(o.totalAmount)} k', style: const TextStyle(color: kTextSecondary)),
+                                        Text('${formatDate(o.createdAt)} • SL ${o.totalQty} • ${formatCurrency(o.totalAmount)} k', style: TextStyle(color: textSecondary)),
                                          if (o.createdByEmployeeName.trim().isNotEmpty)
                                            Padding(
                                              padding: const EdgeInsets.only(top: 2),
-                                             child: Text('Người gửi: ${o.createdByEmployeeName}', style: const TextStyle(fontSize: 12, color: kTextSecondary)),
+                                              child: Text('Người gửi: ${o.createdByEmployeeName}', style: TextStyle(fontSize: 12, color: textSecondary)),
                                            ),
                                         const SizedBox(height: 8),
                                         _buildOrderItemsExcelTable(o),
@@ -939,10 +944,9 @@ class _PendingApprovalScreenState extends State<PendingApprovalScreen> {
             flex: 6,
             child: Container(
               decoration: BoxDecoration(
-                color: Colors.white,
-                border: Border.all(color: kBorder),
+                color: panelBg,
+                border: Border.all(color: borderColor),
                 borderRadius: BorderRadius.circular(14),
-                boxShadow: const [BoxShadow(color: Color(0x11000000), blurRadius: 10, offset: Offset(0, 3))],
               ),
               child: Column(
                 children: [
@@ -970,9 +974,9 @@ class _PendingApprovalScreenState extends State<PendingApprovalScreen> {
                                 duration: const Duration(milliseconds: 300),
                                 margin: const EdgeInsets.only(bottom: 10),
                                 decoration: BoxDecoration(
-                                  border: Border.all(color: isHighlighted ? kPrimary : kBorder),
+                                  border: Border.all(color: isHighlighted ? kPrimary : borderColor),
                                   borderRadius: BorderRadius.circular(12),
-                                  color: isHighlighted ? const Color(0xFFFFF7E6) : const Color(0xFFFCFDFF),
+                                  color: isHighlighted ? const Color(0xFFFFF7E6) : panelSoftBg,
                                 ),
                                 child: ExpansionTile(
                                   tilePadding: const EdgeInsets.fromLTRB(12, 8, 12, 6),
@@ -998,16 +1002,16 @@ class _PendingApprovalScreenState extends State<PendingApprovalScreen> {
                                     child: Column(
                                       crossAxisAlignment: CrossAxisAlignment.start,
                                       children: [
-                                        Text('${o.customerName} • ${formatDate(o.createdAt)}', style: const TextStyle(color: kTextSecondary, fontSize: 12)),
+                                        Text('${o.customerName} • ${formatDate(o.createdAt)}', style: TextStyle(color: textSecondary, fontSize: 12)),
                                         if (o.pickerNote.trim().isNotEmpty)
                                           Padding(
                                             padding: const EdgeInsets.only(top: 3),
-                                            child: Text('Ghi chú: ${o.pickerNote}', style: const TextStyle(fontSize: 12, color: kTextPrimary, fontWeight: FontWeight.w600)),
+                                            child: Text('Ghi chú: ${o.pickerNote}', style: TextStyle(fontSize: 12, color: textPrimary, fontWeight: FontWeight.w600)),
                                           ),
                                         if (o.assignedPickerName.isNotEmpty)
-                                          Text('Nhận: ${o.assignedPickerName} ${o.assignedAt.isNotEmpty ? '• ${o.assignedAt}' : ''}', style: const TextStyle(fontSize: 12)),
+                                          Text('Nhận: ${o.assignedPickerName} ${o.assignedAt.isNotEmpty ? '• ${o.assignedAt}' : ''}', style: TextStyle(fontSize: 12, color: textSecondary)),
                                         if (o.deliveredByName.isNotEmpty)
-                                          Text('Giao: ${o.deliveredByName} ${o.deliveredAt.isNotEmpty ? '• ${o.deliveredAt}' : ''}', style: const TextStyle(fontSize: 12)),
+                                          Text('Giao: ${o.deliveredByName} ${o.deliveredAt.isNotEmpty ? '• ${o.deliveredAt}' : ''}', style: TextStyle(fontSize: 12, color: textSecondary)),
                                         if (o.deliveryPhotoPath.isNotEmpty || o.deliveryPhotoPaths.isNotEmpty)
                                           Padding(
                                             padding: const EdgeInsets.only(top: 4),
@@ -1025,7 +1029,7 @@ class _PendingApprovalScreenState extends State<PendingApprovalScreen> {
                                                     style: const TextStyle(color: kPrimary),
                                                   ),
                                                   style: OutlinedButton.styleFrom(
-                                                    side: const BorderSide(color: kBorder),
+                                                    side: BorderSide(color: borderColor),
                                                     padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
                                                     shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
                                                   ),
@@ -1105,7 +1109,7 @@ class _PendingApprovalScreenState extends State<PendingApprovalScreen> {
                               ),
                               Expanded(
                                 child: filteredEmployees.isEmpty
-                                    ? const Center(child: Text('Không có nhân viên phù hợp'))
+                                    ? Center(child: Text('Không có nhân viên phù hợp', style: TextStyle(color: textSecondary)))
                                     : ListView.builder(
                                         padding: const EdgeInsets.all(12),
                                         itemCount: filteredEmployees.length,
@@ -1115,9 +1119,9 @@ class _PendingApprovalScreenState extends State<PendingApprovalScreen> {
                                             margin: const EdgeInsets.only(bottom: 8),
                                             padding: const EdgeInsets.fromLTRB(12, 10, 12, 10),
                                             decoration: BoxDecoration(
-                                              border: Border.all(color: kBorder),
+                                              border: Border.all(color: borderColor),
                                               borderRadius: BorderRadius.circular(10),
-                                              color: const Color(0xFFFCFDFF),
+                                              color: panelSoftBg,
                                             ),
                                             child: Column(
                                               crossAxisAlignment: CrossAxisAlignment.start,
@@ -1125,7 +1129,7 @@ class _PendingApprovalScreenState extends State<PendingApprovalScreen> {
                                                 Row(
                                                   children: [
                                                     Expanded(
-                                                      child: Text(e.name, style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 15)),
+                                                      child: Text(e.name, style: TextStyle(fontWeight: FontWeight.w700, fontSize: 15, color: textPrimary)),
                                                     ),
                                                     Container(
                                                       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
@@ -1152,17 +1156,17 @@ class _PendingApprovalScreenState extends State<PendingApprovalScreen> {
                                                   ],
                                                 ),
                                                 const SizedBox(height: 4),
-                                                Text('${_roleLabel(e.role)} • PIN: ${e.pin}'),
-                                                Text('SĐT: ${e.phone.isEmpty ? '-' : e.phone} • Email: ${e.email.isEmpty ? '-' : e.email}'),
-                                                if (e.address.trim().isNotEmpty) Text('Địa chỉ: ${e.address.trim()}'),
-                                                if (e.notes.trim().isNotEmpty) Text('Ghi chú: ${e.notes.trim()}'),
+                                                Text('${_roleLabel(e.role)} • PIN: ${e.pin}', style: TextStyle(color: textSecondary)),
+                                                Text('SĐT: ${e.phone.isEmpty ? '-' : e.phone} • Email: ${e.email.isEmpty ? '-' : e.email}', style: TextStyle(color: textSecondary)),
+                                                if (e.address.trim().isNotEmpty) Text('Địa chỉ: ${e.address.trim()}', style: TextStyle(color: textSecondary)),
+                                                if (e.notes.trim().isNotEmpty) Text('Ghi chú: ${e.notes.trim()}', style: TextStyle(color: textSecondary)),
                                                 const SizedBox(height: 6),
                                                 Row(
                                                   children: [
                                                     Expanded(
                                                       child: Text(
                                                         'Đã giao: ${e.deliveredCount} đơn${e.lastDeliveredAt.isNotEmpty ? ' • Gần nhất: ${e.lastDeliveredAt}' : ''}',
-                                                        style: const TextStyle(fontSize: 12, color: kTextSecondary),
+                                                        style: TextStyle(fontSize: 12, color: textSecondary),
                                                       ),
                                                     ),
                                                     MouseRegion(

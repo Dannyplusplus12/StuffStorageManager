@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 import 'package:http/http.dart' as http;
@@ -12,6 +13,23 @@ class ApiService {
   static String get baseUrl => _b;
   static const _timeout = Duration(seconds: 15);
   static final _headers = {'Content-Type': 'application/json'};
+
+  static Future<http.Response> _getWithRetry(
+    Uri uri, {
+    Duration timeout = _timeout,
+    int retries = 1,
+  }) async {
+    for (var attempt = 0; attempt <= retries; attempt++) {
+      try {
+        return await http.get(uri).timeout(timeout + Duration(seconds: attempt * 5));
+      } on TimeoutException {
+        if (attempt >= retries) rethrow;
+      } on SocketException {
+        if (attempt >= retries) rethrow;
+      }
+    }
+    throw TimeoutException('Future not completed');
+  }
 
   static String resolveApiUrl(String pathOrUrl) {
     final raw = pathOrUrl.trim();
@@ -30,7 +48,7 @@ class ApiService {
   // ── Products ──
   static Future<List<Product>> getProducts({String search = ''}) async {
     final uri = search.isEmpty ? Uri.parse('$_b/products') : Uri.parse('$_b/products?search=${Uri.encodeComponent(search)}');
-    final r = await http.get(uri).timeout(_timeout);
+    final r = await _getWithRetry(uri, retries: 1);
     if (r.statusCode == 200) return (jsonDecode(utf8.decode(r.bodyBytes)) as List).map((e) => Product.fromJson(e)).toList();
     throw Exception('Lỗi tải sản phẩm: ${r.statusCode}');
   }
@@ -457,7 +475,7 @@ class ApiService {
       'days': '$days',
       'limit': '$limit',
     });
-    final r = await http.get(uri).timeout(_timeout);
+    final r = await _getWithRetry(uri, retries: 1);
     if (r.statusCode == 200) {
       final data = jsonDecode(utf8.decode(r.bodyBytes)) as Map<String, dynamic>;
       return (data['data'] as List? ?? const []).map((e) => Order.fromJson(e)).toList();

@@ -26,14 +26,18 @@ class _AreasScreenState extends State<AreasScreen> {
         child: Container(
           width: 380,
           padding: const EdgeInsets.all(16),
-          decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(16), border: Border.all(color: kBorder)),
+            decoration: BoxDecoration(
+              color: appPanelBg(context),
+              borderRadius: BorderRadius.circular(16),
+              border: Border.all(color: appBorderColor(context)),
+            ),
           child: Column(
             mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Text(title, style: const TextStyle(fontSize: 24, fontWeight: FontWeight.bold, color: kTextPrimary)),
+                Text(title, style: TextStyle(fontSize: 24, fontWeight: FontWeight.bold, color: appTextPrimary(context))),
               const SizedBox(height: 8),
-              Text(message, style: const TextStyle(color: kTextSecondary)),
+                Text(message, style: TextStyle(color: appTextSecondary(context))),
               const SizedBox(height: 14),
               Row(
                 mainAxisAlignment: MainAxisAlignment.end,
@@ -109,12 +113,16 @@ class _AreasScreenState extends State<AreasScreen> {
         child: Container(
           width: 380,
           padding: const EdgeInsets.all(16),
-          decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(16), border: Border.all(color: kBorder)),
+          decoration: BoxDecoration(
+            color: appPanelBg(context),
+            borderRadius: BorderRadius.circular(16),
+            border: Border.all(color: appBorderColor(context)),
+          ),
           child: Column(
             mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              const Text('Đổi tên khu vực', style: TextStyle(fontSize: 24, fontWeight: FontWeight.bold, color: kTextPrimary)),
+              Text('Đổi tên khu vực', style: TextStyle(fontSize: 24, fontWeight: FontWeight.bold, color: appTextPrimary(context))),
               const SizedBox(height: 8),
               TextField(controller: ctrl, decoration: const InputDecoration(labelText: 'Tên khu vực')),
               const SizedBox(height: 12),
@@ -159,6 +167,10 @@ class _AreasScreenState extends State<AreasScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final panelBg = appPanelBg(context);
+    final panelSoftBg = appPanelSoftBg(context);
+    final borderColor = appBorderColor(context);
+    final textPrimary = appTextPrimary(context);
     return Padding(
       padding: const EdgeInsets.all(16),
       child: Row(
@@ -168,11 +180,11 @@ class _AreasScreenState extends State<AreasScreen> {
             width: 340,
             child: Container(
               padding: const EdgeInsets.all(12),
-              decoration: BoxDecoration(color: Colors.white, border: Border.all(color: kBorder), borderRadius: BorderRadius.circular(8)),
+              decoration: BoxDecoration(color: panelBg, border: Border.all(color: borderColor), borderRadius: BorderRadius.circular(8)),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
-                  const Text('Thêm chợ / khu vực mới', style: TextStyle(fontWeight: FontWeight.bold)),
+                  Text('Thêm chợ / khu vực mới', style: TextStyle(fontWeight: FontWeight.bold, color: textPrimary)),
                   const SizedBox(height: 10),
                   TextField(controller: _nameCtrl, decoration: const InputDecoration(hintText: 'Tên khu vực...')),
                   const SizedBox(height: 10),
@@ -188,12 +200,12 @@ class _AreasScreenState extends State<AreasScreen> {
           Expanded(
             child: Container(
               padding: const EdgeInsets.all(10),
-              decoration: BoxDecoration(color: Colors.white, border: Border.all(color: kBorder), borderRadius: BorderRadius.circular(8)),
+              decoration: BoxDecoration(color: panelBg, border: Border.all(color: borderColor), borderRadius: BorderRadius.circular(8)),
               child: _loading
                   ? const Center(child: CircularProgressIndicator())
                   : SingleChildScrollView(
                       child: DataTable(
-                        headingRowColor: WidgetStateProperty.all(const Color(0xFFF8FAFC)),
+                        headingRowColor: WidgetStateProperty.all(panelSoftBg),
                         columns: const [
                           DataColumn(label: Text('Tên Khu Vực', style: TextStyle(fontWeight: FontWeight.bold))),
                           DataColumn(label: Text('Số Khách', style: TextStyle(fontWeight: FontWeight.bold))),

@@ -355,6 +355,10 @@ class _AddProductPanelState extends State<AddProductPanel> {
 
   @override
   Widget build(BuildContext context) {
+    final panelSoftBg = appPanelSoftBg(context);
+    final borderColor = appBorderColor(context);
+    final textPrimary = appTextPrimary(context);
+    final textSecondary = appTextSecondary(context);
     final panelHeight = (MediaQuery.of(context).size.height - 120).clamp(480.0, 1200.0);
     final panelWidth = MediaQuery.of(context).size.width;
     final leftPanelWidth = (panelWidth * 0.26).clamp(240.0, 300.0);
@@ -382,27 +386,27 @@ class _AddProductPanelState extends State<AddProductPanel> {
                         children: [
                           Container(
                             padding: const EdgeInsets.all(12),
-                            decoration: BoxDecoration(color: const Color(0xFFF8FAFC), border: Border.all(color: const Color(0xFFE2E8F0)), borderRadius: BorderRadius.circular(10)),
+                            decoration: BoxDecoration(color: panelSoftBg, border: Border.all(color: borderColor), borderRadius: BorderRadius.circular(10)),
                             child: Column(
                               crossAxisAlignment: CrossAxisAlignment.stretch,
                               children: [
-                                const Text('Ảnh sản phẩm', style: TextStyle(fontWeight: FontWeight.w700, color: kTextPrimary)),
+                                Text('Ảnh sản phẩm', style: TextStyle(fontWeight: FontWeight.w700, color: textPrimary)),
                                 const SizedBox(height: 8),
                                 SizedBox(
                                   height: previewHeight,
                                   child: AspectRatio(
                                     aspectRatio: kProductImageAspect,
                                     child: Container(
-                                      decoration: BoxDecoration(color: const Color(0xFFF8FAFC), border: Border.all(color: const Color(0xFFE2E8F0)), borderRadius: BorderRadius.circular(8)),
+                                      decoration: BoxDecoration(color: panelSoftBg, border: Border.all(color: borderColor), borderRadius: BorderRadius.circular(8)),
                                       child: _previewImagePath == null
-                                          ? const Center(child: Text('Chưa chọn ảnh', style: TextStyle(color: Colors.grey)))
+                                          ? Center(child: Text('Chưa chọn ảnh', style: TextStyle(color: textSecondary)))
                                           : ClipRRect(
                                               borderRadius: BorderRadius.circular(8),
                                               child: Image.file(
                                                 File(_previewImagePath!),
                                                 fit: BoxFit.cover,
                                                 alignment: Alignment.center,
-                                                errorBuilder: (_, __, ___) => const Center(child: Text('Không tải được ảnh', style: TextStyle(color: Colors.grey))),
+                                                errorBuilder: (_, __, ___) => Center(child: Text('Không tải được ảnh', style: TextStyle(color: textSecondary))),
                                               ),
                                             ),
                                     ),
@@ -419,15 +423,15 @@ class _AddProductPanelState extends State<AddProductPanel> {
                       const SizedBox(height: 10),
                       Container(
                         padding: const EdgeInsets.all(12),
-                        decoration: BoxDecoration(color: const Color(0xFFF6F7FB), border: Border.all(color: const Color(0xFFE2E8F0)), borderRadius: BorderRadius.circular(10)),
+                        decoration: BoxDecoration(color: panelSoftBg, border: Border.all(color: borderColor), borderRadius: BorderRadius.circular(10)),
                         child: Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
-                            const Text('Tóm tắt nhanh', style: TextStyle(fontWeight: FontWeight.w700, color: kTextPrimary)),
+                            Text('Tóm tắt nhanh', style: TextStyle(fontWeight: FontWeight.w700, color: textPrimary)),
                             const SizedBox(height: 8),
-                            Text('• Nhóm màu: $colorCount', style: const TextStyle(color: kTextSecondary)),
-                            Text('• Biến thể size: $variantCount', style: const TextStyle(color: kTextSecondary)),
-                            Text('• Ảnh: ${_previewImagePath == null ? 'Chưa có' : 'Đã chọn'}', style: const TextStyle(color: kTextSecondary)),
+                            Text('• Nhóm màu: $colorCount', style: TextStyle(color: textSecondary)),
+                            Text('• Biến thể size: $variantCount', style: TextStyle(color: textSecondary)),
+                            Text('• Ảnh: ${_previewImagePath == null ? 'Chưa có' : 'Đã chọn'}', style: TextStyle(color: textSecondary)),
                           ],
                         ),
                       ),
@@ -453,18 +457,18 @@ class _AddProductPanelState extends State<AddProductPanel> {
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      const Text('Nhập hàng', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 24, color: kTextPrimary)),
+                      Text('Nhập hàng', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 24, color: textPrimary)),
                       const SizedBox(height: 2),
-                      const Text('Tạo mẫu giày mới với mã hàng, ảnh và biến thể màu/size', style: TextStyle(color: kTextSecondary)),
+                      Text('Tạo mẫu giày mới với mã hàng, ảnh và biến thể màu/size', style: TextStyle(color: textSecondary)),
                       const SizedBox(height: 10),
                       Container(
                         width: double.infinity,
                         padding: const EdgeInsets.all(12),
-                        decoration: BoxDecoration(color: const Color(0xFFF8FAFC), border: Border.all(color: const Color(0xFFE2E8F0)), borderRadius: BorderRadius.circular(10)),
+                        decoration: BoxDecoration(color: panelSoftBg, border: Border.all(color: borderColor), borderRadius: BorderRadius.circular(10)),
                         child: Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
-                            const Text('Thông tin mẫu', style: TextStyle(fontWeight: FontWeight.w700, color: kTextPrimary)),
+                            Text('Thông tin mẫu', style: TextStyle(fontWeight: FontWeight.w700, color: textPrimary)),
                             const SizedBox(height: 8),
                             Row(
                               children: [
@@ -516,11 +520,11 @@ class _AddProductPanelState extends State<AddProductPanel> {
                         child: Container(
                           width: double.infinity,
                           padding: const EdgeInsets.all(10),
-                          decoration: BoxDecoration(color: const Color(0xFFF9FAFD), border: Border.all(color: const Color(0xFFE2E8F0)), borderRadius: BorderRadius.circular(10)),
+                          decoration: BoxDecoration(color: panelSoftBg, border: Border.all(color: borderColor), borderRadius: BorderRadius.circular(10)),
                           child: Column(
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
-                              const Text('Biến thể màu & size', style: TextStyle(fontWeight: FontWeight.w700, color: kTextPrimary)),
+                              Text('Biến thể màu & size', style: TextStyle(fontWeight: FontWeight.w700, color: textPrimary)),
                               const SizedBox(height: 8),
                               Expanded(
                                 child: ListView(
@@ -557,11 +561,11 @@ class _AddProductPanelState extends State<AddProductPanel> {
     return Card(
       key: ValueKey('group_${g.id}'),
       margin: const EdgeInsets.symmetric(vertical: 4),
-      color: const Color(0xFFF8FAFC),
+      color: appPanelSoftBg(context),
       elevation: 0,
       shape: RoundedRectangleBorder(
         borderRadius: BorderRadius.circular(10),
-        side: const BorderSide(color: kBorder),
+        side: BorderSide(color: appBorderColor(context)),
       ),
       child: Padding(
         padding: const EdgeInsets.all(8),

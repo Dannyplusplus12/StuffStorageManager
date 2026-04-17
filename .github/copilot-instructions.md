@@ -39,6 +39,7 @@
 - In mobile picker confirm popup, place picker note input at the top (right below date and quantity summary).
 - In desktop management page, hide raw image URL text and keep a cleaner modern layout with the same information structure.
 - **Revenue date picker UI preference**: display day in standard calendar view only, removing custom month/year selector UI; keep a clean single-calendar layout and harmonious bottom date input styling (not oversized).
+- **App dark mode** should use a modern dark-blue palette (not pure black), preserve readability, and avoid hurting text input usability; place a theme toggle in the far right of the bottom navigation area, visually separated from the main navigation tabs.
 
 ## Desktop UI Guidelines
 - Interactive buttons in the desktop Flutter UI should show `SystemMouseCursors.click` cursor feedback (not `grab`).

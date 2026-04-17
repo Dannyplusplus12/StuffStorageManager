@@ -26,6 +26,14 @@ class MyApp extends StatefulWidget {
 }
 
 class _MyAppState extends State<MyApp> {
+  ThemeMode _themeMode = ThemeMode.light;
+
+  void _toggleThemeMode() {
+    setState(() {
+      _themeMode = _themeMode == ThemeMode.dark ? ThemeMode.light : ThemeMode.dark;
+    });
+  }
+
   @override
   void initState() {
     super.initState();
@@ -52,7 +60,9 @@ class _MyAppState extends State<MyApp> {
     return MaterialApp(
       title: 'Fisd',
       debugShowCheckedModeBanner: false,
-      theme: buildTheme(),
+      theme: buildLightTheme(),
+      darkTheme: buildDarkTheme(),
+      themeMode: _themeMode,
       localizationsDelegates: const [
         GlobalMaterialLocalizations.delegate,
         GlobalWidgetsLocalizations.delegate,
@@ -63,7 +73,12 @@ class _MyAppState extends State<MyApp> {
         Locale('en', 'US'),
       ],
       locale: const Locale('vi', 'VN'),
-      home: DeviceDetector.isMobile ? const MobileHomeScreen() : const HomeScreen(),
+      home: DeviceDetector.isMobile
+          ? const MobileHomeScreen()
+          : HomeScreen(
+              isDarkMode: _themeMode == ThemeMode.dark,
+              onToggleTheme: _toggleThemeMode,
+            ),
     );
   }
 }

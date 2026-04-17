@@ -12,7 +12,14 @@ import 'pending_approval_screen.dart';
 export '../app_pages.dart';
 
 class HomeScreen extends StatefulWidget {
-  const HomeScreen({super.key});
+  final bool isDarkMode;
+  final VoidCallback? onToggleTheme;
+
+  const HomeScreen({
+    super.key,
+    this.isDarkMode = false,
+    this.onToggleTheme,
+  });
   @override
   State<HomeScreen> createState() => _HomeScreenState();
 }
@@ -47,7 +54,12 @@ class _HomeScreenState extends State<HomeScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       body: _body(),
-      bottomNavigationBar: _BottomNavBar(selected: _page, onSelect: _select),
+      bottomNavigationBar: _BottomNavBar(
+        selected: _page,
+        onSelect: _select,
+        isDarkMode: widget.isDarkMode,
+        onToggleTheme: widget.onToggleTheme,
+      ),
     );
   }
 
@@ -79,43 +91,111 @@ class _HomeScreenState extends State<HomeScreen> {
 class _BottomNavBar extends StatelessWidget {
   final AppPage selected;
   final ValueChanged<AppPage> onSelect;
-  const _BottomNavBar({required this.selected, required this.onSelect});
+  final bool isDarkMode;
+  final VoidCallback? onToggleTheme;
+
+  const _BottomNavBar({
+    required this.selected,
+    required this.onSelect,
+    required this.isDarkMode,
+    this.onToggleTheme,
+  });
 
   @override
   Widget build(BuildContext context) {
     final pendingCount = NotificationService.pendingOrderCount;
+    final colorScheme = Theme.of(context).colorScheme;
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final navBg = isDark ? colorScheme.surface : Colors.white;
+    final navBorder = isDark ? const Color(0xFF263449) : kBorder;
     return Container(
-      decoration: const BoxDecoration(
-        color: Colors.white,
-        border: Border(top: BorderSide(color: kBorder)),
+      decoration: BoxDecoration(
+        color: navBg,
+        border: Border(top: BorderSide(color: navBorder)),
       ),
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-      child: SingleChildScrollView(
-        scrollDirection: Axis.horizontal,
-        child: Row(
-          children: [
-            _item(Icons.add_box_outlined, Icons.add_box, 'Nhập hàng', AppPage.stockIn),
-            _item(Icons.inventory_2_outlined, Icons.inventory_2, 'Kho hàng', AppPage.inventory),
-            _item(Icons.point_of_sale_outlined, Icons.point_of_sale, 'Xuất hàng', AppPage.pos),
-            _item(Icons.storefront_outlined, Icons.storefront, 'Bán hàng', AppPage.sales),
-            _item(Icons.bar_chart_outlined, Icons.bar_chart, 'Doanh thu', AppPage.revenue),
-            _item(Icons.map_outlined, Icons.map, 'Khu vực', AppPage.areas),
-            _item(Icons.people_outline, Icons.people, 'Công nợ', AppPage.debt),
-            _item(
-              Icons.fact_check_outlined,
-              Icons.fact_check,
-              'Quản lý',
-              AppPage.pendingApproval,
-              badgeCount: pendingCount,
+      child: Row(
+        children: [
+          Expanded(
+            child: SingleChildScrollView(
+              scrollDirection: Axis.horizontal,
+              child: Row(
+                children: [
+                  _item(context, Icons.add_box_outlined, Icons.add_box, 'Nhập hàng', AppPage.stockIn),
+                  _item(context, Icons.inventory_2_outlined, Icons.inventory_2, 'Kho hàng', AppPage.inventory),
+                  _item(context, Icons.point_of_sale_outlined, Icons.point_of_sale, 'Xuất hàng', AppPage.pos),
+                  _item(context, Icons.storefront_outlined, Icons.storefront, 'Bán hàng', AppPage.sales),
+                  _item(context, Icons.bar_chart_outlined, Icons.bar_chart, 'Doanh thu', AppPage.revenue),
+                  _item(context, Icons.map_outlined, Icons.map, 'Khu vực', AppPage.areas),
+                  _item(context, Icons.people_outline, Icons.people, 'Công nợ', AppPage.debt),
+                  _item(
+                    context,
+                    Icons.fact_check_outlined,
+                    Icons.fact_check,
+                    'Quản lý',
+                    AppPage.pendingApproval,
+                    badgeCount: pendingCount,
+                  ),
+                ],
+              ),
             ),
+          ),
+          if (onToggleTheme != null) ...[
+            const SizedBox(width: 14),
+            Container(width: 1, height: 28, color: navBorder),
+            const SizedBox(width: 10),
+            _themeToggle(isDark),
           ],
+        ],
+      ),
+    );
+  }
+
+  Widget _themeToggle(bool isDark) {
+    final activeColor = isDark ? const Color(0xFF60A5FA) : kPrimary;
+    final activeBg = isDark ? const Color(0xFF1D2B45) : kPrimaryLight;
+    final idleColor = isDark ? const Color(0xFF94A3B8) : kTextSecondary;
+
+    return Container(
+      margin: const EdgeInsets.only(left: 2),
+      child: InkWell(
+        mouseCursor: SystemMouseCursors.click,
+        onTap: onToggleTheme,
+        borderRadius: BorderRadius.circular(10),
+        child: AnimatedContainer(
+          duration: const Duration(milliseconds: 160),
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+          decoration: BoxDecoration(
+            color: activeBg,
+            borderRadius: BorderRadius.circular(10),
+            border: Border.all(color: activeColor.withValues(alpha: 0.75)),
+          ),
+          child: Row(
+            children: [
+              Icon(isDark ? Icons.nightlight_round : Icons.light_mode, color: activeColor, size: 18),
+              const SizedBox(width: 8),
+              Text(
+                isDarkMode ? 'Dark' : 'Light',
+                style: TextStyle(
+                  color: isDark ? Colors.white : idleColor,
+                  fontWeight: FontWeight.w600,
+                  fontSize: 13,
+                ),
+              ),
+            ],
+          ),
         ),
       ),
     );
   }
 
-  Widget _item(IconData icon, IconData activeIcon, String label, AppPage page, {int badgeCount = 0}) {
+  Widget _item(BuildContext context, IconData icon, IconData activeIcon, String label, AppPage page, {int badgeCount = 0}) {
     final active = selected == page;
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final color = active
+        ? (isDark ? const Color(0xFF60A5FA) : kPrimary)
+        : (isDark ? const Color(0xFF94A3B8) : kTextSecondary);
+    final activeBg = isDark ? const Color(0xFF1A2A44) : kPrimaryLight;
     return Container(
       margin: const EdgeInsets.symmetric(horizontal: 4),
       child: InkWell(
@@ -126,22 +206,22 @@ class _BottomNavBar extends StatelessWidget {
           duration: const Duration(milliseconds: 150),
           padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
           decoration: BoxDecoration(
-            color: active ? kPrimaryLight : Colors.transparent,
+            color: active ? activeBg : Colors.transparent,
             borderRadius: BorderRadius.circular(8),
-            border: Border.all(color: active ? kPrimary : Colors.transparent),
+            border: Border.all(color: active ? color : Colors.transparent),
           ),
           child: Row(
             children: [
               Icon(
                 active ? activeIcon : icon,
-                color: active ? kPrimary : kTextSecondary,
+                color: color,
                 size: 18,
               ),
               const SizedBox(width: 8),
               Text(
                 label,
                 style: TextStyle(
-                  color: active ? kPrimary : kTextSecondary,
+                  color: color,
                   fontWeight: active ? FontWeight.w600 : FontWeight.normal,
                   fontSize: 13,
                 ),

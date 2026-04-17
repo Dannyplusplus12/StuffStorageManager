@@ -232,6 +232,9 @@ class _SalesScreenState extends State<SalesScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final panelBg = appPanelBg(context);
+    final borderColor = appBorderColor(context);
+    final textPrimary = appTextPrimary(context);
     return Padding(
       padding: const EdgeInsets.all(12),
       child: Center(
@@ -242,11 +245,11 @@ class _SalesScreenState extends State<SalesScreen> {
               Container(
                 width: double.infinity,
                 padding: const EdgeInsets.all(10),
-                decoration: BoxDecoration(color: Colors.white, border: Border.all(color: kBorder), borderRadius: BorderRadius.circular(8)),
+                decoration: BoxDecoration(color: panelBg, border: Border.all(color: borderColor), borderRadius: BorderRadius.circular(8)),
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    const Text('Bán hàng', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: kTextPrimary)),
+                    Text('Bán hàng', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: textPrimary)),
                     const SizedBox(height: 8),
                     Table(
                       columnWidths: const {
@@ -257,21 +260,21 @@ class _SalesScreenState extends State<SalesScreen> {
                         4: FixedColumnWidth(160),
                       },
                       children: [
-                        const TableRow(
+                        TableRow(
                           children: [
                             Padding(
-                              padding: EdgeInsets.only(bottom: 4),
-                              child: Text('Khách hàng', style: TextStyle(fontSize: 12, color: kTextSecondary, fontWeight: FontWeight.w600)),
+                              padding: const EdgeInsets.only(bottom: 4),
+                              child: Text('Khách hàng', style: TextStyle(fontSize: 12, color: appTextSecondary(context), fontWeight: FontWeight.w600)),
                             ),
-                            SizedBox.shrink(),
+                            const SizedBox.shrink(),
                             Padding(
-                              padding: EdgeInsets.only(bottom: 4),
-                              child: Text('Số điện thoại', style: TextStyle(fontSize: 12, color: kTextSecondary, fontWeight: FontWeight.w600)),
+                              padding: const EdgeInsets.only(bottom: 4),
+                              child: Text('Số điện thoại', style: TextStyle(fontSize: 12, color: appTextSecondary(context), fontWeight: FontWeight.w600)),
                             ),
-                            SizedBox.shrink(),
+                            const SizedBox.shrink(),
                             Padding(
-                              padding: EdgeInsets.only(bottom: 4),
-                              child: Text('Ngày xuất', style: TextStyle(fontSize: 12, color: kTextSecondary, fontWeight: FontWeight.w600)),
+                              padding: const EdgeInsets.only(bottom: 4),
+                              child: Text('Ngày xuất', style: TextStyle(fontSize: 12, color: appTextSecondary(context), fontWeight: FontWeight.w600)),
                             ),
                           ],
                         ),
@@ -318,7 +321,7 @@ class _SalesScreenState extends State<SalesScreen> {
               Expanded(
                 child: Container(
                   width: double.infinity,
-                  decoration: BoxDecoration(color: Colors.white, border: Border.all(color: kBorder), borderRadius: BorderRadius.circular(8)),
+                  decoration: BoxDecoration(color: panelBg, border: Border.all(color: borderColor), borderRadius: BorderRadius.circular(8)),
                   child: _loading
                       ? const Center(child: CircularProgressIndicator())
                       : Column(
@@ -339,7 +342,7 @@ class _SalesScreenState extends State<SalesScreen> {
                 padding: const EdgeInsets.symmetric(horizontal: 4),
                 child: Row(
                   children: [
-                    Text('TỔNG TIỀN: ${formatCurrency(_total)} k', style: const TextStyle(fontSize: 34, fontWeight: FontWeight.bold)),
+                    Text('TỔNG TIỀN: ${formatCurrency(_total)} k', style: TextStyle(fontSize: 34, fontWeight: FontWeight.bold, color: textPrimary)),
                     const Spacer(),
                     SizedBox(
                       height: 48,
@@ -360,10 +363,16 @@ class _SalesScreenState extends State<SalesScreen> {
   }
 
   Widget _header() {
-    Widget th(String t, {double? w}) => SizedBox(width: w, child: Text(t, style: const TextStyle(fontWeight: FontWeight.bold)));
+    Widget th(String t, {double? w}) => SizedBox(
+          width: w,
+          child: Text(t, style: TextStyle(fontWeight: FontWeight.bold, color: appTextPrimary(context))),
+        );
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 10),
-      decoration: const BoxDecoration(border: Border(bottom: BorderSide(color: kBorder)), color: Color(0xFFF8FAFC)),
+      decoration: BoxDecoration(
+        border: Border(bottom: BorderSide(color: appBorderColor(context))),
+        color: appPanelSoftBg(context),
+      ),
       child: Row(
         children: [
           th('Mã hàng', w: 140),
@@ -388,7 +397,7 @@ class _SalesScreenState extends State<SalesScreen> {
   Widget _row(int idx, _SaleRow r) {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
-      decoration: const BoxDecoration(border: Border(bottom: BorderSide(color: kBorder))),
+      decoration: BoxDecoration(border: Border(bottom: BorderSide(color: appBorderColor(context)))),
       child: Row(
         children: [
           SizedBox(
@@ -435,8 +444,8 @@ class _SalesScreenState extends State<SalesScreen> {
             ),
           ),
           const SizedBox(width: 8),
-          SizedBox(width: 120, child: Text(formatCurrency(r.price))),
-          SizedBox(width: 130, child: Text(formatCurrency(r.amount))),
+          SizedBox(width: 120, child: Text(formatCurrency(r.price), style: TextStyle(color: appTextPrimary(context)))),
+          SizedBox(width: 130, child: Text(formatCurrency(r.amount), style: TextStyle(color: appTextPrimary(context)))),
           IconButton(
             mouseCursor: SystemMouseCursors.click,
             onPressed: _rows.length <= 1

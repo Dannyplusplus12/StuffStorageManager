@@ -40,17 +40,17 @@ class _DebtScreenState extends State<DebtScreen> {
           width: 380,
           padding: const EdgeInsets.all(16),
           decoration: BoxDecoration(
-            color: Colors.white,
+            color: appPanelBg(context),
             borderRadius: BorderRadius.circular(16),
-            border: Border.all(color: kBorder),
+            border: Border.all(color: appBorderColor(context)),
           ),
           child: Column(
             mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Text(title, style: const TextStyle(fontSize: 26, fontWeight: FontWeight.bold, color: kTextPrimary)),
+              Text(title, style: TextStyle(fontSize: 26, fontWeight: FontWeight.bold, color: appTextPrimary(context))),
               const SizedBox(height: 10),
-              Text(message, style: const TextStyle(color: kTextSecondary)),
+              Text(message, style: TextStyle(color: appTextSecondary(context))),
               const SizedBox(height: 14),
               Row(
                 mainAxisAlignment: MainAxisAlignment.end,
@@ -190,18 +190,18 @@ class _DebtScreenState extends State<DebtScreen> {
           width: 420,
           padding: const EdgeInsets.all(16),
           decoration: BoxDecoration(
-            color: Colors.white,
+            color: appPanelBg(context),
             borderRadius: BorderRadius.circular(16),
-            border: Border.all(color: kBorder),
+            border: Border.all(color: appBorderColor(context)),
           ),
           child: StatefulBuilder(
             builder: (ctx, setLocal) => Column(
               mainAxisSize: MainAxisSize.min,
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                const Text('Sửa khách hàng', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: kTextPrimary)),
+                Text('Sửa khách hàng', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: appTextPrimary(context))),
                 const SizedBox(height: 2),
-                Text(c.name, style: const TextStyle(color: kTextSecondary)),
+                Text(c.name, style: TextStyle(color: appTextSecondary(context))),
                 const SizedBox(height: 14),
                 TextField(controller: nameCtrl, decoration: const InputDecoration(labelText: 'Tên')),
                 const SizedBox(height: 10),
@@ -262,15 +262,18 @@ class _DebtScreenState extends State<DebtScreen> {
   }
 
   Widget _addPanel() {
+    final panelBg = appPanelBg(context);
+    final borderColor = appBorderColor(context);
+    final textPrimary = appTextPrimary(context);
     final names = _customers.map((e) => e.name).toSet().toList()..sort();
     return Container(
       margin: EdgeInsets.zero,
       padding: const EdgeInsets.all(12),
-      decoration: BoxDecoration(color: Colors.white, border: Border.all(color: kBorder), borderRadius: BorderRadius.circular(8)),
+      decoration: BoxDecoration(color: panelBg, border: Border.all(color: borderColor), borderRadius: BorderRadius.circular(8)),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          const Text('Thêm khách hàng mới', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
+          Text('Thêm khách hàng mới', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16, color: textPrimary)),
           const SizedBox(height: 10),
           Autocomplete<String>(
             optionsBuilder: (v) {
@@ -357,6 +360,8 @@ class _DebtScreenState extends State<DebtScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final panelSoftBg = appPanelSoftBg(context);
+    final borderColor = appBorderColor(context);
     return Row(
       children: [
         SizedBox(
@@ -369,8 +374,8 @@ class _DebtScreenState extends State<DebtScreen> {
                 const SizedBox(height: 10),
                 Container(
                   decoration: BoxDecoration(
-                    color: const Color(0xFFF8FAFC),
-                    border: Border.all(color: kBorder),
+                    color: panelSoftBg,
+                    border: Border.all(color: borderColor),
                     borderRadius: BorderRadius.circular(8),
                   ),
                   child: _addPanel(),
@@ -382,14 +387,14 @@ class _DebtScreenState extends State<DebtScreen> {
         Expanded(
           child: Container(
           margin: const EdgeInsets.fromLTRB(0, 12, 12, 12),
-          decoration: const BoxDecoration(color: Colors.white, border: Border(left: BorderSide(color: kBorder))),
+          decoration: BoxDecoration(color: appPanelBg(context), border: Border(left: BorderSide(color: appBorderColor(context)))),
           child: _selectedCustomer == null
-              ? const Center(
+              ? Center(
                   child: Padding(
-                    padding: EdgeInsets.all(20),
+                    padding: const EdgeInsets.all(20),
                     child: Text(
                       'Chọn một khách hàng để xem lịch sử giao dịch',
-                      style: TextStyle(color: kTextSecondary),
+                      style: TextStyle(color: appTextSecondary(context)),
                       textAlign: TextAlign.center,
                     ),
                   ),
@@ -407,14 +412,19 @@ class _DebtScreenState extends State<DebtScreen> {
   }
 
   Widget _tableArea() {
+    final panelBg = appPanelBg(context);
+    final panelSoftBg = appPanelSoftBg(context);
+    final borderColor = appBorderColor(context);
+    final textPrimary = appTextPrimary(context);
+    final textSecondary = appTextSecondary(context);
     final data = _filtered;
     return Container(
       padding: const EdgeInsets.all(12),
-      decoration: BoxDecoration(color: Colors.white, border: Border.all(color: kBorder), borderRadius: BorderRadius.circular(8)),
+      decoration: BoxDecoration(color: panelBg, border: Border.all(color: borderColor), borderRadius: BorderRadius.circular(8)),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          const Text('Danh sách khách hàng', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: kTextPrimary)),
+          Text('Danh sách khách hàng', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: textPrimary)),
           const SizedBox(height: 8),
           TextField(
             decoration: const InputDecoration(
@@ -458,7 +468,7 @@ class _DebtScreenState extends State<DebtScreen> {
                         child: Column(mainAxisSize: MainAxisSize.min, children: [
                           Icon(Icons.people_outline, size: 64, color: Colors.grey[300]),
                           const SizedBox(height: 12),
-                          const Text('Không có khách hàng', style: TextStyle(color: kTextSecondary)),
+                          Text('Không có khách hàng', style: TextStyle(color: textSecondary)),
                         ]),
                       )
                     : ListView.builder(
@@ -466,18 +476,21 @@ class _DebtScreenState extends State<DebtScreen> {
                         itemBuilder: (_, i) {
                           final c = data[i];
                           final selected = _selectedCustomer?.id == c.id;
+                          final selectedBg = Theme.of(context).brightness == Brightness.dark
+                              ? const Color(0xFF1A2A44)
+                              : const Color(0xFFFFF5F2);
                           return Container(
                             margin: const EdgeInsets.only(bottom: 6),
                             decoration: BoxDecoration(
-                              color: selected ? const Color(0xFFFFF5F2) : Colors.white,
-                              border: Border.all(color: selected ? kPrimary : kBorder),
+                              color: selected ? selectedBg : panelSoftBg,
+                              border: Border.all(color: selected ? kPrimary : borderColor),
                               borderRadius: BorderRadius.circular(8),
                             ),
                             child: ListTile(
                               mouseCursor: SystemMouseCursors.click,
                               onTap: () => setState(() => _selectedCustomer = c),
-                              title: Text(c.name, style: const TextStyle(fontWeight: FontWeight.w600)),
-                              subtitle: Text('${c.phone.isEmpty ? '-' : c.phone} • ${c.areaName.isEmpty ? 'Chưa rõ khu vực' : c.areaName}'),
+                              title: Text(c.name, style: TextStyle(fontWeight: FontWeight.w600, color: textPrimary)),
+                              subtitle: Text('${c.phone.isEmpty ? '-' : c.phone} • ${c.areaName.isEmpty ? 'Chưa rõ khu vực' : c.areaName}', style: TextStyle(color: textSecondary)),
                               trailing: SizedBox(
                                 width: 140,
                                 child: Row(
@@ -543,17 +556,17 @@ class _CustomerHistoryPanelState extends State<_CustomerHistoryPanel> {
           width: 360,
           padding: const EdgeInsets.all(16),
           decoration: BoxDecoration(
-            color: Colors.white,
+            color: appPanelBg(context),
             borderRadius: BorderRadius.circular(16),
-            border: Border.all(color: kBorder),
+            border: Border.all(color: appBorderColor(context)),
           ),
           child: Column(
             mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Text(title, style: const TextStyle(fontSize: 24, fontWeight: FontWeight.bold, color: kTextPrimary)),
+              Text(title, style: TextStyle(fontSize: 24, fontWeight: FontWeight.bold, color: appTextPrimary(context))),
               const SizedBox(height: 8),
-              Text(message, style: const TextStyle(color: kTextSecondary)),
+              Text(message, style: TextStyle(color: appTextSecondary(context))),
               const SizedBox(height: 14),
               Row(
                 mainAxisAlignment: MainAxisAlignment.end,
@@ -705,8 +718,8 @@ class _CustomerHistoryPanelState extends State<_CustomerHistoryPanel> {
                     child: Container(
                       width: double.infinity,
                       decoration: BoxDecoration(
-                        color: const Color(0xFFF8FAFC),
-                        border: Border.all(color: kBorder),
+                        color: appPanelSoftBg(context),
+                        border: Border.all(color: appBorderColor(context)),
                         borderRadius: BorderRadius.circular(8),
                       ),
                       child: InteractiveViewer(
@@ -725,7 +738,7 @@ class _CustomerHistoryPanelState extends State<_CustomerHistoryPanel> {
                               assets[i].url,
                               fit: BoxFit.contain,
                               loadingBuilder: (context, child, progress) => progress == null ? child : const Center(child: CircularProgressIndicator()),
-                              errorBuilder: (_, __, ___) => const Center(child: Text('Không tải được ảnh giao hàng', style: TextStyle(color: kTextSecondary))),
+                              errorBuilder: (_, __, ___) => Center(child: Text('Không tải được ảnh giao hàng', style: TextStyle(color: appTextSecondary(context)))),
                             );
                           },
                         ),
@@ -753,12 +766,12 @@ class _CustomerHistoryPanelState extends State<_CustomerHistoryPanel> {
         children: [
           Text(
             isOrder ? 'Chi tiết đơn hàng' : 'Chi tiết điều chỉnh',
-            style: const TextStyle(fontWeight: FontWeight.w600, color: kTextPrimary),
+            style: TextStyle(fontWeight: FontWeight.w600, color: appTextPrimary(context)),
           ),
           const SizedBox(height: 6),
-          Text('Nội dung: ${h.desc}', style: const TextStyle(color: kTextSecondary)),
+          Text('Nội dung: ${h.desc}', style: TextStyle(color: appTextSecondary(context))),
           const SizedBox(height: 4),
-          Text('Số tiền: ${formatSignedCurrency(h.amount)} k', style: const TextStyle(color: kTextSecondary)),
+          Text('Số tiền: ${formatSignedCurrency(h.amount)} k', style: TextStyle(color: appTextSecondary(context))),
           if (isOrder) ...[
             const SizedBox(height: 8),
             if (((d?['delivery_photo_paths'] as List?)?.isNotEmpty ?? false) || ((d?['delivery_photo_path'] ?? '').toString().trim().isNotEmpty))
@@ -774,7 +787,7 @@ class _CustomerHistoryPanelState extends State<_CustomerHistoryPanel> {
                 ),
               ),
             if (orderItems.isEmpty)
-              const Text('- Không có chi tiết mặt hàng', style: TextStyle(color: kTextSecondary))
+              Text('- Không có chi tiết mặt hàng', style: TextStyle(color: appTextSecondary(context)))
             else ...() {
               final grouped = <String, Map<String, dynamic>>{};
               for (final item in orderItems) {
@@ -808,9 +821,9 @@ class _CustomerHistoryPanelState extends State<_CustomerHistoryPanel> {
               return [
                 Container(
                   decoration: BoxDecoration(
-                    border: Border.all(color: kBorder),
+                    border: Border.all(color: appBorderColor(context)),
                     borderRadius: BorderRadius.circular(6),
-                    color: const Color(0xFFF8FAFC),
+                    color: appPanelSoftBg(context),
                   ),
                   child: Table(
                     columnWidths: const {
@@ -819,10 +832,10 @@ class _CustomerHistoryPanelState extends State<_CustomerHistoryPanel> {
                       2: FlexColumnWidth(1),
                       3: FlexColumnWidth(1.5),
                     },
-                    border: const TableBorder.symmetric(inside: BorderSide(color: kBorder)),
+                    border: TableBorder.symmetric(inside: BorderSide(color: appBorderColor(context))),
                     children: [
-                      const TableRow(
-                        decoration: BoxDecoration(color: Color(0xFFEFF3F8)),
+                      TableRow(
+                        decoration: BoxDecoration(color: appPanelBg(context)),
                         children: [
                           Padding(padding: EdgeInsets.all(6), child: Text('Mẫu', style: TextStyle(fontWeight: FontWeight.bold))),
                           Padding(padding: EdgeInsets.all(6), child: Text('Màu', style: TextStyle(fontWeight: FontWeight.bold))),
@@ -849,6 +862,11 @@ class _CustomerHistoryPanelState extends State<_CustomerHistoryPanel> {
 
   @override
   Widget build(BuildContext context) {
+    final panelBg = appPanelBg(context);
+    final panelSoftBg = appPanelSoftBg(context);
+    final borderColor = appBorderColor(context);
+    final textPrimary = appTextPrimary(context);
+    final textSecondary = appTextSecondary(context);
     return Padding(
       padding: const EdgeInsets.all(12),
       child: Column(
@@ -859,7 +877,7 @@ class _CustomerHistoryPanelState extends State<_CustomerHistoryPanel> {
               Expanded(
                 child: Text(
                   'Lịch sử — ${widget.custName}',
-                  style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+                  style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: textPrimary),
                   overflow: TextOverflow.ellipsis,
                 ),
               ),
@@ -877,28 +895,28 @@ class _CustomerHistoryPanelState extends State<_CustomerHistoryPanel> {
           Expanded(
             child: Container(
               decoration: BoxDecoration(
-                color: Colors.white,
+                color: panelBg,
                 borderRadius: BorderRadius.circular(8),
-                border: Border.all(color: kBorder),
+                border: Border.all(color: borderColor),
               ),
               child: _loading
                   ? const Center(child: CircularProgressIndicator())
                   : _items.isEmpty
-                      ? const Center(child: Text('Chưa có lịch sử'))
+                      ? Center(child: Text('Chưa có lịch sử', style: TextStyle(color: textSecondary)))
                       : ListView.builder(
                           padding: const EdgeInsets.all(8),
                           itemCount: _items.length,
                           itemBuilder: (_, index) {
                             final h = _items[index];
                             final isOrder = h.type == 'ORDER';
-                            final rowColor = index.isEven ? const Color(0xFFF8FAFC) : const Color(0xFFF5F7FB);
+                            final rowColor = index.isEven ? panelSoftBg : panelBg;
                             return Container(
                               margin: const EdgeInsets.only(bottom: 10),
                               padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
                               decoration: BoxDecoration(
                                 color: rowColor,
                                 borderRadius: BorderRadius.circular(10),
-                                border: Border.all(color: kBorder),
+                                border: Border.all(color: borderColor),
                               ),
                               child: Column(
                                 crossAxisAlignment: CrossAxisAlignment.stretch,

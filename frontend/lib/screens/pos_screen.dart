@@ -146,7 +146,7 @@ class PosScreenState extends State<PosScreen> {
 
   Widget _imageFallback() {
     return Container(
-      color: const Color(0xFFF1F5F9),
+      color: appPanelSoftBg(context),
       child: Center(child: Icon(Icons.directions_walk, size: 40, color: Colors.grey[400])),
     );
   }
@@ -228,7 +228,7 @@ class PosScreenState extends State<PosScreen> {
   Widget build(BuildContext context) {
     if (!widget.showProductArea) {
       return Container(
-        color: Colors.white,
+        color: appPanelBg(context),
         child: AddProductPanel(onAdded: () => _loadProducts(_search)),
       );
     }
@@ -268,6 +268,10 @@ class PosScreenState extends State<PosScreen> {
   }
 
   Widget _salesLayout() {
+    final panelBg = appPanelBg(context);
+    final panelSoftBg = appPanelSoftBg(context);
+    final borderColor = appBorderColor(context);
+    final textPrimary = appTextPrimary(context);
     return Padding(
       padding: const EdgeInsets.all(14),
       child: Column(
@@ -276,18 +280,18 @@ class PosScreenState extends State<PosScreen> {
             width: double.infinity,
             padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
             decoration: BoxDecoration(
-              gradient: const LinearGradient(
-                colors: [Color(0xFFFFF7F3), Colors.white],
+              gradient: LinearGradient(
+                colors: [panelSoftBg, panelBg],
                 begin: Alignment.centerLeft,
                 end: Alignment.centerRight,
               ),
               borderRadius: BorderRadius.circular(12),
-              border: Border.all(color: kBorder),
+              border: Border.all(color: borderColor),
             ),
             child: Row(
               children: [
-                const Expanded(
-                  child: Text('Xuất hàng', style: TextStyle(fontSize: 24, fontWeight: FontWeight.bold, color: kTextPrimary)),
+                Expanded(
+                  child: Text('Xuất hàng', style: TextStyle(fontSize: 24, fontWeight: FontWeight.bold, color: textPrimary)),
                 ),
                 Container(
                   padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
@@ -297,7 +301,7 @@ class PosScreenState extends State<PosScreen> {
                 const SizedBox(width: 8),
                 Container(
                   padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-                  decoration: BoxDecoration(color: const Color(0xFFEEF2FF), borderRadius: BorderRadius.circular(20)),
+                  decoration: BoxDecoration(color: panelSoftBg, borderRadius: BorderRadius.circular(20)),
                   child: Text('$_qty SP trong giỏ', style: const TextStyle(color: Color(0xFF3B82F6), fontWeight: FontWeight.w700)),
                 ),
               ],
@@ -313,7 +317,7 @@ class PosScreenState extends State<PosScreen> {
                     children: [
                       Container(
                         padding: const EdgeInsets.all(10),
-                        decoration: BoxDecoration(color: Colors.white, border: Border.all(color: kBorder), borderRadius: BorderRadius.circular(10)),
+                        decoration: BoxDecoration(color: panelBg, border: Border.all(color: borderColor), borderRadius: BorderRadius.circular(10)),
                         child: Row(
                           children: [
                             Expanded(
@@ -354,7 +358,7 @@ class PosScreenState extends State<PosScreen> {
                       Expanded(
                         child: Container(
                           padding: const EdgeInsets.all(8),
-                          decoration: BoxDecoration(color: Colors.white, border: Border.all(color: kBorder), borderRadius: BorderRadius.circular(10)),
+                          decoration: BoxDecoration(color: panelBg, border: Border.all(color: borderColor), borderRadius: BorderRadius.circular(10)),
                           child: _grid(),
                         ),
                       ),
@@ -366,7 +370,7 @@ class PosScreenState extends State<PosScreen> {
                   width: 390,
                   child: Container(
                     padding: const EdgeInsets.all(12),
-                    decoration: BoxDecoration(color: Colors.white, border: Border.all(color: kBorder), borderRadius: BorderRadius.circular(10)),
+                    decoration: BoxDecoration(color: panelBg, border: Border.all(color: borderColor), borderRadius: BorderRadius.circular(10)),
                     child: _cartPanel(),
                   ),
                 ),
@@ -392,7 +396,7 @@ class PosScreenState extends State<PosScreen> {
                   Flexible(
                     child: Text(
                       widget.titleOverride ?? (widget.inventoryMode ? 'Kho hàng' : 'Xuất hàng'),
-                      style: const TextStyle(fontSize: 20, fontWeight: FontWeight.bold, color: kTextPrimary),
+                      style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold, color: appTextPrimary(context)),
                       overflow: TextOverflow.ellipsis,
                     ),
                   ),
@@ -486,7 +490,7 @@ class PosScreenState extends State<PosScreen> {
         child: Column(mainAxisSize: MainAxisSize.min, children: [
           Icon(Icons.inventory_2_outlined, size: 64, color: Colors.grey[300]),
           const SizedBox(height: 12),
-          const Text('Không có sản phẩm nào', style: TextStyle(color: kTextSecondary)),
+          Text('Không có sản phẩm nào', style: TextStyle(color: appTextSecondary(context))),
         ]),
       );
     }
@@ -522,7 +526,7 @@ class PosScreenState extends State<PosScreen> {
         onTap: () => widget.inventoryMode ? _editProduct(p) : _buyProduct(p),
         child: Container(
           decoration: BoxDecoration(
-              color: Colors.white, border: Border.all(color: borderColor), borderRadius: BorderRadius.circular(8)),
+              color: appPanelBg(context), border: Border.all(color: borderColor), borderRadius: BorderRadius.circular(8)),
           child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
             Expanded(
               flex: 3,
@@ -554,10 +558,10 @@ class PosScreenState extends State<PosScreen> {
               padding: const EdgeInsets.fromLTRB(8, 7, 8, 8),
               child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
                 Text(p.name, maxLines: 2, overflow: TextOverflow.ellipsis,
-                    style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: kTextPrimary)),
+                    style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: appTextPrimary(context))),
                 const SizedBox(height: 3),
                 Text('Mã: ${p.code.isEmpty ? p.name : p.code}', maxLines: 1, overflow: TextOverflow.ellipsis,
-                    style: const TextStyle(fontSize: 10, color: kTextSecondary)),
+                    style: TextStyle(fontSize: 10, color: appTextSecondary(context))),
                 const SizedBox(height: 3),
                 Row(
                   children: [
@@ -573,7 +577,7 @@ class PosScreenState extends State<PosScreen> {
                       style: TextStyle(
                         fontSize: 10,
                         fontWeight: FontWeight.w600,
-                        color: totalStock <= 0 ? kDanger : (hasLow ? kWarning : kTextSecondary),
+                        color: totalStock <= 0 ? kDanger : (hasLow ? kWarning : appTextSecondary(context)),
                       ),
                     ),
                   ],
@@ -614,7 +618,7 @@ class PosScreenState extends State<PosScreen> {
   Widget _rightPanel({double? width}) {
     return Container(
       width: width,
-      decoration: const BoxDecoration(color: Colors.white, border: Border(left: BorderSide(color: kBorder))),
+      decoration: BoxDecoration(color: appPanelBg(context), border: Border(left: BorderSide(color: appBorderColor(context)))),
       child: widget.inventoryMode ? AddProductPanel(onAdded: () => _loadProducts(_search)) : _cartPanel(),
     );
   }
@@ -760,9 +764,9 @@ class PosScreenState extends State<PosScreen> {
           margin: const EdgeInsets.symmetric(vertical: 4),
           padding: const EdgeInsets.all(8),
           decoration: BoxDecoration(
-            color: const Color(0xFFF8FAFC),
+            color: appPanelSoftBg(context),
             borderRadius: BorderRadius.circular(8),
-            border: Border.all(color: kBorder),
+            border: Border.all(color: appBorderColor(context)),
           ),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
@@ -780,9 +784,9 @@ class PosScreenState extends State<PosScreen> {
                   Container(
                     padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
                     decoration: BoxDecoration(
-                      color: const Color(0xFFEFF3F8),
+                      color: appPanelBg(context),
                       borderRadius: BorderRadius.circular(12),
-                      border: Border.all(color: kBorder),
+                      border: Border.all(color: appBorderColor(context)),
                     ),
                     child: Text(first.color, style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w600)),
                   ),
@@ -791,7 +795,7 @@ class PosScreenState extends State<PosScreen> {
               const SizedBox(height: 4),
               Text(
                 'SL $totalQty • ${formatCurrency(totalMoney)} k',
-                style: const TextStyle(fontSize: 11, color: kTextSecondary, fontWeight: FontWeight.w600),
+                style: TextStyle(fontSize: 11, color: appTextSecondary(context), fontWeight: FontWeight.w600),
               ),
               const SizedBox(height: 6),
               ...indexes.map((idx) {
@@ -803,7 +807,7 @@ class PosScreenState extends State<PosScreen> {
                       Expanded(
                         child: Text(
                           'Size ${it.size} • ${formatCurrency(it.price)} k',
-                          style: const TextStyle(fontSize: 12, color: kTextSecondary),
+                          style: TextStyle(fontSize: 12, color: appTextSecondary(context)),
                         ),
                       ),
                       _QtyEditor(
@@ -921,9 +925,9 @@ class _QtyEditorState extends State<_QtyEditor> {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 2, vertical: 1),
       decoration: BoxDecoration(
-        border: Border.all(color: kBorder),
+        border: Border.all(color: appBorderColor(context)),
         borderRadius: BorderRadius.circular(6),
-        color: Colors.white,
+        color: appPanelBg(context),
       ),
       child: Row(
         mainAxisSize: MainAxisSize.min,

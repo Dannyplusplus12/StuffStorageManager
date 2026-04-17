@@ -25,10 +25,63 @@ import '../utils/app_mode_manager.dart';
   return (color: color, size: size);
 }
 
+Widget _buildMobileOrderItemsExcelTable(
+  List<OrderItem> items, {
+  EdgeInsetsGeometry margin = const EdgeInsets.only(top: 8),
+}) {
+  final rows = <Map<String, dynamic>>[];
+  for (final item in items) {
+    final pair = _splitVariantInfo(item.variantInfo);
+    rows.add({
+      'product': item.productName,
+      'color': pair.color,
+      'qty': item.quantity,
+      'money': item.quantity * item.price,
+    });
+  }
+  if (rows.isEmpty) return const SizedBox.shrink();
+
+  return Container(
+    width: double.infinity,
+    margin: margin,
+    decoration: BoxDecoration(
+      color: const Color(0xFFF8FAFC),
+      borderRadius: BorderRadius.circular(10),
+      border: Border.all(color: kBorder),
+    ),
+    child: Table(
+      border: TableBorder.all(color: kBorder),
+      columnWidths: const {
+        0: FlexColumnWidth(2.3),
+        1: FlexColumnWidth(1.4),
+        2: FlexColumnWidth(0.9),
+        3: FlexColumnWidth(1.2),
+      },
+      children: [
+        const TableRow(
+          decoration: BoxDecoration(color: Color(0xFFF1F5F9)),
+          children: [
+            Padding(padding: EdgeInsets.all(6), child: Text('Mẫu', style: TextStyle(fontWeight: FontWeight.w700, fontSize: 12))),
+            Padding(padding: EdgeInsets.all(6), child: Text('Màu', style: TextStyle(fontWeight: FontWeight.w700, fontSize: 12))),
+            Padding(padding: EdgeInsets.all(6), child: Text('SL', style: TextStyle(fontWeight: FontWeight.w700, fontSize: 12))),
+            Padding(padding: EdgeInsets.all(6), child: Text('Tiền', style: TextStyle(fontWeight: FontWeight.w700, fontSize: 12))),
+          ],
+        ),
+        ...rows.map((r) => TableRow(children: [
+              Padding(padding: const EdgeInsets.all(6), child: Text(r['product'].toString(), style: const TextStyle(fontSize: 12))),
+              Padding(padding: const EdgeInsets.all(6), child: Text(r['color'].toString(), style: const TextStyle(fontSize: 12))),
+              Padding(padding: const EdgeInsets.all(6), child: Text('${r['qty']}', style: const TextStyle(fontSize: 12))),
+              Padding(padding: const EdgeInsets.all(6), child: Text('${formatCurrency((r['money'] as int))} k', style: const TextStyle(fontSize: 12))),
+            ])),
+      ],
+    ),
+  );
+}
+
 void _openImagePreview(BuildContext context, String imageUrl, String rawPath) {
   showDialog<void>(
     context: context,
-    builder: (_) => Dialog(
+    builder: (dialogContext) => Dialog(
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
       child: ConstrainedBox(
         constraints: const BoxConstraints(maxWidth: 520, maxHeight: 520),
@@ -41,7 +94,7 @@ void _openImagePreview(BuildContext context, String imageUrl, String rawPath) {
                 children: [
                   const Expanded(child: Text('Ảnh sản phẩm', style: TextStyle(fontWeight: FontWeight.w600))),
                   IconButton(
-                    onPressed: () => Navigator.pop(context),
+                    onPressed: () => Navigator.pop(dialogContext),
                     icon: const Icon(Icons.close),
                   ),
                 ],
@@ -108,12 +161,20 @@ class _RoleSelectionScreenState extends State<_RoleSelectionScreen> {
   String? _error;
 
   @override
+  void initState() {
+    super.initState();
+    _loading = false;
+    _error = null;
+  }
+
+  @override
   void dispose() {
     _pinCtrl.dispose();
     super.dispose();
   }
 
   Future<void> _loginByPin() async {
+    if (_loading) return;
     if (_pinCtrl.text.trim().isEmpty) {
       setState(() => _error = 'Nhập mã PIN');
       return;
@@ -126,6 +187,7 @@ class _RoleSelectionScreenState extends State<_RoleSelectionScreen> {
     final pin = _pinCtrl.text.trim();
     final roles = ['orderer', 'picker', 'manager'];
     String? lastErr;
+    var loggedIn = false;
     for (final role in roles) {
       try {
         final login = await ApiService.loginByPin(pin: pin, requestedRole: role);
@@ -136,24 +198,37 @@ class _RoleSelectionScreenState extends State<_RoleSelectionScreen> {
           employeeName: (login['name'] ?? '').toString(),
           employeeRole: role,
         );
+        loggedIn = true;
         if (!mounted) return;
         widget.onRoleSelected();
         return;
       } catch (e) {
         lastErr = e.toString();
+        final msg = lastErr.toLowerCase();
+        final shouldStopTryingOtherRoles = msg.contains('pin không đúng') ||
+            msg.contains('tài khoản nhân viên đang bị khóa') ||
+            msg.contains('failed host lookup') ||
+            msg.contains('connection') ||
+            msg.contains('timed out') ||
+            msg.contains('socket');
+        if (shouldStopTryingOtherRoles) {
+          break;
+        }
       }
     }
 
     if (!mounted) return;
     setState(() {
-      _loading = false;
       final msg = (lastErr ?? '').toLowerCase();
       if (msg.contains('failed host lookup') || msg.contains('connection') || msg.contains('timed out') || msg.contains('socket')) {
         _error = 'Không kết nối được server';
       } else {
         _error = 'PIN không hợp lệ';
       }
+      _loading = false;
     });
+
+    if (loggedIn) return;
   }
 
   @override
@@ -192,16 +267,28 @@ class _RoleSelectionScreenState extends State<_RoleSelectionScreen> {
                 const SizedBox(height: 12),
                 SizedBox(
                   width: double.infinity,
-                  child: ElevatedButton.icon(
+                  child: ElevatedButton(
                     style: ElevatedButton.styleFrom(
                       backgroundColor: kSidebar,
                       foregroundColor: Colors.white,
                       padding: const EdgeInsets.symmetric(vertical: 16),
                       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
                     ),
-                    icon: const Icon(Icons.pin_outlined),
-                    label: const Text('Vào app', style: TextStyle(fontSize: 16)),
-                    onPressed: _loading ? null : _loginByPin,
+                    onPressed: _loginByPin,
+                    child: _loading
+                        ? const SizedBox(
+                            width: 20,
+                            height: 20,
+                            child: CircularProgressIndicator(strokeWidth: 2.4, color: Colors.white),
+                          )
+                        : const Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Icon(Icons.pin_outlined),
+                              SizedBox(width: 8),
+                              Text('Vào app', style: TextStyle(fontSize: 16)),
+                            ],
+                          ),
                   ),
                 ),
               ],
@@ -287,20 +374,66 @@ class _OrdererScreenState extends State<_OrdererScreen> with _NotificationMixin 
   final GlobalKey<_CreateOrderScreenState> _createOrderKey = GlobalKey<_CreateOrderScreenState>();
   final GlobalKey<_OrdererDebtScreenState> _debtKey = GlobalKey<_OrdererDebtScreenState>();
   final GlobalKey<_MyActivityHistoryScreenState> _activityKey = GlobalKey<_MyActivityHistoryScreenState>();
+  final GlobalKey<_ManagerApproveScreenState> _managerApproveKey = GlobalKey<_ManagerApproveScreenState>();
   final Map<int, String> _trackedOrders = {};
   final Map<int, int> _statusMissCount = {};
+  final Set<int> _lastSeenPendingOrderIds = {};
+  bool _managerPendingBootstrapped = false;
   int _tabIndex = 0;
+
+  void _setTabIndexSafe(int index, int maxIndex) {
+    if (!mounted) return;
+    FocusManager.instance.primaryFocus?.unfocus();
+    final next = index.clamp(0, maxIndex);
+    if (next == _tabIndex) return;
+    setState(() => _tabIndex = next);
+  }
 
   @override
   void initState() {
     super.initState();
-    _pollTimer = Timer.periodic(const Duration(seconds: 10), (_) => _pollOrderStatuses());
+    _pollTimer = Timer.periodic(const Duration(seconds: 10), (_) {
+      unawaited(_pollOrderStatuses());
+      if (AppModeManager.isManager) {
+        unawaited(_pollManagerPendingOrders());
+      }
+    });
+    if (AppModeManager.isManager) {
+      unawaited(_pollManagerPendingOrders());
+    }
   }
 
   @override
   void dispose() {
     _pollTimer?.cancel();
     super.dispose();
+  }
+
+  Future<void> _pollManagerPendingOrders() async {
+    if (!AppModeManager.isManager) return;
+    try {
+      final pending = await ApiService.getPendingOrders();
+      final currentIds = pending.map((o) => o.id).toSet();
+
+      if (!_managerPendingBootstrapped) {
+        _lastSeenPendingOrderIds
+          ..clear()
+          ..addAll(currentIds);
+        _managerPendingBootstrapped = true;
+      } else {
+        final newIds = currentIds.difference(_lastSeenPendingOrderIds);
+        for (final id in newIds) {
+          addNotice('📥 Có đơn mới #$id chờ duyệt');
+        }
+        _lastSeenPendingOrderIds
+          ..clear()
+          ..addAll(currentIds);
+      }
+
+      if (_tabIndex == 3) {
+        _managerApproveKey.currentState?.reloadOrders(silent: true);
+      }
+    } catch (_) {}
   }
 
   void _onDraftCreated(int orderId) {
@@ -363,11 +496,18 @@ class _OrdererScreenState extends State<_OrdererScreen> with _NotificationMixin 
 
   @override
   Widget build(BuildContext context) {
+    final isManager = AppModeManager.isManager;
+    final appBarTitle = _tabIndex == 0
+        ? 'Order'
+        : (_tabIndex == 1
+            ? 'Công nợ khách hàng'
+            : (_tabIndex == 2 ? 'Lịch sử giao dịch' : 'Duyệt đơn'));
+
     return Scaffold(
       appBar: AppBar(
         backgroundColor: kSidebar,
         foregroundColor: Colors.white,
-        title: Text(_tabIndex == 0 ? 'Order' : (_tabIndex == 1 ? 'Công nợ khách hàng' : 'Lịch sử giao dịch')),
+        title: Text(appBarTitle),
         actions: [
           buildNotificationIcon(),
           IconButton(
@@ -376,8 +516,10 @@ class _OrdererScreenState extends State<_OrdererScreen> with _NotificationMixin 
                 _createOrderKey.currentState?.reloadProducts();
               } else if (_tabIndex == 1) {
                 _debtKey.currentState?.reload();
-              } else {
+              } else if (_tabIndex == 2) {
                 _activityKey.currentState?.reload();
+              } else {
+                _managerApproveKey.currentState?.reloadOrders();
               }
             },
             icon: const Icon(Icons.refresh),
@@ -401,21 +543,266 @@ class _OrdererScreenState extends State<_OrdererScreen> with _NotificationMixin 
         children: [
           _CreateOrderScreen(key: _createOrderKey, onDraftCreated: _onDraftCreated),
           _OrdererDebtScreen(key: _debtKey),
-          _MyActivityHistoryScreen(key: _activityKey),
+          _MyActivityHistoryScreen(key: _activityKey, isActive: _tabIndex == 2),
+          if (isManager)
+            _ManagerApproveScreen(
+              key: _managerApproveKey,
+              onApproved: (id) => addNotice('✅ Đã duyệt đơn #$id'),
+              onRejected: (id) => addNotice('❌ Đã từ chối đơn #$id'),
+            ),
         ],
       ),
       bottomNavigationBar: BottomNavigationBar(
         currentIndex: _tabIndex,
-        onTap: (index) => setState(() => _tabIndex = index),
+        onTap: (index) => _setTabIndexSafe(index, isManager ? 3 : 2),
         type: BottomNavigationBarType.fixed,
         backgroundColor: Colors.white,
         selectedItemColor: kPrimary,
         unselectedItemColor: kTextSecondary,
-        items: const [
-          BottomNavigationBarItem(icon: Icon(Icons.note_add_outlined), label: 'Soạn đơn'),
-          BottomNavigationBarItem(icon: Icon(Icons.people_outline), label: 'Công nợ'),
-          BottomNavigationBarItem(icon: Icon(Icons.history_outlined), label: 'Lịch sử'),
+        items: [
+          const BottomNavigationBarItem(icon: Icon(Icons.note_add_outlined), label: 'Soạn đơn'),
+          const BottomNavigationBarItem(icon: Icon(Icons.people_outline), label: 'Công nợ'),
+          const BottomNavigationBarItem(icon: Icon(Icons.history_outlined), label: 'Lịch sử'),
+          if (isManager) const BottomNavigationBarItem(icon: Icon(Icons.fact_check_outlined), label: 'Duyệt đơn'),
         ],
+      ),
+    );
+  }
+}
+
+class _ManagerApproveScreen extends StatefulWidget {
+  final ValueChanged<int> onApproved;
+  final ValueChanged<int> onRejected;
+
+  const _ManagerApproveScreen({
+    super.key,
+    required this.onApproved,
+    required this.onRejected,
+  });
+
+  @override
+  State<_ManagerApproveScreen> createState() => _ManagerApproveScreenState();
+}
+
+class _ManagerApproveScreenState extends State<_ManagerApproveScreen> {
+  bool _loading = true;
+  List<Order> _orders = [];
+
+  @override
+  void initState() {
+    super.initState();
+    reloadOrders();
+  }
+
+  Future<void> reloadOrders({bool silent = false}) async {
+    if (!silent) setState(() => _loading = true);
+    try {
+      final rows = await ApiService.getPendingOrders();
+      if (mounted) {
+        setState(() => _orders = rows);
+      }
+    } catch (e) {
+      if (!silent && mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Lỗi tải đơn chờ duyệt: $e'), backgroundColor: Colors.red),
+        );
+      }
+    }
+    if (!silent && mounted) setState(() => _loading = false);
+  }
+
+  Future<void> _approve(Order order) async {
+    try {
+      await ApiService.approveOrder(order.id);
+      widget.onApproved(order.id);
+      await reloadOrders();
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Duyệt thất bại: $e'), backgroundColor: Colors.red),
+      );
+    }
+  }
+
+  Future<void> _reject(Order order) async {
+    final ok = await showDialog<bool>(
+      context: context,
+      builder: (_) => AlertDialog(
+        title: const Text('Từ chối hóa đơn'),
+        content: Text('Xóa hóa đơn nháp #${order.id}?'),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(context, false), child: const Text('Hủy')),
+          ElevatedButton(
+            onPressed: () => Navigator.pop(context, true),
+            style: ElevatedButton.styleFrom(backgroundColor: Colors.red),
+            child: const Text('Từ chối'),
+          ),
+        ],
+      ),
+    );
+    if (ok != true) return;
+    try {
+      await ApiService.rejectOrder(order.id);
+      widget.onRejected(order.id);
+      await reloadOrders();
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Từ chối thất bại: $e'), backgroundColor: Colors.red),
+      );
+    }
+  }
+
+  Widget _orderItemsPreview(Order order) {
+    if (order.items.isEmpty) return const SizedBox.shrink();
+    final previewItems = order.items.take(3).toList();
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        ...previewItems.map((it) {
+          final pair = _splitVariantInfo(it.variantInfo);
+          return Padding(
+            padding: const EdgeInsets.only(bottom: 2),
+            child: Text(
+              '- ${it.productName} • ${pair.color} • ${pair.size} • x${it.quantity}',
+              style: const TextStyle(fontSize: 12, color: kTextSecondary),
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+            ),
+          );
+        }),
+        if (order.items.length > previewItems.length)
+          Text(
+            '... và ${order.items.length - previewItems.length} dòng khác',
+            style: const TextStyle(fontSize: 12, color: kTextSecondary),
+          ),
+      ],
+    );
+  }
+
+  Future<void> _openOrderDetail(Order order) async {
+    await showModalBottomSheet<void>(
+      context: context,
+      isScrollControlled: true,
+      showDragHandle: true,
+      builder: (sheetContext) {
+        return FractionallySizedBox(
+          heightFactor: 0.9,
+          child: SafeArea(
+            top: false,
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(16, 8, 16, 4),
+                  child: Text('Đơn #${order.id} • ${order.customerName}', style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+                ),
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(16, 0, 16, 10),
+                  child: Text(
+                    '${formatDate(order.createdAt)} • SL ${order.totalQty} • ${formatCurrency(order.totalAmount)} k',
+                    style: const TextStyle(fontSize: 12, color: kTextSecondary),
+                  ),
+                ),
+                Expanded(
+                  child: SingleChildScrollView(
+                    padding: const EdgeInsets.fromLTRB(16, 0, 16, 12),
+                    child: _buildMobileOrderItemsExcelTable(order.items, margin: EdgeInsets.zero),
+                  ),
+                ),
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
+                  child: Row(
+                    children: [
+                      Expanded(
+                        child: OutlinedButton.icon(
+                          onPressed: () async {
+                            Navigator.pop(sheetContext);
+                            await _reject(order);
+                          },
+                          icon: const Icon(Icons.close, size: 16, color: Colors.red),
+                          label: const Text('Từ chối', style: TextStyle(color: Colors.red)),
+                          style: OutlinedButton.styleFrom(side: const BorderSide(color: Colors.red)),
+                        ),
+                      ),
+                      const SizedBox(width: 8),
+                      Expanded(
+                        child: ElevatedButton.icon(
+                          onPressed: () async {
+                            Navigator.pop(sheetContext);
+                            await _approve(order);
+                          },
+                          icon: const Icon(Icons.check, size: 16),
+                          label: const Text('Duyệt'),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+          ),
+        );
+      },
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    if (_loading) return const Center(child: CircularProgressIndicator());
+    if (_orders.isEmpty) {
+      return RefreshIndicator(
+        onRefresh: () => reloadOrders(silent: true),
+        child: ListView(
+          physics: const AlwaysScrollableScrollPhysics(),
+          children: const [
+            SizedBox(height: 120),
+            Center(child: Text('Không có đơn chờ duyệt')),
+          ],
+        ),
+      );
+    }
+    return RefreshIndicator(
+      onRefresh: () => reloadOrders(silent: true),
+      child: ListView.separated(
+        padding: const EdgeInsets.all(12),
+        itemCount: _orders.length,
+        separatorBuilder: (_, __) => const SizedBox(height: 8),
+        itemBuilder: (_, i) {
+          final order = _orders[i];
+          return Card(
+            child: InkWell(
+              borderRadius: BorderRadius.circular(12),
+              onTap: () => _openOrderDetail(order),
+              child: Padding(
+                padding: const EdgeInsets.all(12),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text('Đơn #${order.id} • ${order.customerName}', style: const TextStyle(fontWeight: FontWeight.w700)),
+                    const SizedBox(height: 4),
+                    Text(
+                      '${formatDate(order.createdAt)} • SL ${order.totalQty} • ${formatCurrency(order.totalAmount)} k',
+                      style: const TextStyle(fontSize: 12, color: kTextSecondary),
+                    ),
+                    if (order.createdByEmployeeName.trim().isNotEmpty)
+                      Padding(
+                        padding: const EdgeInsets.only(top: 2),
+                        child: Text('Người gửi: ${order.createdByEmployeeName}', style: const TextStyle(fontSize: 12, color: kTextSecondary)),
+                      ),
+                    const SizedBox(height: 8),
+                    _orderItemsPreview(order),
+                    const SizedBox(height: 6),
+                    const Align(
+                      alignment: Alignment.centerRight,
+                      child: Icon(Icons.open_in_new, size: 18, color: kTextSecondary),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          );
+        },
       ),
     );
   }
@@ -721,7 +1108,8 @@ class _OrdererCustomerHistorySheetState extends State<_OrdererCustomerHistoryShe
 }
 
 class _MyActivityHistoryScreen extends StatefulWidget {
-  const _MyActivityHistoryScreen({super.key});
+  final bool isActive;
+  const _MyActivityHistoryScreen({super.key, this.isActive = false});
 
   @override
   State<_MyActivityHistoryScreen> createState() => _MyActivityHistoryScreenState();
@@ -731,6 +1119,7 @@ class _MyActivityHistoryScreenState extends State<_MyActivityHistoryScreen> {
   final TextEditingController _searchCtrl = TextEditingController();
   Timer? _searchDebounce;
   bool _loading = true;
+  bool _requesting = false;
   String _search = '';
   int _range = 1; // 1=day, 2=month, 3=year
   List<Map<String, dynamic>> _items = [];
@@ -749,6 +1138,14 @@ class _MyActivityHistoryScreenState extends State<_MyActivityHistoryScreen> {
   }
 
   @override
+  void didUpdateWidget(covariant _MyActivityHistoryScreen oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (!oldWidget.isActive && widget.isActive && _items.isEmpty) {
+      unawaited(_load(silent: false));
+    }
+  }
+
+  @override
   void dispose() {
     _searchDebounce?.cancel();
     _searchCtrl.dispose();
@@ -758,8 +1155,10 @@ class _MyActivityHistoryScreenState extends State<_MyActivityHistoryScreen> {
   Future<void> reload() => _load();
 
   Future<void> _load({bool silent = false}) async {
+    if (_requesting) return;
     final employeeId = AppModeManager.employeeId;
     if (employeeId == null) return;
+    _requesting = true;
     if (!silent) setState(() => _loading = true);
     try {
       final rows = await ApiService.getEmployeeActivities(employeeId, search: _search, days: _days, limit: 400);
@@ -767,12 +1166,14 @@ class _MyActivityHistoryScreenState extends State<_MyActivityHistoryScreen> {
         setState(() => _items = rows);
       }
     } catch (e) {
-      if (mounted && !silent) {
+      if (mounted && !silent && widget.isActive) {
+        final msg = e is TimeoutException ? 'Mạng chậm, đang thử lại sau' : 'Lỗi tải lịch sử giao dịch: $e';
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Lỗi tải lịch sử giao dịch: $e'), backgroundColor: Colors.red),
+          SnackBar(content: Text(msg), backgroundColor: Colors.red),
         );
       }
     }
+    _requesting = false;
     if (mounted && !silent) setState(() => _loading = false);
   }
 
@@ -1064,6 +1465,17 @@ class _PickerScreenState extends State<_PickerScreen> with _NotificationMixin {
   final GlobalKey<_MyDeliveryHistoryScreenState> _myHistoryKey = GlobalKey<_MyDeliveryHistoryScreenState>();
   int _tabIndex = 0;
 
+  void _setTabIndexSafe(int index) {
+    if (!mounted) return;
+    FocusManager.instance.primaryFocus?.unfocus();
+    final next = index.clamp(0, 3);
+    if (next == _tabIndex) return;
+    setState(() => _tabIndex = next);
+    if (next == 3) {
+      _myHistoryKey.currentState?.reload();
+    }
+  }
+
   @override
   void initState() {
     super.initState();
@@ -1108,10 +1520,16 @@ class _PickerScreenState extends State<_PickerScreen> with _NotificationMixin {
         for (final id in newIds) {
           addNotice('📦 Đơn mới #$id cần soạn hàng');
         }
-        _approvedKey.currentState?.reloadOrders();
-        _assignedKey.currentState?.reloadOrders();
+        if (_tabIndex == 0) {
+          _approvedKey.currentState?.reloadOrders();
+        }
+        if (_tabIndex == 1) {
+          _assignedKey.currentState?.reloadOrders();
+        }
       }
-      _assignedKey.currentState?.reloadOrders(silent: true);
+      if (_tabIndex == 1) {
+        _assignedKey.currentState?.reloadOrders(silent: true);
+      }
       _lastSeenAcceptedIds = currentIds;
       await prefs.setStringList(
         _seenAcceptedKey,
@@ -1122,7 +1540,7 @@ class _PickerScreenState extends State<_PickerScreen> with _NotificationMixin {
 
   Future<void> _jumpToInventoryItem(OrderItem item) async {
     if (!mounted) return;
-    setState(() => _tabIndex = 2);
+    _setTabIndexSafe(2);
     await Future.delayed(const Duration(milliseconds: 80));
     _inventoryKey.currentState?.focusByOrderItem(item);
   }
@@ -1196,17 +1614,12 @@ class _PickerScreenState extends State<_PickerScreen> with _NotificationMixin {
             onOpenItem: _jumpToInventoryItem,
           ),
           _PickerInventoryScreen(key: _inventoryKey),
-          _MyDeliveryHistoryScreen(key: _myHistoryKey),
+          _MyDeliveryHistoryScreen(key: _myHistoryKey, isActive: _tabIndex == 3),
         ],
       ),
       bottomNavigationBar: BottomNavigationBar(
         currentIndex: _tabIndex,
-        onTap: (index) {
-          setState(() => _tabIndex = index);
-          if (index == 3) {
-            _myHistoryKey.currentState?.reload();
-          }
-        },
+        onTap: _setTabIndexSafe,
         type: BottomNavigationBarType.fixed,
         backgroundColor: Colors.white,
         selectedItemColor: kPrimary,
@@ -1572,7 +1985,6 @@ class _CreateOrderScreenState extends State<_CreateOrderScreen> {
   void _openOrdererProductQuickView(Product p) {
     final image = p.image.trim();
     final imageUrl = ApiService.resolveApiUrl(image);
-    final canLoadNetworkImage = imageUrl.isNotEmpty;
     final qtys = <int, int>{};
 
     showModalBottomSheet(
@@ -2145,72 +2557,6 @@ class _ApprovedOrdersScreenState extends State<_ApprovedOrdersScreen> {
     if (mounted && !silent) setState(() => _loading = false);
   }
 
-  List<Widget> _orderGroupedSummaryWidgets(Order o) {
-    final grouped = <String, Map<String, Map<String, int>>>{};
-    for (final it in o.items) {
-      final pair = _splitVariantInfo(it.variantInfo);
-      grouped.putIfAbsent(it.productName, () => {});
-      grouped[it.productName]!.putIfAbsent(pair.color, () => {});
-      grouped[it.productName]![pair.color]![pair.size] = (grouped[it.productName]![pair.color]![pair.size] ?? 0) + it.quantity;
-    }
-    if (grouped.isEmpty) {
-      return const [Text('Không có chi tiết', style: TextStyle(fontSize: 12, color: kTextSecondary))];
-    }
-
-    final widgets = <Widget>[];
-    grouped.forEach((model, byColor) {
-      widgets.add(
-        Container(
-          width: double.infinity,
-          margin: const EdgeInsets.only(bottom: 8),
-          padding: const EdgeInsets.all(10),
-          decoration: BoxDecoration(
-            color: const Color(0xFFF8FAFC),
-            borderRadius: BorderRadius.circular(10),
-            border: Border.all(color: kBorder),
-          ),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(model, style: const TextStyle(fontWeight: FontWeight.w700, color: kTextPrimary, fontSize: 15)),
-              const SizedBox(height: 8),
-              ...byColor.entries.map((entry) {
-                final color = entry.key;
-                final bySize = entry.value;
-                return Padding(
-                  padding: const EdgeInsets.only(bottom: 8),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text('Màu $color', style: const TextStyle(fontWeight: FontWeight.w600, color: kTextPrimary)),
-                      const SizedBox(height: 4),
-                      Wrap(
-                        spacing: 6,
-                        runSpacing: 6,
-                        children: bySize.entries
-                            .map((e) => Container(
-                                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                                  decoration: BoxDecoration(
-                                    color: Colors.white,
-                                    borderRadius: BorderRadius.circular(999),
-                                    border: Border.all(color: kBorder),
-                                  ),
-                                  child: Text('Size ${e.key}: ${e.value}', style: const TextStyle(fontSize: 12, color: kTextSecondary)),
-                                ))
-                            .toList(),
-                      ),
-                    ],
-                  ),
-                );
-              }),
-            ],
-          ),
-        ),
-      );
-    });
-    return widgets;
-  }
-
   Future<void> _receive(Order order) async {
     final pickerId = AppModeManager.employeeId;
     if (pickerId == null) return;
@@ -2243,10 +2589,7 @@ class _ApprovedOrdersScreenState extends State<_ApprovedOrdersScreen> {
             subtitle: Text('${formatDate(o.createdAt)} • ${formatCurrency(o.totalAmount)} k'),
             childrenPadding: const EdgeInsets.fromLTRB(16, 0, 16, 12),
             children: [
-              Align(
-                alignment: Alignment.centerLeft,
-                child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: _orderGroupedSummaryWidgets(o)),
-              ),
+              _buildMobileOrderItemsExcelTable(o.items, margin: const EdgeInsets.only(top: 4)),
               const SizedBox(height: 8),
               Align(
                 alignment: Alignment.centerRight,
@@ -2569,7 +2912,6 @@ class _AcceptedOrdersScreenState extends State<_AcceptedOrdersScreen> {
   Future<void> _openOrderPopup(Order order) async {
     final pickedByKey = <int, int>{};
     final pickerNoteCtrl = TextEditingController();
-    final pickerNoteFocus = FocusNode();
     for (var i = 0; i < order.items.length; i++) {
       final item = order.items[i];
       final key = item.orderItemId ?? (item.variantId ?? (100000 + i));
@@ -2641,14 +2983,13 @@ class _AcceptedOrdersScreenState extends State<_AcceptedOrdersScreen> {
                         padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
                         child: TextField(
                           controller: pickerNoteCtrl,
-                          focusNode: pickerNoteFocus,
                           maxLines: 2,
                           decoration: InputDecoration(
                             hintText: 'Ghi chú cho đơn (tuỳ chọn)',
                             prefixIcon: const Icon(Icons.sticky_note_2_outlined),
                             suffixIcon: IconButton(
                               icon: const Icon(Icons.check_circle_outline),
-                              onPressed: () => pickerNoteFocus.unfocus(),
+                              onPressed: () => FocusScope.of(dialogContext).unfocus(),
                             ),
                           ),
                         ),
@@ -2719,7 +3060,10 @@ class _AcceptedOrdersScreenState extends State<_AcceptedOrdersScreen> {
                                                             borderRadius: BorderRadius.circular(6),
                                                             onTap: () {
                                                               Navigator.pop(dialogContext);
-                                                              widget.onOpenItem(item);
+                                                              WidgetsBinding.instance.addPostFrameCallback((_) {
+                                                                if (!mounted) return;
+                                                                widget.onOpenItem(item);
+                                                              });
                                                             },
                                                             child: Padding(
                                                               padding: const EdgeInsets.symmetric(vertical: 4),
@@ -2849,7 +3193,6 @@ class _AcceptedOrdersScreenState extends State<_AcceptedOrdersScreen> {
       },
     );
     pickerNoteCtrl.dispose();
-    pickerNoteFocus.dispose();
   }
 
   @override
@@ -2902,7 +3245,8 @@ class _AcceptedOrdersScreenState extends State<_AcceptedOrdersScreen> {
 }
 
 class _MyDeliveryHistoryScreen extends StatefulWidget {
-  const _MyDeliveryHistoryScreen({super.key});
+  final bool isActive;
+  const _MyDeliveryHistoryScreen({super.key, this.isActive = false});
 
   @override
   State<_MyDeliveryHistoryScreen> createState() => _MyDeliveryHistoryScreenState();
@@ -2912,6 +3256,7 @@ class _MyDeliveryHistoryScreenState extends State<_MyDeliveryHistoryScreen> {
   final TextEditingController _searchCtrl = TextEditingController();
   Timer? _searchDebounce;
   bool _loading = true;
+  bool _requesting = false;
   String _search = '';
   int _range = 1; // 1=day, 2=month, 3=year
   List<Order> _orders = [];
@@ -2930,6 +3275,14 @@ class _MyDeliveryHistoryScreenState extends State<_MyDeliveryHistoryScreen> {
   }
 
   @override
+  void didUpdateWidget(covariant _MyDeliveryHistoryScreen oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (!oldWidget.isActive && widget.isActive && _orders.isEmpty) {
+      unawaited(_load(silent: false));
+    }
+  }
+
+  @override
   void dispose() {
     _searchDebounce?.cancel();
     _searchCtrl.dispose();
@@ -2939,19 +3292,23 @@ class _MyDeliveryHistoryScreenState extends State<_MyDeliveryHistoryScreen> {
   Future<void> reload() => _load();
 
   Future<void> _load({bool silent = false}) async {
+    if (_requesting) return;
     final employeeId = AppModeManager.employeeId;
     if (employeeId == null) return;
+    _requesting = true;
     if (!silent) setState(() => _loading = true);
     try {
       final rows = await ApiService.getEmployeeDeliveries(employeeId, search: _search, days: _days, limit: 300);
       if (mounted) setState(() => _orders = rows);
     } catch (e) {
-      if (mounted && !silent) {
+      if (mounted && !silent && widget.isActive) {
+        final msg = e is TimeoutException ? 'Mạng chậm, lịch sử đang phản hồi chậm' : 'Lỗi tải lịch sử giao: $e';
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Lỗi tải lịch sử giao: $e'), backgroundColor: Colors.red),
+          SnackBar(content: Text(msg), backgroundColor: Colors.red),
         );
       }
     }
+    _requesting = false;
     if (mounted && !silent) setState(() => _loading = false);
   }
 
@@ -3221,7 +3578,6 @@ class _PickerInventoryScreenState extends State<_PickerInventoryScreen> {
       builder: (_) {
         final image = p.image.trim();
         final imageUrl = ApiService.resolveApiUrl(image);
-        final canLoadNetworkImage = imageUrl.isNotEmpty;
 
         return FractionallySizedBox(
           heightFactor: 0.95,

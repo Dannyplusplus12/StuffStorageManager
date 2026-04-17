@@ -1,6 +1,4 @@
 import 'dart:io';
-import 'dart:math' as math;
-
 import 'package:file_selector/file_selector.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -91,7 +89,7 @@ class _EditProductDialogState extends State<EditProductDialog> {
                 children: [
                   Row(
                     children: [
-                      const Expanded(child: Text('Ảnh sản phẩm', style: TextStyle(fontWeight: FontWeight.w600))),
+                      Expanded(child: Text('Ảnh sản phẩm', style: TextStyle(fontWeight: FontWeight.w600, color: appTextPrimary(context)))),
                       IconButton(
                         onPressed: () => Navigator.pop(context),
                         icon: const Icon(Icons.close),
@@ -209,13 +207,18 @@ class _EditProductDialogState extends State<EditProductDialog> {
         child: Container(
           width: 360,
           padding: const EdgeInsets.all(16),
+          decoration: BoxDecoration(
+            color: appPanelBg(context),
+            border: Border.all(color: appBorderColor(context)),
+            borderRadius: BorderRadius.circular(16),
+          ),
           child: Column(
             mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              const Text('Xác nhận xóa', style: TextStyle(fontSize: 22, fontWeight: FontWeight.bold)),
+              Text('Xác nhận xóa', style: TextStyle(fontSize: 22, fontWeight: FontWeight.bold, color: appTextPrimary(context))),
               const SizedBox(height: 8),
-              const Text('Xóa vĩnh viễn sản phẩm này?', style: TextStyle(color: Colors.black54)),
+              Text('Xóa vĩnh viễn sản phẩm này?', style: TextStyle(color: appTextSecondary(context))),
               const SizedBox(height: 12),
               Row(
                 mainAxisAlignment: MainAxisAlignment.end,
@@ -248,6 +251,12 @@ class _EditProductDialogState extends State<EditProductDialog> {
 
   @override
   Widget build(BuildContext context) {
+    final panelBg = appPanelBg(context);
+    final panelSoftBg = appPanelSoftBg(context);
+    final borderColor = appBorderColor(context);
+    final textPrimary = appTextPrimary(context);
+    final textSecondary = appTextSecondary(context);
+
     return Dialog(
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
       clipBehavior: Clip.antiAlias,
@@ -255,9 +264,9 @@ class _EditProductDialogState extends State<EditProductDialog> {
         constraints: const BoxConstraints(maxWidth: 620, maxHeight: 720),
         child: Container(
           decoration: BoxDecoration(
-            color: Colors.white,
+            color: panelBg,
             borderRadius: BorderRadius.circular(16),
-            border: Border.all(color: kBorder),
+            border: Border.all(color: borderColor),
           ),
           child: Padding(
             padding: const EdgeInsets.fromLTRB(16, 14, 16, 14),
@@ -267,18 +276,18 @@ class _EditProductDialogState extends State<EditProductDialog> {
               Row(
                 children: [
                   Expanded(
-                    child: Text('Chỉnh sửa: ${widget.product.name}', style: const TextStyle(fontSize: 30, fontWeight: FontWeight.bold, color: kTextPrimary)),
+                    child: Text('Chỉnh sửa: ${widget.product.name}', style: TextStyle(fontSize: 30, fontWeight: FontWeight.bold, color: textPrimary)),
                   ),
                   IconButton(
                     onPressed: () => Navigator.pop(context),
                     icon: const Icon(Icons.close),
-                    color: kTextSecondary,
+                    color: textSecondary,
                     mouseCursor: SystemMouseCursors.click,
                   ),
                 ],
               ),
               const SizedBox(height: 2),
-              const Text('Cập nhật mã, màu, size, giá và tồn kho', style: TextStyle(color: kTextSecondary)),
+              Text('Cập nhật mã, màu, size, giá và tồn kho', style: TextStyle(color: textSecondary)),
               const SizedBox(height: 8),
               Row(
                 children: [
@@ -294,16 +303,16 @@ class _EditProductDialogState extends State<EditProductDialog> {
                     child: Container(
                       height: 48,
                       decoration: BoxDecoration(
-                        color: const Color(0xFFF8FAFC),
+                        color: panelSoftBg,
                         borderRadius: BorderRadius.circular(10),
-                        border: Border.all(color: kBorder),
+                        border: Border.all(color: borderColor),
                       ),
                       child: Row(
                         children: [
                           const SizedBox(width: 10),
-                          const Icon(Icons.image_outlined, color: kTextSecondary),
+                          Icon(Icons.image_outlined, color: textSecondary),
                           const SizedBox(width: 8),
-                          const Expanded(child: Text('Ảnh sản phẩm', style: TextStyle(color: kTextSecondary))),
+                          Expanded(child: Text('Ảnh sản phẩm', style: TextStyle(color: textSecondary))),
                           TextButton.icon(
                             onPressed: _openImagePreview,
                             icon: const Icon(Icons.visibility_outlined, size: 16),
@@ -385,22 +394,22 @@ class _EditProductDialogState extends State<EditProductDialog> {
     return Container(
       margin: const EdgeInsets.symmetric(vertical: 4),
       decoration: BoxDecoration(
-        color: Colors.white,
+        color: appPanelSoftBg(context),
         borderRadius: BorderRadius.circular(10),
-        border: Border.all(color: kBorder),
+        border: Border.all(color: appBorderColor(context)),
       ),
       child: Padding(
         padding: const EdgeInsets.all(8),
         child: Column(
           children: [
             Row(children: [
-              const Text('Màu: '),
+              Text('Màu: ', style: TextStyle(color: appTextSecondary(context))),
               Expanded(
                 child: TextFormField(
                   initialValue: g.color,
                   decoration: const InputDecoration(hintText: 'Tên màu'),
                   onChanged: (v) => g.color = v,
-                  style: const TextStyle(fontWeight: FontWeight.bold),
+                  style: TextStyle(fontWeight: FontWeight.bold, color: appTextPrimary(context)),
                 ),
               ),
               Tooltip(
